@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Ollama commonly serves local/LAN clients over HTTP. Host validation in the app restricts this to local destinations. -->
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

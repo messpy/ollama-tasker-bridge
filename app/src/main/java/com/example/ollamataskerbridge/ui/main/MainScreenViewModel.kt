@@ -26,11 +26,20 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
 
   private suspend fun loadModelsInternal() { _uiState.value = _uiState.value.copy(models = client().listModels()) }
 
+  private fun isLocalHost(host: String): Boolean {
+    val normalized = host.lowercase()
+    if (normalized == "localhost" || normalized.endsWith(".local") || normalized.endsWith(".ts.net")) return true
+    val octets = normalized.split(".").mapNotNull { it.toIntOrNull() }
+    if (octets.size != 4) return normalized == "::1" || normalized.startsWith("fc") || normalized.startsWith("fd")
+    return octets[0] == 10 || (octets[0] == 172 && octets[1] in 16..31) || (octets[0] == 192 && octets[1] == 168) || (octets[0] == 100 && octets[1] in 64..127) || octets[0] == 127
+  }
+
   private fun client(): OllamaClient {
     val value = _uiState.value.endpoint.trim().removeSuffix("/")
     val uri = URI(value)
     require(uri.scheme == "http" || uri.scheme == "https") { "URLはhttpまたはhttpsで入力してください" }
     require(!uri.host.isNullOrBlank()) { "URLのホストが必要です" }
+    require(isLocalHost(uri.host!!)) { "安全のためローカル接続先のみ許可しています" }
     settings.endpoint = value
     return OllamaClient(value)
   }
