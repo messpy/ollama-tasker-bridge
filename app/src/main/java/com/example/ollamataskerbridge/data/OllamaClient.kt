@@ -15,6 +15,11 @@ class OllamaClient(private val baseUrl: String) {
     }
   }
 
+  suspend fun pullModel(name: String) = withContext(Dispatchers.IO) {
+    require(name.isNotBlank())
+    request("POST", "/api/pull", org.json.JSONObject().put("model", name).put("stream", false).toString())
+  }
+
   suspend fun deleteModel(name: String) = withContext(Dispatchers.IO) {
     require(name.isNotBlank() && !name.contains("/../") && !name.contains("\\"))
     request("DELETE", "/api/delete", org.json.JSONObject().put("model", name).toString())

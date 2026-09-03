@@ -51,9 +51,18 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
       singleLine = true,
       modifier = Modifier.fillMaxWidth(),
     )
+    OutlinedTextField(
+      value = state.downloadModel,
+      onValueChange = viewModel::downloadModelChanged,
+      label = { Text("取得するモデル名") },
+      supportingText = { Text("例: llama3.2") },
+      singleLine = true,
+      modifier = Modifier.fillMaxWidth(),
+    )
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       Button(onClick = viewModel::testConnection, enabled = !state.loading) { Text("接続テスト") }
       OutlinedButton(onClick = viewModel::loadModels, enabled = !state.loading) { Text("モデル一覧") }
+      Button(onClick = { viewModel.downloadModel(state.downloadModel) }, enabled = !state.loading && state.downloadModel.isNotBlank()) { Text("取得") }
     }
     state.message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
     if (state.loading) CircularProgressIndicator()
