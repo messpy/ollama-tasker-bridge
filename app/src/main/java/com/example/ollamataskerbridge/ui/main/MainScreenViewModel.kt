@@ -22,7 +22,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   fun testConnection() { runRequest { client().ping(); "接続成功" } }
   fun downloadModel(name: String) { runRequest { client().pullModel(name); loadModelsInternal(); "モデルを取得しました" } }
   fun loadModels() { runRequest { client().listModels().also { models -> _uiState.value = _uiState.value.copy(models = models) }; "モデル一覧を更新しました" } }
-  fun deleteModel(name: String) { runRequest { client().deleteModel(name); _uiState.value = _uiState.value.copy(models = _uiState.value.models - name); "削除しました: $name" } }
+  fun deleteModel(name: String) { runRequest { client().deleteModel(name); _uiState.value = _uiState.value.copy(models = _uiState.value.models.filterNot { it.name == name }); "削除しました: $name" } }
 
   private suspend fun loadModelsInternal() { _uiState.value = _uiState.value.copy(models = client().listModels()) }
 
@@ -57,7 +57,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
 data class MainScreenUiState(
   val endpoint: String,
   val downloadModel: String = "",
-  val models: List<String> = emptyList(),
+  val models: List<com.example.ollamataskerbridge.data.OllamaModel> = emptyList(),
   val loading: Boolean = false,
   val message: String? = null,
 )

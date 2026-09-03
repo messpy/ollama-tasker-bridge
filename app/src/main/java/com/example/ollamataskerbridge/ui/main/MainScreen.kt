@@ -70,11 +70,12 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
     Text("モデル", style = MaterialTheme.typography.titleMedium)
     if (state.models.isEmpty()) Text("まだ取得していません")
     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-      items(state.models, key = { it }) { model ->
+      items(state.models.sortedBy { it.remote }, key = { it.name }) { model ->
         Card(modifier = Modifier.fillMaxWidth()) {
+          Text(if (model.remote) "リモート" else "ローカル", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(start = 12.dp, top = 10.dp))
           Row(modifier = Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(model, modifier = Modifier.weight(1f).padding(top = 8.dp))
-            TextButton(onClick = { pendingDelete = model }, enabled = !state.loading) { Text("削除") }
+            Text(model.name, modifier = Modifier.weight(1f).padding(top = 8.dp))
+            TextButton(onClick = { pendingDelete = model.name }, enabled = !state.loading) { Text("削除") }
           }
         }
       }

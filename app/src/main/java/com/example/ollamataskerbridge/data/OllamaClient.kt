@@ -7,11 +7,15 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 
+class OllamaModel(val name: String, val remote: Boolean)
+
 class OllamaClient(private val baseUrl: String) {
-  suspend fun listModels(): List<String> = withContext(Dispatchers.IO) {
+  suspend fun listModels(): List<OllamaModel> = withContext(Dispatchers.IO) {
     request("GET", "/api/tags").let { body ->
       val models = JSONArray(org.json.JSONObject(body).optJSONArray("models")?.toString() ?: "[]")
-      (0 until models.length()).mapNotNull { models.optJSONObject(it)?.optString("name")?.takeIf(String::isNotBlank) }
+      (0 until models.length()).mapNotNull { models.optJSONObject(it)?.let { item ->
+        item.optString("name").takeIf(String::isNotBlank)?.let { name -> OllamaModel(name, !item.optString("remote_host").isNullOrBlank()) }
+      } }
     }
   }
 
