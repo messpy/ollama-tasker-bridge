@@ -13,7 +13,6 @@ class MainScreenTest {
   fun screen_showsConnectionControls() {
     composeTestRule.setContent { MainScreen() }
     composeTestRule.onNodeWithText("Ollama Tasker Bridge").assertExists()
-    composeTestRule.onNodeWithText("接続テスト").assertExists()
-    composeTestRule.onNodeWithText("モデル一覧").assertExists()
+    composeTestRule.onNodeWithText("端末内モデル実行は準備中です").assertExists()
   }
 }

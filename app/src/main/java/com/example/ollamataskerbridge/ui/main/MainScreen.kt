@@ -31,10 +31,17 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ollamataskerbridge.theme.MyApplicationTheme
 
+private const val SHOW_REMOTE_OLLAMA = false
+
 @Composable
 fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier = Modifier) {
   val state by viewModel.uiState.collectAsStateWithLifecycle()
   var pendingDelete by remember { mutableStateOf<String?>(null) }
+  if (!SHOW_REMOTE_OLLAMA) {
+    Text("端末内モデル実行は準備中です", style = MaterialTheme.typography.titleMedium)
+    Text("Ollama API接続機能は将来用に内部保持しています。")
+    return
+  }
 
   Column(
     modifier = modifier.fillMaxSize().padding(20.dp),
@@ -92,6 +99,7 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
     )
   }
 }
+
 
 @Composable
 fun MainScreenPreview() { MyApplicationTheme { MainScreen() } }
