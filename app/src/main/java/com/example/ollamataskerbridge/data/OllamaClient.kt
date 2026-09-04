@@ -13,7 +13,7 @@ class OllamaModel(val name: String, val remote: Boolean)
 class OllamaClient(private val baseUrl: String, private val apiKey: String = "") {
   private val logTag = "OllamaClient"
   suspend fun listModels(): List<OllamaModel> = withContext(Dispatchers.IO) {
-    request("GET", "/api/tags").let { body ->
+    request("GET", "/api/tags", authenticated = false).let { body ->
       val models = JSONArray(org.json.JSONObject(body).optJSONArray("models")?.toString() ?: "[]")
       (0 until models.length()).mapNotNull { models.optJSONObject(it)?.let { item ->
         item.optString("name").takeIf(String::isNotBlank)?.let { name -> OllamaModel(name, !item.optString("remote_host").isNullOrBlank()) }
@@ -31,7 +31,7 @@ class OllamaClient(private val baseUrl: String, private val apiKey: String = "")
     request("DELETE", "/api/delete", org.json.JSONObject().put("model", name).toString())
   }
 
-  suspend fun ping() = withContext(Dispatchers.IO) { request("GET", "/api/tags"); Unit }
+  suspend fun ping() = withContext(Dispatchers.IO) { request("GET", "/api/tags", authenticated = false); Unit }
 
   suspend fun generate(model: String, prompt: String, system: String? = null): String = withContext(Dispatchers.IO) {
     require(model.isNotBlank()) { "モデル名が必要です" }
@@ -46,14 +46,14 @@ class OllamaClient(private val baseUrl: String, private val apiKey: String = "")
       ?: throw IOException("Ollamaから応答がありません")
   }
 
-  private fun request(method: String, path: String, body: String? = null, readTimeoutMs: Int = 30_000): String {
-    Log.d(logTag, method + " " + baseUrl + path + " apiKeyPresent=" + apiKey.isNotBlank() + " apiKeyLength=" + apiKey.trim().removePrefix("Bearer ").length)
+  private fun request(method: String, path: String, body: String? = null, readTimeoutMs: Int = 30_000, authenticated: Boolean = true): String {
+    Log.d(logTag, method + " " + baseUrl + path + " authenticated=" + authenticated + " apiKeyPresent=" + apiKey.isNotBlank() + " apiKeyLength=" + apiKey.trim().removePrefix("Bearer ").length)
     val connection = (URL(baseUrl.trimEnd('/') + path).openConnection() as HttpURLConnection).apply {
       requestMethod = method
       connectTimeout = 8_000
       readTimeout = readTimeoutMs
       setRequestProperty("Accept", "application/json")
-      if (apiKey.isNotBlank()) {
+      if (authenticated && apiKey.isNotBlank()) {
         val token = apiKey.removePrefix("Bearer ").trim()
         setRequestProperty("Authorization", "Bearer " + token)
       }
