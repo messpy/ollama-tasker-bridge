@@ -66,7 +66,7 @@ class PluginSettingsActivity : ComponentActivity() {
               putString(LocalePluginContract.KEY_PROMPT, prompt)
               putString(LocalePluginContract.KEY_SYSTEM, system)
               putString(LocalePluginContract.KEY_MODE, mode)
-              putString(LocalePluginContract.KEY_RESULT_VARIABLE, resultVariable.trim())
+              putString(LocalePluginContract.KEY_RESULT_VARIABLE, normalizeResultVariable(resultVariable))
             }
             val result = Intent().apply {
               putExtra(LocalePluginContract.EXTRA_BUNDLE, values)
@@ -85,6 +85,12 @@ class PluginSettingsActivity : ComponentActivity() {
     "cloud" -> "Cloud"
     else -> "自動"
   }
+
+  private fun normalizeResultVariable(value: String): String = value.trim()
+    .removePrefix("{lv=")
+    .removePrefix("%")
+    .removeSuffix("}")
+    .trim()
 }
 
 private data class PluginModelLists(
@@ -146,8 +152,15 @@ private fun PluginSettingsContent(
       }
     }
     OutlinedTextField(prompt, { prompt = it }, Modifier.fillMaxWidth(), label = { Text("プロンプト") })
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+      Button(onClick = { prompt = "Tasker連携テストです。成功したら『テスト成功』とだけ返してください。" }) {
+        Text("テストプロンプト")
+      }
+      Text("入力例: {lv=test} / Tasker: %test", Modifier.padding(top = 12.dp))
+    }
     OutlinedTextField(system, { system = it }, Modifier.fillMaxWidth(), label = { Text("システムプロンプト（任意）") })
     OutlinedTextField(resultVariable, { resultVariable = it }, Modifier.fillMaxWidth(), label = { Text("結果を入れるMacroDroid変数名（任意）") }, singleLine = true)
+    Text("結果変数は test のように名前だけ入力します。{lv=test} はプロンプト側の入力変数です。")
     Text("実行先")
     Row {
       listOf("auto" to "自動", "local" to "ローカル", "cloud" to "Cloud").forEach { (value, label) ->

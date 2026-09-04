@@ -26,7 +26,7 @@ class LocaleFireReceiver : BroadcastReceiver() {
         val prompt = values?.getString(LocalePluginContract.KEY_PROMPT).orEmpty()
         val system = values?.getString(LocalePluginContract.KEY_SYSTEM)
         val mode = values?.getString(LocalePluginContract.KEY_MODE) ?: "auto"
-        val resultVariable = values?.getString(LocalePluginContract.KEY_RESULT_VARIABLE).orEmpty()
+        val resultVariable = normalizeResultVariable(values?.getString(LocalePluginContract.KEY_RESULT_VARIABLE).orEmpty())
         val result = when (mode) {
           "local" -> LocalInferenceBridge.generate(appContext, model, prompt, system)
           "cloud" -> generateCloud(appContext, model, prompt, system)
@@ -49,6 +49,12 @@ class LocaleFireReceiver : BroadcastReceiver() {
     val settings = SettingsStore(context)
     return OllamaClient(settings.endpoint, settings.apiKey).generate(model, prompt, system)
   }
+
+  private fun normalizeResultVariable(value: String): String = value.trim()
+    .removePrefix("{lv=")
+    .removePrefix("%")
+    .removeSuffix("}")
+    .trim()
 
   private fun finish(pending: PendingResult, context: Context, request: Intent, ok: Boolean, result: String?, error: String?, resultVariable: String) {
     val extras = Bundle().apply {
