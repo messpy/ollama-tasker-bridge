@@ -48,7 +48,16 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   fun savePreset(name: String, body: String, id: String = java.util.UUID.randomUUID().toString()) { settings.savePreset(SystemPromptPreset(id, name, body)); _uiState.value = _uiState.value.copy(presets = settings.presets()) }
   fun deletePreset(id: String) { settings.deletePreset(id); _uiState.value = _uiState.value.copy(presets = settings.presets()) }
 
-  fun testConnection() { runRequest("接続テストに失敗しました。APIキーとネットワークを確認してください。") { client().ping(); "接続成功（Ollama APIに到達しました）" } }
+  fun testConnection() { runRequest("接続テストに失敗しました。モデル・APIキー・ネットワークを確認してください。") {
+    val model = _uiState.value.selectedModel.trim()
+    require(model.isNotBlank()) { "先にモデルを選択してください" }
+    if (localModels.fileFor(model).isFile) {
+      com.example.ollamataskerbridge.bridge.LocalInferenceBridge.generate(getApplication(), model, "接続テスト", _uiState.value.systemPrompt)
+    } else {
+      client().generate(model, "接続テスト", _uiState.value.systemPrompt)
+    }
+    "接続成功（選択モデルで応答を確認しました）"
+  } }
   fun downloadModel(name: String) { runRequest("モデルの取得に失敗しました。ストレージの空き容量とネットワークを確認してください。") {
     val maxBytes = settings.maxLocalModelSizeGb.toDouble().times(1_000_000_000.0).toLong()
     val metadata = registry.metadata(name)
@@ -122,6 +131,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
           val raw = error.message.orEmpty()
           val detail = when {
             raw.contains("HTTP 402") -> "Cloud APIの利用枠がありません（HTTP 402）。Ollamaのプランまたは追加利用を確認してください。"
+            error::class.simpleName?.contains("UnsupportedArchitecture") == true -> "このモデル形式は端末のローカル推論エンジンに未対応です。対応モデルを選択してください。"
             raw.contains("HTTP 401") -> "認証に失敗しました（HTTP 401）。APIキーを確認してください。"
             raw.contains("HTTP 403") -> "アクセスが拒否されました（HTTP 403）。APIキーの権限またはモデルの利用権限を確認してください。"
             raw.contains("timeout", true) || raw.contains("timed out", true) -> "接続がタイムアウトしました。ネットワークを確認してください。"
