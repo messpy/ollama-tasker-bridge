@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import java.io.File
 import java.io.FileOutputStream
+import java.io.FileInputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
@@ -99,12 +100,27 @@ class OllamaRegistryClient(
 
   private fun downloadBlob(url: String, digest: String, expectedSize: Long, temp: File) {
     Log.d(logTag, "download start url=" + url + " expectedSize=" + expectedSize + " temp=" + temp.name)
+    var resumeBytes = temp.takeIf { it.isFile }?.length() ?: 0L
     val connection = open(url, readTimeoutMs = 15 * 60 * 1000)
+    if (resumeBytes > 0L) connection.setRequestProperty("Range", "bytes=" + resumeBytes + "-")
     try {
+      if (resumeBytes > 0L && connection.responseCode == HttpURLConnection.HTTP_OK) {
+        Log.w(logTag, "registry ignored Range; restarting download")
+        temp.delete()
+        resumeBytes = 0L
+      }
       check(connection.responseCode in 200..299) { "モデルBlob HTTP " + connection.responseCode }
       val digestor = MessageDigest.getInstance("SHA-256")
+      if (resumeBytes > 0L) FileInputStream(temp).use { input ->
+        val buffer = ByteArray(1024 * 1024)
+        while (true) {
+          val count = input.read(buffer)
+          if (count < 0) break
+          digestor.update(buffer, 0, count)
+        }
+      }
       var total = 0L
-      FileOutputStream(temp).use { output ->
+      FileOutputStream(temp, resumeBytes > 0L).use { output ->
         connection.inputStream.use { input ->
           val buffer = ByteArray(1024 * 1024)
           while (true) {
@@ -116,6 +132,7 @@ class OllamaRegistryClient(
           }
         }
       }
+      total += resumeBytes
       check(expectedSize < 0 || total == expectedSize) { "モデルサイズが一致しません" }
       val actual = "sha256:" + digestor.digest().joinToString("") { "%02x".format(it) }
       check(actual == digest) { "モデル検証に失敗しました" }
