@@ -96,7 +96,17 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     viewModelScope.launch {
       runCatching { action() }
         .onSuccess { message -> _uiState.value = _uiState.value.copy(loading = false, message = message) }
-        .onFailure { error -> val detail = if (error.message?.contains("timeout", true) == true) "接続がタイムアウトしました。ネットワークを確認してください。" else failureMessage + (error.message?.let { " ($it)" } ?: ""); _uiState.value = _uiState.value.copy(loading = false, message = "エラー: $detail") }
+        .onFailure { error ->
+          val raw = error.message.orEmpty()
+          val detail = when {
+            raw.contains("HTTP 402") -> "Cloud APIの利用枠がありません（HTTP 402）。Ollamaのプランまたは追加利用を確認してください。"
+            raw.contains("HTTP 401") -> "認証に失敗しました（HTTP 401）。APIキーを確認してください。"
+            raw.contains("HTTP 403") -> "アクセスが拒否されました（HTTP 403）。APIキーの権限またはモデルの利用権限を確認してください。"
+            raw.contains("timeout", true) || raw.contains("timed out", true) -> "接続がタイムアウトしました。ネットワークを確認してください。"
+            else -> failureMessage + (raw.takeIf { it.isNotBlank() }?.let { " ($it)" } ?: "")
+          }
+          _uiState.value = _uiState.value.copy(loading = false, message = "エラー: $detail")
+        }
     }
   }
 }

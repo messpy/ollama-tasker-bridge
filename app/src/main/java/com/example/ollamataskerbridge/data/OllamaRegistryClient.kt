@@ -77,7 +77,7 @@ class OllamaRegistryClient(
   }
 
   private fun requestJson(url: String): JSONObject {
-    val connection = open(url)
+    val connection = open(url, readTimeoutMs = 30_000)
     try {
       check(connection.responseCode in 200..299) { "Registry HTTP " + connection.responseCode }
       return JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
@@ -86,7 +86,7 @@ class OllamaRegistryClient(
 
   private fun downloadBlob(url: String, digest: String, expectedSize: Long, temp: File) {
     Log.d(logTag, "download start url=" + url + " expectedSize=" + expectedSize + " temp=" + temp.name)
-    val connection = open(url)
+    val connection = open(url, readTimeoutMs = 15 * 60 * 1000)
     try {
       check(connection.responseCode in 200..299) { "モデルBlob HTTP " + connection.responseCode }
       val digestor = MessageDigest.getInstance("SHA-256")
@@ -110,9 +110,9 @@ class OllamaRegistryClient(
     } finally { connection.disconnect() }
   }
 
-  private fun open(url: String) = (URL(url).openConnection() as HttpURLConnection).apply {
+  private fun open(url: String, readTimeoutMs: Int) = (URL(url).openConnection() as HttpURLConnection).apply {
     connectTimeout = 15_000
-    readTimeout = 15 * 60 * 1000
+    readTimeout = readTimeoutMs
     setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14; Pixel 8a) AppleWebKit/537.36 Chrome/131.0 Mobile Safari/537.36")
     setRequestProperty("Accept", "application/vnd.docker.distribution.manifest.v2+json, application/json")
   }

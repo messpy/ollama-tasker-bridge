@@ -1,6 +1,9 @@
 package com.example.ollamataskerbridge.bridge
 
 import android.content.BroadcastReceiver
+import android.app.job.JobInfo
+import android.app.job.JobScheduler
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import com.example.ollamataskerbridge.data.LocalModelStore
@@ -24,12 +27,18 @@ class OllamaBridgeReceiver : BroadcastReceiver() {
             system = intent.getStringExtra(BridgeContract.EXTRA_SYSTEM),
           )
           BridgeContract.ACTION_PULL -> {
-            appContext.startForegroundService(Intent(appContext, ModelDownloadService::class.java).apply {
-              putExtra(BridgeContract.EXTRA_MODEL, model)
-              putExtra(BridgeContract.EXTRA_REPLY_ACTION, intent.getStringExtra(BridgeContract.EXTRA_REPLY_ACTION))
-              putExtra(BridgeContract.EXTRA_REPLY_PACKAGE, intent.getStringExtra(BridgeContract.EXTRA_REPLY_PACKAGE))
-            })
-            "モデル取得をバックグラウンドで開始しました: $model"
+            val extras = android.os.PersistableBundle().apply {
+              putString(BridgeContract.EXTRA_MODEL, model)
+              putString(BridgeContract.EXTRA_REPLY_ACTION, intent.getStringExtra(BridgeContract.EXTRA_REPLY_ACTION))
+              putString(BridgeContract.EXTRA_REPLY_PACKAGE, intent.getStringExtra(BridgeContract.EXTRA_REPLY_PACKAGE))
+            }
+            val job = JobInfo.Builder(1002, ComponentName(appContext, ModelDownloadJobService::class.java))
+              .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
+              .setExtras(extras)
+              .build()
+            val result = appContext.getSystemService(JobScheduler::class.java).schedule(job)
+            check(result == JobScheduler.RESULT_SUCCESS) { "Androidがモデル取得ジョブを登録できません" }
+            "モデル取得をAndroidのバックグラウンドジョブとして開始しました: $model"
           }
           else -> throw IllegalArgumentException("未対応のActionです")
         }
