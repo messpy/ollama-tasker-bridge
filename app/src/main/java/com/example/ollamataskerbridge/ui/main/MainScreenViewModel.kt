@@ -32,9 +32,9 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   private suspend fun loadModelsInternal() {
     val local = localModels.directory.listFiles()
       ?.filter { it.extension == "gguf" }
-      ?.map { com.example.ollamataskerbridge.data.OllamaModel(it.nameWithoutExtension, false) }
+      ?.map { com.example.ollamataskerbridge.data.OllamaModel(it.nameWithoutExtension, false, true) }
       .orEmpty()
-    val remote = client().listModels().map { com.example.ollamataskerbridge.data.OllamaModel(it.name, true) }
+    val remote = client().listModels().map { com.example.ollamataskerbridge.data.OllamaModel(it.name, true, it.downloadable) }
     _uiState.value = _uiState.value.copy(models = remote + local)
   }
 

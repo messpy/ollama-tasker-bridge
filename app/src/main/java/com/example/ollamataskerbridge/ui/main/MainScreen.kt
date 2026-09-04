@@ -102,8 +102,10 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
           Text(if (model.remote) "リモート" else "ローカル", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(start = 12.dp, top = 10.dp))
           Row(modifier = Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(model.name, modifier = Modifier.weight(1f).padding(top = 8.dp))
-            if (model.remote) {
+            if (model.remote && model.downloadable) {
               Button(onClick = { viewModel.downloadModel(model.name) }, enabled = !state.loading) { Text("Androidへ取得") }
+            } else if (model.remote) {
+              Text("Cloud専用", color = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(top = 8.dp))
             } else {
               TextButton(onClick = { pendingDelete = model.name }, enabled = !state.loading) { Text("削除") }
             }

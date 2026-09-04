@@ -8,7 +8,7 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 
-class OllamaModel(val name: String, val remote: Boolean)
+class OllamaModel(val name: String, val remote: Boolean, val downloadable: Boolean = true)
 
 class OllamaClient(private val baseUrl: String, private val apiKey: String = "") {
   private val logTag = "OllamaClient"
@@ -16,7 +16,10 @@ class OllamaClient(private val baseUrl: String, private val apiKey: String = "")
     request("GET", "/api/tags", authenticated = false).let { body ->
       val models = JSONArray(org.json.JSONObject(body).optJSONArray("models")?.toString() ?: "[]")
       (0 until models.length()).mapNotNull { models.optJSONObject(it)?.let { item ->
-        item.optString("name").takeIf(String::isNotBlank)?.let { name -> OllamaModel(name, !item.optString("remote_host").isNullOrBlank()) }
+        item.optString("name").takeIf(String::isNotBlank)?.let { name ->
+          val format = item.optJSONObject("details")?.optString("format").orEmpty()
+          OllamaModel(name, !item.optString("remote_host").isNullOrBlank(), format == "gguf")
+        }
       } }
     }
   }
