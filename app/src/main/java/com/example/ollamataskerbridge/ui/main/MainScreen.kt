@@ -6,6 +6,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
@@ -56,7 +59,7 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
   }
 
   Column(
-    modifier = modifier.fillMaxSize().padding(20.dp),
+    modifier = modifier.fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState()),
     verticalArrangement = Arrangement.spacedBy(16.dp),
   ) {
     Text("Ollama Tasker Bridge", style = MaterialTheme.typography.headlineSmall)
@@ -79,18 +82,18 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
       modifier = Modifier.fillMaxWidth(),
     )
     OutlinedTextField(
-      value = state.downloadModel,
-      onValueChange = viewModel::downloadModelChanged,
-      label = { Text("取得するモデル名") },
-      supportingText = { Text("例: llama3.2") },
-      singleLine = true,
-      modifier = Modifier.fillMaxWidth(),
-    )
-    OutlinedTextField(
       value = state.testPrompt,
       onValueChange = viewModel::testPromptChanged,
       label = { Text("テスト用プロンプト") },
       supportingText = { Text("ここで本体のCloud/ローカル実行を確認できます") },
+      modifier = Modifier.fillMaxWidth(),
+    )
+    OutlinedTextField(
+      value = state.downloadModel,
+      onValueChange = viewModel::downloadModelChanged,
+      label = { Text("テスト/取得するモデル名") },
+      supportingText = { Text("例: llama3.2。取得済みならローカル、未取得ならCloudでテスト") },
+      singleLine = true,
       modifier = Modifier.fillMaxWidth(),
     )
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -104,7 +107,7 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
     HorizontalDivider()
     Text("Android内のモデル", style = MaterialTheme.typography.titleMedium)
     if (state.models.isEmpty()) Text("まだ取得していません")
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
       items(state.models.sortedBy { it.remote }, key = { it.name }) { model ->
         Card(modifier = Modifier.fillMaxWidth()) {
           Text(if (model.remote) "リモート" else "ローカル", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(start = 12.dp, top = 10.dp))
