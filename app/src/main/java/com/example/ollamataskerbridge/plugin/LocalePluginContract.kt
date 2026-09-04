@@ -13,4 +13,7 @@ object LocalePluginContract {
   const val KEY_SYSTEM = "com.example.ollamataskerbridge.plugin.SYSTEM"
   const val KEY_MODE = "com.example.ollamataskerbridge.plugin.MODE"
   const val KEY_RESULT_VARIABLE = "com.example.ollamataskerbridge.plugin.RESULT_VARIABLE"
+  const val KEY_PLATFORM = "com.example.ollamataskerbridge.plugin.PLATFORM"
+  const val KEY_PRESET_ID = "com.example.ollamataskerbridge.plugin.PRESET_ID"
+  const val KEY_CUSTOM_SYSTEM = "com.example.ollamataskerbridge.plugin.CUSTOM_SYSTEM"
 }

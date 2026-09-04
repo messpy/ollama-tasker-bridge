@@ -24,18 +24,20 @@ class LocaleFireReceiver : BroadcastReceiver() {
       try {
         val model = values?.getString(LocalePluginContract.KEY_MODEL).orEmpty()
         val prompt = values?.getString(LocalePluginContract.KEY_PROMPT).orEmpty()
-        val system = values?.getString(LocalePluginContract.KEY_SYSTEM)
-        val mode = values?.getString(LocalePluginContract.KEY_MODE) ?: "auto"
+        val presetId = values?.getString(LocalePluginContract.KEY_PRESET_ID).orEmpty()
+        val customSystem = values?.getString(LocalePluginContract.KEY_CUSTOM_SYSTEM).orEmpty()
+        val settings = SettingsStore(appContext)
+        val system = if (presetId.isNotBlank() && presetId != "custom") {
+          settings.presets().firstOrNull { it.id == presetId }?.body
+        } else {
+          customSystem.ifBlank { values?.getString(LocalePluginContract.KEY_SYSTEM) }
+        }
         val resultVariable = normalizeResultVariable(values?.getString(LocalePluginContract.KEY_RESULT_VARIABLE).orEmpty())
-        val result = when (mode) {
-          "local" -> LocalInferenceBridge.generate(appContext, model, prompt, system)
-          "cloud" -> generateCloud(appContext, model, prompt, system)
-          else -> if (LocalModelStore(appContext).fileFor(model).isFile) {
+        val result = if (LocalModelStore(appContext).fileFor(model).isFile) {
             LocalInferenceBridge.generate(appContext, model, prompt, system)
           } else {
             generateCloud(appContext, model, prompt, system)
           }
-        }
         finish(pending, appContext, intent, true, result, null, resultVariable)
       } catch (error: Exception) {
         finish(pending, appContext, intent, false, null, error.message ?: "実行に失敗しました", "")

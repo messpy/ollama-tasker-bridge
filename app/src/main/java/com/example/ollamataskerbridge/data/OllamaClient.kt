@@ -8,7 +8,13 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 
-class OllamaModel(val name: String, val remote: Boolean, val downloadable: Boolean = true)
+data class OllamaModel(
+  val name: String,
+  val remote: Boolean,
+  val downloadable: Boolean = true,
+  val sizeBytes: Long = -1L,
+  val local: Boolean = false,
+)
 
 class OllamaClient(private val baseUrl: String, private val apiKey: String = "") {
   private val logTag = "OllamaClient"
@@ -18,7 +24,7 @@ class OllamaClient(private val baseUrl: String, private val apiKey: String = "")
       (0 until models.length()).mapNotNull { models.optJSONObject(it)?.let { item ->
         item.optString("name").takeIf(String::isNotBlank)?.let { name ->
           val format = item.optJSONObject("details")?.optString("format").orEmpty()
-          OllamaModel(name, !item.optString("remote_host").isNullOrBlank(), format == "gguf")
+          OllamaModel(name, !item.optString("remote_host").isNullOrBlank(), format == "gguf", item.optLong("size", -1L))
         }
       } }
     }
