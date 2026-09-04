@@ -6,6 +6,7 @@ import android.app.job.JobScheduler
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import com.example.ollamataskerbridge.data.LocalModelStore
 import com.example.ollamataskerbridge.data.OllamaRegistryClient
 import kotlinx.coroutines.CoroutineScope
@@ -44,6 +45,7 @@ class OllamaBridgeReceiver : BroadcastReceiver() {
         }
         sendResult(pending, appContext, intent, ok = true, result = response)
       } catch (error: Exception) {
+        Log.e("OllamaBridge", "bridge action failed", error)
         sendResult(pending, appContext, intent, ok = false, error = error.message ?: "処理に失敗しました")
       } finally {
         pending.finish()
