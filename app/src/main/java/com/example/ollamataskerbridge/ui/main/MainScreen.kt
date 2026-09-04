@@ -108,6 +108,10 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
     if (state.loading) CircularProgressIndicator()
 
     Text("動作検証", style = MaterialTheme.typography.titleMedium)
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+      OutlinedTextField(state.maxTokens, viewModel::maxTokensChanged, Modifier.weight(1f), label = { Text("最大トークン") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+      OutlinedTextField(state.temperature, viewModel::temperatureChanged, Modifier.weight(1f), label = { Text("Temperature") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+    }
     val selectedSystemPreset = state.presets.firstOrNull { it.id == state.systemPromptPresetId }
     Text("システムプロンプト", style = MaterialTheme.typography.labelLarge)
     Row {

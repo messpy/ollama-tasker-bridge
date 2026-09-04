@@ -8,6 +8,9 @@ import com.example.ollamataskerbridge.data.LocalModelStore
 import com.example.ollamataskerbridge.data.OllamaRegistryClient
 import com.example.ollamataskerbridge.data.SettingsStore
 import com.example.ollamataskerbridge.data.SystemPromptPreset
+import com.example.ollamataskerbridge.bridge.Backend
+import com.example.ollamataskerbridge.bridge.DefaultInferenceRepository
+import com.example.ollamataskerbridge.bridge.GenerateRequest
 import java.net.URI
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -39,10 +42,9 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   }
   fun searchChanged(value: String) { _uiState.value = _uiState.value.copy(search = value) }
   fun localOnlyChanged(value: Boolean) { _uiState.value = _uiState.value.copy(localOnly = value) }
-  fun maxLocalModelSizeChanged(value: String) {
-    _uiState.value = _uiState.value.copy(maxLocalModelSizeGb = value)
-    value.toFloatOrNull()?.takeIf { it >= 0f }?.let { settings.maxLocalModelSizeGb = it }
-  }
+  fun maxLocalModelSizeChanged(value: String) { _uiState.value = _uiState.value.copy(maxLocalModelSizeGb = value); value.toFloatOrNull()?.takeIf { it >= 0f }?.let { settings.maxLocalModelSizeGb = it } }
+  fun maxTokensChanged(value: String) { _uiState.value = _uiState.value.copy(maxTokens = value) }
+  fun temperatureChanged(value: String) { _uiState.value = _uiState.value.copy(temperature = value) }
   fun selectModel(name: String) { _uiState.value = _uiState.value.copy(selectedModel = name, downloadModel = name, message = null) }
   fun apiKeyVisibleChanged(value: Boolean) { _uiState.value = _uiState.value.copy(apiKeyVisible = value) }
   fun savePreset(name: String, body: String, id: String = java.util.UUID.randomUUID().toString()) { settings.savePreset(SystemPromptPreset(id, name, body)); _uiState.value = _uiState.value.copy(presets = settings.presets()) }
@@ -51,11 +53,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   fun testConnection() { runRequest("接続テストに失敗しました。モデル・APIキー・ネットワークを確認してください。") {
     val model = _uiState.value.selectedModel.trim()
     require(model.isNotBlank()) { "先にモデルを選択してください" }
-    if (localModels.fileFor(model).isFile) {
-      com.example.ollamataskerbridge.bridge.LocalInferenceBridge.generate(getApplication(), model, "接続テスト", _uiState.value.systemPrompt)
-    } else {
-      client().generate(model, "接続テスト", _uiState.value.systemPrompt)
-    }
+    DefaultInferenceRepository.generate(getApplication(), GenerateRequest(if (localModels.fileFor(model).isFile) Backend.LOCAL else Backend.OLLAMA, model, "接続テスト", _uiState.value.systemPrompt, _uiState.value.maxTokens.toIntOrNull() ?: 256, _uiState.value.temperature.toFloatOrNull() ?: 0.7f))
     "接続成功（選択モデルで応答を確認しました）"
   } }
   fun downloadModel(name: String) { runRequest("モデルの取得に失敗しました。ストレージの空き容量とネットワークを確認してください。") {
@@ -74,11 +72,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
       val prompt = _uiState.value.testPrompt.trim()
       require(model.isNotBlank()) { "テストするモデル名を入力してください" }
       require(prompt.isNotBlank()) { "テスト用プロンプトを入力してください" }
-      val result = if (localModels.fileFor(model).isFile) {
-        com.example.ollamataskerbridge.bridge.LocalInferenceBridge.generate(getApplication(), model, prompt, _uiState.value.systemPrompt)
-      } else {
-        client().generate(model, prompt, _uiState.value.systemPrompt)
-      }
+      val result = DefaultInferenceRepository.generate(getApplication(), GenerateRequest(if (localModels.fileFor(model).isFile) Backend.LOCAL else Backend.OLLAMA, model, prompt, _uiState.value.systemPrompt, _uiState.value.maxTokens.toIntOrNull() ?: 256, _uiState.value.temperature.toFloatOrNull() ?: 0.7f))
       "テスト結果:\n$result"
     }
   }
@@ -154,6 +148,8 @@ data class MainScreenUiState(
   val systemPrompt: String = "",
   val systemPromptPresetId: String = "",
   val apiKeyVisible: Boolean = false,
+  val maxTokens: String = "256",
+  val temperature: String = "0.7",
   val testPrompt: String = "Tasker連携テストです。成功したら『テスト成功』とだけ返してください。",
   val models: List<com.example.ollamataskerbridge.data.OllamaModel> = emptyList(),
   val presets: List<SystemPromptPreset> = emptyList(),

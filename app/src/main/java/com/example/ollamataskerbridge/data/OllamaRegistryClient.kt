@@ -55,6 +55,7 @@ class OllamaRegistryClient(
     ModelMetadata(downloadable, size)
   }
   fun download(model: String): File {
+    hfUrlFor(model)?.let { return downloadHf(it, model) }
     val parsed = parseModel(model)
     val manifestUrl = registryBase + "/v2/library/" + parsed.first + "/manifests/" + parsed.second
     Log.d(logTag, "GET " + manifestUrl)
@@ -77,6 +78,32 @@ class OllamaRegistryClient(
     downloadBlob(registryBase + "/v2/library/" + parsed.first + "/blobs/" + digest, digest, modelSize, temp)
     check(temp.renameTo(target)) { "モデルファイルを保存できません" }
     return target
+  }
+
+  private fun hfUrlFor(model: String): String? = when (model.lowercase()) {
+    "smollm2:135m", "smollm2_135m" -> "https://huggingface.co/bartowski/SmolLM2-135M-Instruct-GGUF/resolve/main/SmolLM2-135M-Instruct-Q4_K_M.gguf"
+    "tinyllama:1.1b", "tinyllama_1.1b" -> "https://huggingface.co/bartowski/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/TinyLlama-1.1B-Chat-v1.0-Q4_K_M.gguf"
+    else -> null
+  }
+
+  private fun downloadHf(url: String, model: String): File {
+    val target = store.fileFor(model)
+    val temp = File(target.path + ".download")
+    var resumeBytes = temp.takeIf { it.isFile }?.length() ?: 0L
+    val connection = open(url, readTimeoutMs = 15 * 60 * 1000)
+    if (resumeBytes > 0L) connection.setRequestProperty("Range", "bytes=" + resumeBytes + "-")
+    try {
+      if (resumeBytes > 0L && connection.responseCode == HttpURLConnection.HTTP_OK) { temp.delete(); resumeBytes = 0L }
+      check(connection.responseCode in 200..299) { "Hugging Face HTTP " + connection.responseCode }
+      FileOutputStream(temp, resumeBytes > 0L).use { output -> connection.inputStream.use { input ->
+        val buffer = ByteArray(1024 * 1024)
+        while (true) { val count = input.read(buffer); if (count < 0) break; output.write(buffer, 0, count) }
+      } }
+      check(temp.length() > 0L) { "GGUFファイルが空です" }
+      check(temp.renameTo(target)) { "モデルファイルを保存できません" }
+      Log.i(logTag, "Hugging Face download complete: " + target.name + " bytes=" + target.length())
+      return target
+    } finally { connection.disconnect() }
   }
 
   private fun parseModel(model: String): Pair<String, String> {

@@ -43,6 +43,11 @@
             <intent-filter>
                 <action android:name="com.example.ollamataskerbridge.action.GENERATE" />
                 <action android:name="com.example.ollamataskerbridge.action.PULL" />
+                <action android:name="com.example.ollamataskerbridge.action.LOAD_MODEL" />
+                <action android:name="com.example.ollamataskerbridge.action.UNLOAD_MODEL" />
+                <action android:name="com.example.ollamataskerbridge.action.DOWNLOAD_MODEL" />
+                <action android:name="com.example.ollamataskerbridge.action.LIST_MODELS" />
+                <action android:name="com.example.ollamataskerbridge.action.STOP" />
             </intent-filter>
         </receiver>
         <service

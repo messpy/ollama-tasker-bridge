@@ -27,12 +27,17 @@ class OllamaBridgeReceiver : BroadcastReceiver() {
           BridgeContract.ACTION_GENERATE -> {
             val prompt = intent.getStringExtra(BridgeContract.EXTRA_PROMPT).orEmpty()
             val system = intent.getStringExtra(BridgeContract.EXTRA_SYSTEM)
+            val backend = intent.getStringExtra(BridgeContract.EXTRA_BACKEND)?.lowercase()
+            val maxTokens = intent.getIntExtra(BridgeContract.EXTRA_MAX_TOKENS, 256)
+            val temperature = intent.getFloatExtra(BridgeContract.EXTRA_TEMPERATURE, 0.7f)
             val localFile = LocalModelStore(appContext).fileFor(model)
-            if (localFile.isFile) {
-              LocalInferenceBridge.generate(appContext, model, prompt, system)
+            val resolvedBackend = backend ?: if (localFile.isFile) "local" else "ollama"
+            require(resolvedBackend == "local" || resolvedBackend == "ollama") { "backendはlocalまたはollamaを指定してください" }
+            if (resolvedBackend == "local") {
+              LocalInferenceBridge.generate(appContext, model, prompt, system, maxTokens, temperature)
             } else {
               val settings = SettingsStore(appContext)
-              OllamaClient(settings.endpoint, settings.apiKey).generate(model, prompt, system)
+              OllamaClient(settings.endpoint, settings.apiKey).generate(model, prompt, system, maxTokens, temperature)
             }
           }
           BridgeContract.ACTION_PULL -> {

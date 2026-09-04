@@ -5,6 +5,9 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import com.example.ollamataskerbridge.bridge.BridgeContract
+import com.example.ollamataskerbridge.bridge.Backend
+import com.example.ollamataskerbridge.bridge.DefaultInferenceRepository
+import com.example.ollamataskerbridge.bridge.GenerateRequest
 import com.example.ollamataskerbridge.bridge.LocalInferenceBridge
 import com.example.ollamataskerbridge.data.LocalModelStore
 import com.example.ollamataskerbridge.data.OllamaClient
@@ -33,11 +36,8 @@ class LocaleFireReceiver : BroadcastReceiver() {
           customSystem.ifBlank { values?.getString(LocalePluginContract.KEY_SYSTEM) }
         }
         val resultVariable = normalizeResultVariable(values?.getString(LocalePluginContract.KEY_RESULT_VARIABLE).orEmpty())
-        val result = if (LocalModelStore(appContext).fileFor(model).isFile) {
-            LocalInferenceBridge.generate(appContext, model, prompt, system)
-          } else {
-            generateCloud(appContext, model, prompt, system)
-          }
+        val backend = if (LocalModelStore(appContext).fileFor(model).isFile) Backend.LOCAL else Backend.OLLAMA
+        val result = DefaultInferenceRepository.generate(appContext, GenerateRequest(backend, model, prompt, system))
         finish(pending, appContext, intent, true, result, null, resultVariable)
       } catch (error: Exception) {
         finish(pending, appContext, intent, false, null, error.message ?: "実行に失敗しました", "")

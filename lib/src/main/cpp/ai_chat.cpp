@@ -4,6 +4,7 @@
 #include <cmath>
 #include <string>
 #include <unistd.h>
+#include <sys/stat.h>
 #include <sampling.h>
 
 #include "logging.h"
@@ -45,14 +46,19 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_init(JNIEnv *env, jobject /*unu
     // Set llama log handler to Android
     llama_log_set(aichat_android_log_callback, nullptr);
 
-    // Loading all CPU backend variants
     const auto *path_to_backend = env->GetStringUTFChars(nativeLibDir, 0);
-    LOGi("Loading backends from %s", path_to_backend);
-    ggml_backend_load_all_from_path(path_to_backend);
+    LOGi("Native library/backend path: %s", path_to_backend);
+    LOGi("Static CPU backend build: dynamic backend loading is disabled");
     env->ReleaseStringUTFChars(nativeLibDir, path_to_backend);
 
     // Initialize backends
     llama_backend_init();
+    const size_t count = ggml_backend_reg_count();
+    LOGi("Backend registry count = %zu", count);
+    for (size_t i = 0; i < count; ++i) {
+        auto *reg = ggml_backend_reg_get(i);
+        LOGi("Backend[%zu] = %s", i, ggml_backend_reg_name(reg));
+    }
     LOGi("Backend initiated; Log handler set.");
 }
 
@@ -62,16 +68,22 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_load(JNIEnv *env, jobject, jstr
     llama_model_params model_params = llama_model_default_params();
 
     const auto *model_path = env->GetStringUTFChars(jmodel_path, 0);
+    struct stat model_stat{};
+    const auto stat_result = stat(model_path, &model_stat);
+    LOGi("Model path=%s size=%lld stat=%d", model_path, stat_result == 0 ? static_cast<long long>(model_stat.st_size) : -1LL, stat_result);
     LOGd("%s: Loading model from: \n%s\n", __func__, model_path);
 
     auto *model = llama_model_load_from_file(model_path, model_params);
     env->ReleaseStringUTFChars(jmodel_path, model_path);
     if (!model) {
+        LOGe("llama_model_load_from_file result=NULL");
         return 1;
     }
+    LOGi("llama_model_load_from_file result=success");
     g_model = model;
     return 0;
 }
+
 
 static llama_context *init_context(llama_model *model, const int n_ctx = DEFAULT_CONTEXT_SIZE) {
     if (!model) {
@@ -101,6 +113,7 @@ static llama_context *init_context(llama_model *model, const int n_ctx = DEFAULT
     if (context == nullptr) {
         LOGe("%s: llama_new_context_with_model() returned null)", __func__);
     }
+    LOGi("context creation result=%s", context == nullptr ? "NULL" : "success");
     return context;
 }
 
@@ -120,6 +133,15 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_prepare(JNIEnv * /*env*/, jobje
     g_chat_templates = common_chat_templates_init(g_model, "");
     g_sampler = new_sampler(DEFAULT_SAMPLER_TEMP);
     return 0;
+}
+
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_arm_aichat_internal_InferenceEngineImpl_setTemperature(JNIEnv *, jobject, jfloat temperature) {
+    if (g_sampler) common_sampler_free(g_sampler);
+    g_sampler = new_sampler(temperature);
+    LOGi("Sampler temperature=%f", temperature);
 }
 
 static std::string get_backend() {
@@ -350,6 +372,7 @@ static int decode_tokens_in_batches(
     return 0;
 }
 
+
 extern "C"
 JNIEXPORT jint JNICALL
 Java_com_arm_aichat_internal_InferenceEngineImpl_processSystemPrompt(
@@ -398,6 +421,7 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_processSystemPrompt(
     system_prompt_position = current_position = (int) system_tokens.size();
     return 0;
 }
+
 
 extern "C"
 JNIEXPORT jint JNICALL
@@ -448,6 +472,7 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_processUserPrompt(
     stop_generation_position = current_position + user_prompt_size + n_predict;
     return 0;
 }
+
 
 static bool is_valid_utf8(const char *string) {
     if (!string) { return true; }

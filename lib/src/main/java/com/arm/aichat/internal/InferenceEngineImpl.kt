@@ -1,6 +1,7 @@
 package com.arm.aichat.internal
 
 import android.content.Context
+import android.os.Build
 import android.util.Log
 import com.arm.aichat.InferenceEngine
 import com.arm.aichat.UnsupportedArchitectureException
@@ -100,6 +101,9 @@ internal class InferenceEngineImpl private constructor(
     @FastNative
     private external fun processUserPrompt(userPrompt: String, predictLength: Int): Int
 
+    
+    private external fun setTemperature(temperature: Float)
+
     @FastNative
     private external fun generateNextToken(): String?
 
@@ -133,6 +137,8 @@ internal class InferenceEngineImpl private constructor(
                 _state.value = InferenceEngine.State.Initializing
                 Log.i(TAG, "Loading native library...")
                 System.loadLibrary("ai-chat")
+                Log.i(TAG, "SUPPORTED_ABIS=${Build.SUPPORTED_ABIS.joinToString()}")
+                Log.i(TAG, "nativeLibraryDir=$nativeLibDir files=${File(nativeLibDir).list()?.joinToString()}")
                 init(nativeLibDir)
                 _state.value = InferenceEngine.State.Initialized
                 Log.i(TAG, "Native library loaded! System info: \n${systemInfo()}")
@@ -217,6 +223,7 @@ internal class InferenceEngineImpl private constructor(
     override fun sendUserPrompt(
         message: String,
         predictLength: Int,
+        temperature: Float,
     ): Flow<String> = flow {
         require(message.isNotEmpty()) { "User prompt discarded due to being empty!" }
         check(_state.value is InferenceEngine.State.ModelReady) {
@@ -224,7 +231,8 @@ internal class InferenceEngineImpl private constructor(
         }
 
         try {
-            Log.i(TAG, "Sending user prompt...")
+            Log.i(TAG, "Sending user prompt (maxTokens=" + predictLength + " temperature=" + temperature + ")...")
+            setTemperature(temperature)
             _readyForSystemPrompt = false
             _state.value = InferenceEngine.State.ProcessingUserPrompt
 
