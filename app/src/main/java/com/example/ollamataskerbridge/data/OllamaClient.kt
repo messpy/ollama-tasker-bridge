@@ -50,7 +50,10 @@ class OllamaClient(private val baseUrl: String, private val apiKey: String = "")
       connectTimeout = 8_000
       readTimeout = readTimeoutMs
       setRequestProperty("Accept", "application/json")
-      if (apiKey.isNotBlank()) setRequestProperty("Authorization", "Bearer $apiKey")
+      if (apiKey.isNotBlank()) {
+        val token = apiKey.removePrefix("Bearer ").trim()
+        setRequestProperty("Authorization", "Bearer " + token)
+      }
       if (body != null) {
         doOutput = true
         setRequestProperty("Content-Type", "application/json")
@@ -61,7 +64,10 @@ class OllamaClient(private val baseUrl: String, private val apiKey: String = "")
       val code = connection.responseCode
       val stream = if (code in 200..299) connection.inputStream else connection.errorStream
       val response = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
-      if (code !in 200..299) throw IOException("Ollama returned HTTP $code")
+      if (code !in 200..299) {
+        val detail = response.take(240).replace(Regex("\\s+"), " ")
+        throw IOException("Ollama HTTP " + code + if (detail.isNotBlank()) ": " + detail else "")
+      }
       return response
     } finally { connection.disconnect() }
   }
