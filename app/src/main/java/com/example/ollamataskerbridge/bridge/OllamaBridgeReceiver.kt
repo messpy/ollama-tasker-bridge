@@ -24,8 +24,12 @@ class OllamaBridgeReceiver : BroadcastReceiver() {
             system = intent.getStringExtra(BridgeContract.EXTRA_SYSTEM),
           )
           BridgeContract.ACTION_PULL -> {
-            val file = OllamaRegistryClient(LocalModelStore(appContext)).download(model)
-            "モデルをAndroidへ保存しました: " + file.name
+            appContext.startForegroundService(Intent(appContext, ModelDownloadService::class.java).apply {
+              putExtra(BridgeContract.EXTRA_MODEL, model)
+              putExtra(BridgeContract.EXTRA_REPLY_ACTION, intent.getStringExtra(BridgeContract.EXTRA_REPLY_ACTION))
+              putExtra(BridgeContract.EXTRA_REPLY_PACKAGE, intent.getStringExtra(BridgeContract.EXTRA_REPLY_PACKAGE))
+            })
+            "モデル取得をバックグラウンドで開始しました: $model"
           }
           else -> throw IllegalArgumentException("未対応のActionです")
         }
