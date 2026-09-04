@@ -10,23 +10,32 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.example.ollamataskerbridge.data.LocalModelStore
+import com.example.ollamataskerbridge.data.OllamaClient
+import com.example.ollamataskerbridge.data.SettingsStore
+import kotlinx.coroutines.launch
 import com.example.ollamataskerbridge.theme.MyApplicationTheme
 
 class PluginSettingsActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     val initial = intent.extras?.getBundle(LocalePluginContract.EXTRA_BUNDLE)
+    val appContext = applicationContext
     setContent {
       MyApplicationTheme {
         PluginSettingsContent(
@@ -34,6 +43,17 @@ class PluginSettingsActivity : ComponentActivity() {
           initialPrompt = initial?.getString(LocalePluginContract.KEY_PROMPT).orEmpty(),
           initialSystem = initial?.getString(LocalePluginContract.KEY_SYSTEM).orEmpty(),
           initialMode = initial?.getString(LocalePluginContract.KEY_MODE) ?: "auto",
+          loadModels = {
+            val local = LocalModelStore(appContext).directory.listFiles()
+              ?.filter { it.extension == "gguf" }
+              ?.map { it.nameWithoutExtension }
+              .orEmpty()
+            val settings = SettingsStore(appContext)
+            val remote = runCatching {
+              OllamaClient(settings.endpoint, settings.apiKey).listModels().map { it.name }
+            }.getOrDefault(emptyList())
+            (local + remote).distinct().sorted()
+          },
           onCancel = { setResult(Activity.RESULT_CANCELED); finish() },
           onSave = { model, prompt, system, mode ->
             val values = Bundle().apply {
@@ -67,6 +87,7 @@ private fun PluginSettingsContent(
   initialPrompt: String,
   initialSystem: String,
   initialMode: String,
+  loadModels: suspend () -> List<String>,
   onCancel: () -> Unit,
   onSave: (String, String, String, String) -> Unit,
 ) {
@@ -74,9 +95,31 @@ private fun PluginSettingsContent(
   var prompt by remember { mutableStateOf(initialPrompt) }
   var system by remember { mutableStateOf(initialSystem) }
   var mode by remember { mutableStateOf(initialMode) }
+  var query by remember { mutableStateOf("") }
+  var models by remember { mutableStateOf<List<String>>(emptyList()) }
+  var loadingModels by remember { mutableStateOf(false) }
+  val scope = rememberCoroutineScope()
+  fun refreshModels() = scope.launch {
+    loadingModels = true
+    models = loadModels()
+    loadingModels = false
+  }
+  LaunchedEffect(Unit) { refreshModels() }
   Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Text("Ollama Tasker Bridge")
     OutlinedTextField(model, { model = it }, Modifier.fillMaxWidth(), label = { Text("モデル名") })
+    OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), label = { Text("モデルを検索") }, singleLine = true)
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+      Button(onClick = { refreshModels() }, enabled = !loadingModels) {
+        Text(if (loadingModels) "更新中…" else "候補を更新")
+      }
+      Text("本体アプリのAPIキーを使用", Modifier.padding(top = 12.dp))
+    }
+    LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+      items(models.filter { query.isBlank() || it.contains(query, ignoreCase = true) }, key = { it }) { candidate ->
+        Button(onClick = { model = candidate }, modifier = Modifier.fillMaxWidth()) { Text(candidate) }
+      }
+    }
     OutlinedTextField(prompt, { prompt = it }, Modifier.fillMaxWidth(), label = { Text("プロンプト") })
     OutlinedTextField(system, { system = it }, Modifier.fillMaxWidth(), label = { Text("システムプロンプト（任意）") })
     Text("実行先")
