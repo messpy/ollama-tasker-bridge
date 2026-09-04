@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.OutlinedButton
@@ -113,6 +114,7 @@ private fun PluginSettingsContent(
       OutlinedButton(onClick = { platform = "macrodroid" }) { Text("MacroDroid") }
     }
     Text("モデルの取得・APIキー・プリセット管理は本体アプリで行います。")
+    Row { Checkbox(checked = true, onCheckedChange = null); Text("本体アプリのAPIキーを使用") }
     Button(onClick = onOpenApp, modifier = Modifier.fillMaxWidth()) { Text("本体アプリを開く") }
     OutlinedTextField(model, { model = it }, Modifier.fillMaxWidth(), label = { Text("モデル") }, singleLine = true)
     OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), label = { Text("本体のモデル一覧を検索") }, singleLine = true)
