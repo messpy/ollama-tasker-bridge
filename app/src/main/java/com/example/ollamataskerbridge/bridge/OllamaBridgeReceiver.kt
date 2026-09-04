@@ -8,7 +8,9 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import com.example.ollamataskerbridge.data.LocalModelStore
+import com.example.ollamataskerbridge.data.OllamaClient
 import com.example.ollamataskerbridge.data.OllamaRegistryClient
+import com.example.ollamataskerbridge.data.SettingsStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -22,11 +24,17 @@ class OllamaBridgeReceiver : BroadcastReceiver() {
       try {
         val model = intent.getStringExtra(BridgeContract.EXTRA_MODEL).orEmpty()
         val response = when (intent.action) {
-          BridgeContract.ACTION_GENERATE -> LocalInferenceBridge.generate(
-            context = appContext, model = model,
-            prompt = intent.getStringExtra(BridgeContract.EXTRA_PROMPT).orEmpty(),
-            system = intent.getStringExtra(BridgeContract.EXTRA_SYSTEM),
-          )
+          BridgeContract.ACTION_GENERATE -> {
+            val prompt = intent.getStringExtra(BridgeContract.EXTRA_PROMPT).orEmpty()
+            val system = intent.getStringExtra(BridgeContract.EXTRA_SYSTEM)
+            val localFile = LocalModelStore(appContext).fileFor(model)
+            if (localFile.isFile) {
+              LocalInferenceBridge.generate(appContext, model, prompt, system)
+            } else {
+              val settings = SettingsStore(appContext)
+              OllamaClient(settings.endpoint, settings.apiKey).generate(model, prompt, system)
+            }
+          }
           BridgeContract.ACTION_PULL -> {
             val extras = android.os.PersistableBundle().apply {
               putString(BridgeContract.EXTRA_MODEL, model)
