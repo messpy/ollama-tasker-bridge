@@ -26,6 +26,7 @@ class LocaleFireReceiver : BroadcastReceiver() {
         val prompt = values?.getString(LocalePluginContract.KEY_PROMPT).orEmpty()
         val system = values?.getString(LocalePluginContract.KEY_SYSTEM)
         val mode = values?.getString(LocalePluginContract.KEY_MODE) ?: "auto"
+        val resultVariable = values?.getString(LocalePluginContract.KEY_RESULT_VARIABLE).orEmpty()
         val result = when (mode) {
           "local" -> LocalInferenceBridge.generate(appContext, model, prompt, system)
           "cloud" -> generateCloud(appContext, model, prompt, system)
@@ -35,9 +36,9 @@ class LocaleFireReceiver : BroadcastReceiver() {
             generateCloud(appContext, model, prompt, system)
           }
         }
-        finish(pending, appContext, intent, true, result, null)
+        finish(pending, appContext, intent, true, result, null, resultVariable)
       } catch (error: Exception) {
-        finish(pending, appContext, intent, false, null, error.message ?: "実行に失敗しました")
+        finish(pending, appContext, intent, false, null, error.message ?: "実行に失敗しました", "")
       } finally {
         pending.finish()
       }
@@ -49,10 +50,14 @@ class LocaleFireReceiver : BroadcastReceiver() {
     return OllamaClient(settings.endpoint, settings.apiKey).generate(model, prompt, system)
   }
 
-  private fun finish(pending: PendingResult, context: Context, request: Intent, ok: Boolean, result: String?, error: String?) {
+  private fun finish(pending: PendingResult, context: Context, request: Intent, ok: Boolean, result: String?, error: String?, resultVariable: String) {
     val extras = Bundle().apply {
       putBoolean(BridgeContract.EXTRA_OK, ok)
-      result?.let { putString(BridgeContract.EXTRA_RESULT, it) }
+      result?.let {
+        putString(BridgeContract.EXTRA_RESULT, it)
+        putString("response", it)
+        if (resultVariable.isNotBlank()) putString(resultVariable, it)
+      }
       error?.let { putString(BridgeContract.EXTRA_ERROR, it) }
     }
     pending.setResultCode(if (ok) 0 else 1)

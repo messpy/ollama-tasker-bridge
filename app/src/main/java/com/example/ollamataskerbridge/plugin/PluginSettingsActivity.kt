@@ -44,6 +44,7 @@ class PluginSettingsActivity : ComponentActivity() {
           initialPrompt = initial?.getString(LocalePluginContract.KEY_PROMPT).orEmpty(),
           initialSystem = initial?.getString(LocalePluginContract.KEY_SYSTEM).orEmpty(),
           initialMode = initial?.getString(LocalePluginContract.KEY_MODE) ?: "auto",
+          initialResultVariable = initial?.getString(LocalePluginContract.KEY_RESULT_VARIABLE).orEmpty(),
           onOpenApp = {
             startActivity(Intent(this@PluginSettingsActivity, MainActivity::class.java))
           },
@@ -59,12 +60,13 @@ class PluginSettingsActivity : ComponentActivity() {
             PluginModelLists(cloud = remote.distinct().sorted(), local = local.distinct().sorted())
           },
           onCancel = { setResult(Activity.RESULT_CANCELED); finish() },
-          onSave = { model, prompt, system, mode ->
+          onSave = { model, prompt, system, mode, resultVariable ->
             val values = Bundle().apply {
               putString(LocalePluginContract.KEY_MODEL, model.trim())
               putString(LocalePluginContract.KEY_PROMPT, prompt)
               putString(LocalePluginContract.KEY_SYSTEM, system)
               putString(LocalePluginContract.KEY_MODE, mode)
+              putString(LocalePluginContract.KEY_RESULT_VARIABLE, resultVariable.trim())
             }
             val result = Intent().apply {
               putExtra(LocalePluginContract.EXTRA_BUNDLE, values)
@@ -96,15 +98,17 @@ private fun PluginSettingsContent(
   initialPrompt: String,
   initialSystem: String,
   initialMode: String,
+  initialResultVariable: String,
   onOpenApp: () -> Unit,
   loadModels: suspend () -> PluginModelLists,
   onCancel: () -> Unit,
-  onSave: (String, String, String, String) -> Unit,
+  onSave: (String, String, String, String, String) -> Unit,
 ) {
   var model by remember { mutableStateOf(initialModel) }
   var prompt by remember { mutableStateOf(initialPrompt) }
   var system by remember { mutableStateOf(initialSystem) }
   var mode by remember { mutableStateOf(initialMode) }
+  var resultVariable by remember { mutableStateOf(initialResultVariable) }
   var query by remember { mutableStateOf("") }
   var modelLists by remember { mutableStateOf(PluginModelLists()) }
   var loadingModels by remember { mutableStateOf(false) }
@@ -143,6 +147,7 @@ private fun PluginSettingsContent(
     }
     OutlinedTextField(prompt, { prompt = it }, Modifier.fillMaxWidth(), label = { Text("プロンプト") })
     OutlinedTextField(system, { system = it }, Modifier.fillMaxWidth(), label = { Text("システムプロンプト（任意）") })
+    OutlinedTextField(resultVariable, { resultVariable = it }, Modifier.fillMaxWidth(), label = { Text("結果を入れるMacroDroid変数名（任意）") }, singleLine = true)
     Text("実行先")
     Row {
       listOf("auto" to "自動", "local" to "ローカル", "cloud" to "Cloud").forEach { (value, label) ->
@@ -154,7 +159,7 @@ private fun PluginSettingsContent(
     }
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
       Button(onClick = onCancel) { Text("キャンセル") }
-      Button(onClick = { onSave(model, prompt, system, mode) }, enabled = model.isNotBlank() && prompt.isNotBlank()) {
+      Button(onClick = { onSave(model, prompt, system, mode, resultVariable) }, enabled = model.isNotBlank() && prompt.isNotBlank()) {
         Text("保存")
       }
     }
