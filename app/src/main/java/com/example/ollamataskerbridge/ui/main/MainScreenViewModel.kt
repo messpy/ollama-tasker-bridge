@@ -21,9 +21,14 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   private val settings = SettingsStore(application)
   private val localModels = LocalModelStore(application)
   private val registry = OllamaRegistryClient(localModels)
+  private fun installedModels() = localModels.directory.listFiles()
+    ?.filter { it.extension == "gguf" }
+    ?.map { com.example.ollamataskerbridge.data.OllamaModel(it.nameWithoutExtension, false, true, it.length(), true) }
+    .orEmpty()
+  private val initialModels = (settings.cachedModels() + installedModels()).distinctBy { it.name }
   private val initialPresets = settings.presets()
   private val initialPreset = initialPresets.firstOrNull { it.id == settings.lastPresetId } ?: initialPresets.firstOrNull()
-  private val _uiState = MutableStateFlow(MainScreenUiState(endpoint = settings.endpoint, apiKey = settings.apiKey, maxLocalModelSizeGb = settings.maxLocalModelSizeGb.toString(), systemPromptPresetId = initialPreset?.id.orEmpty(), systemPrompt = initialPreset?.body.orEmpty(), presets = initialPresets))
+  private val _uiState = MutableStateFlow(MainScreenUiState(endpoint = settings.endpoint, apiKey = settings.apiKey, maxLocalModelSizeGb = settings.maxLocalModelSizeGb.toString(), systemPromptPresetId = initialPreset?.id.orEmpty(), systemPrompt = initialPreset?.body.orEmpty(), presets = initialPresets, models = initialModels))
   val uiState: StateFlow<MainScreenUiState> = _uiState.asStateFlow()
 
   fun endpointChanged(value: String) { _uiState.value = _uiState.value.copy(endpoint = value, message = null) }
@@ -83,7 +88,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
       ?.map { com.example.ollamataskerbridge.data.OllamaModel(it.nameWithoutExtension, false, true, it.length(), true) }
       .orEmpty()
     val localByName = local.associateBy { it.name }
-    val remote = (client().listModels() + registry.catalog()).distinctBy { it.name }.map { item ->
+    val remote = runCatching { (client().listModels() + registry.catalog()).distinctBy { it.name } }.getOrDefault(emptyList()).map { item ->
       val registryInfo = runCatching { registry.metadata(item.name) }.getOrNull()
       item.copy(
         local = localByName[item.name] != null,
