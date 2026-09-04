@@ -53,6 +53,7 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
   var pendingDelete by remember { mutableStateOf<String?>(null) }
   var editingPreset by remember { mutableStateOf<SystemPromptPreset?>(null) }
   var showPresetDialog by remember { mutableStateOf(false) }
+  var systemPresetMenu by remember { mutableStateOf(false) }
   val clipboard = LocalClipboardManager.current
   val maxBytes = state.maxLocalModelSizeGb.toDoubleOrNull()?.times(1_000_000_000.0)?.toLong() ?: Long.MAX_VALUE
   val shownModels = state.models.filter { !it.local || it.sizeBytes <= maxBytes }.filter { !state.localOnly || it.local }.filter { state.search.isBlank() || it.name.contains(state.search, true) }
@@ -105,7 +106,26 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
     if (state.loading) CircularProgressIndicator()
 
     Text("動作検証", style = MaterialTheme.typography.titleMedium)
-    OutlinedTextField(state.systemPrompt, viewModel::systemPromptChanged, Modifier.fillMaxWidth(), label = { Text("システムプロンプト（任意）") }, minLines = 3)
+    val selectedSystemPreset = state.presets.firstOrNull { it.id == state.systemPromptPresetId }
+    Text("システムプロンプト", style = MaterialTheme.typography.labelLarge)
+    Row {
+      OutlinedButton(onClick = { systemPresetMenu = true }) {
+        Text(selectedSystemPreset?.name ?: if (state.systemPromptPresetId == CUSTOM_SYSTEM_PROMPT_ID) "カスタム入力" else "プリセットを選択")
+      }
+      DropdownMenu(expanded = systemPresetMenu, onDismissRequest = { systemPresetMenu = false }) {
+        state.presets.forEach { preset ->
+          DropdownMenuItem(text = { Text(preset.name) }, onClick = { viewModel.selectSystemPromptPreset(preset.id); systemPresetMenu = false })
+        }
+        DropdownMenuItem(text = { Text("カスタム入力…") }, onClick = { viewModel.selectSystemPromptPreset(CUSTOM_SYSTEM_PROMPT_ID); systemPresetMenu = false })
+      }
+    }
+    if (selectedSystemPreset != null) {
+      Text(selectedSystemPreset.body, style = MaterialTheme.typography.bodySmall, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp))
+    } else if (state.systemPromptPresetId == CUSTOM_SYSTEM_PROMPT_ID) {
+      OutlinedTextField(state.systemPrompt, viewModel::systemPromptChanged, Modifier.fillMaxWidth(), label = { Text("カスタムシステムプロンプト") }, minLines = 3)
+    } else {
+      Text("プリセットを選ぶとシステムプロンプトが適用されます。", style = MaterialTheme.typography.bodySmall)
+    }
     OutlinedTextField(state.testPrompt, viewModel::testPromptChanged, Modifier.fillMaxWidth(), label = { Text("テスト用プロンプト") }, minLines = 2)
     Button(onClick = viewModel::runTest, enabled = !state.loading && state.selectedModel.isNotBlank() && state.testPrompt.isNotBlank()) { Text("テスト実行") }
 

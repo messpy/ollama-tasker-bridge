@@ -18,7 +18,9 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   private val settings = SettingsStore(application)
   private val localModels = LocalModelStore(application)
   private val registry = OllamaRegistryClient(localModels)
-  private val _uiState = MutableStateFlow(MainScreenUiState(endpoint = settings.endpoint, apiKey = settings.apiKey, maxLocalModelSizeGb = settings.maxLocalModelSizeGb.toString(), presets = settings.presets()))
+  private val initialPresets = settings.presets()
+  private val initialPreset = initialPresets.firstOrNull { it.id == settings.lastPresetId } ?: initialPresets.firstOrNull()
+  private val _uiState = MutableStateFlow(MainScreenUiState(endpoint = settings.endpoint, apiKey = settings.apiKey, maxLocalModelSizeGb = settings.maxLocalModelSizeGb.toString(), systemPromptPresetId = initialPreset?.id.orEmpty(), systemPrompt = initialPreset?.body.orEmpty(), presets = initialPresets))
   val uiState: StateFlow<MainScreenUiState> = _uiState.asStateFlow()
 
   fun endpointChanged(value: String) { _uiState.value = _uiState.value.copy(endpoint = value, message = null) }
@@ -26,6 +28,15 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   fun downloadModelChanged(value: String) { _uiState.value = _uiState.value.copy(downloadModel = value, message = null) }
   fun testPromptChanged(value: String) { _uiState.value = _uiState.value.copy(testPrompt = value, message = null) }
   fun systemPromptChanged(value: String) { _uiState.value = _uiState.value.copy(systemPrompt = value, message = null) }
+  fun selectSystemPromptPreset(id: String) {
+    if (id == CUSTOM_SYSTEM_PROMPT_ID) {
+      _uiState.value = _uiState.value.copy(systemPromptPresetId = id, message = null)
+    } else {
+      val preset = settings.presets().firstOrNull { it.id == id } ?: return
+      settings.lastPresetId = id
+      _uiState.value = _uiState.value.copy(systemPromptPresetId = id, systemPrompt = preset.body, presets = settings.presets(), message = null)
+    }
+  }
   fun searchChanged(value: String) { _uiState.value = _uiState.value.copy(search = value) }
   fun localOnlyChanged(value: Boolean) { _uiState.value = _uiState.value.copy(localOnly = value) }
   fun maxLocalModelSizeChanged(value: String) {
@@ -124,6 +135,7 @@ data class MainScreenUiState(
   val localOnly: Boolean = false,
   val maxLocalModelSizeGb: String = "8.0",
   val systemPrompt: String = "",
+  val systemPromptPresetId: String = "",
   val apiKeyVisible: Boolean = false,
   val testPrompt: String = "Tasker連携テストです。成功したら『テスト成功』とだけ返してください。",
   val models: List<com.example.ollamataskerbridge.data.OllamaModel> = emptyList(),
@@ -131,3 +143,5 @@ data class MainScreenUiState(
   val loading: Boolean = false,
   val message: String? = null,
 )
+
+const val CUSTOM_SYSTEM_PROMPT_ID = "__custom__"
