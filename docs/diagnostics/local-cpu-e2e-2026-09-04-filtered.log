@@ -1,0 +1,201 @@
+I/adbd    ( 1256): adbd service requested 'shell,v2,TERM=dumb,raw:am broadcast -n com.example.ollamataskerbridge/.bridge.OllamaBridgeReceiver -a com.example.ollamataskerbridge.action.GENERATE --es backend local --es model smollm2:135m --es prompt TESTONE --es system_prompt plain --ei max_tokens 16 --ef temperature 0.2 --es request_id local-cpu-1'
+I/ActivityManager( 1509): Broadcasting: Intent { act=com.example.ollamataskerbridge.action.GENERATE flg=0x400000 cmp=com.example.ollamataskerbridge/.bridge.OllamaBridgeReceiver (has extras) }
+I/ActivityManager( 1509): Enqueued broadcast Intent { act=com.example.ollamataskerbridge.action.GENERATE flg=0x400000 cmp=com.example.ollamataskerbridge/.bridge.OllamaBridgeReceiver (has extras) }: 0
+I/ActivityManager( 1509): Start proc 4224:com.example.ollamataskerbridge/u0a480 for broadcast {com.example.ollamataskerbridge/com.example.ollamataskerbridge.bridge.OllamaBridgeReceiver}
+I/Zygote  ( 4224): Process 4224 created for com.example.ollamataskerbridge
+D/nativeloader( 4224): Configuring clns-9 for other apk /data/app/~~0TirYOKk7cIcLwG1kr7zGA==/com.example.ollamataskerbridge-QeScb-30bO72zJamaxYIcg==/base.apk. target_sdk_version=36, uses_libraries=, library_path=/data/app/~~0TirYOKk7cIcLwG1kr7zGA==/com.example.ollamataskerbridge-QeScb-30bO72zJamaxYIcg==/lib/arm64:/data/app/~~0TirYOKk7cIcLwG1kr7zGA==/com.example.ollamataskerbridge-QeScb-30bO72zJamaxYIcg==/base.apk!/lib/arm64-v8a, permitted_path=/data:/mnt/expand:/data/user/0/com.example.ollamataskerbridge
+V/GraphicsEnvironment( 4224): com.example.ollamataskerbridge is not listed in per-application setting
+I/InferenceEngineImpl( 4224): Instantiating InferenceEngineImpl,,,
+I/InferenceEngineImpl( 4224): Loading native library...
+D/nativeloader( 4224): Load /data/app/~~0TirYOKk7cIcLwG1kr7zGA==/com.example.ollamataskerbridge-QeScb-30bO72zJamaxYIcg==/base.apk!/lib/arm64-v8a/libai-chat.so using class loader ns clns-9 (caller=/data/app/~~0TirYOKk7cIcLwG1kr7zGA==/com.example.ollamataskerbridge-QeScb-30bO72zJamaxYIcg==/base.apk!classes4.dex): ok
+I/InferenceEngineImpl( 4224): SUPPORTED_ABIS=arm64-v8a
+I/InferenceEngineImpl( 4224): nativeLibraryDir=/data/app/~~0TirYOKk7cIcLwG1kr7zGA==/com.example.ollamataskerbridge-QeScb-30bO72zJamaxYIcg==/lib/arm64 files=
+I/ai-chat ( 4224): Native library/backend path: /data/app/~~0TirYOKk7cIcLwG1kr7zGA==/com.example.ollamataskerbridge-QeScb-30bO72zJamaxYIcg==/lib/arm64
+I/ai-chat ( 4224): Static CPU backend build: dynamic backend loading is disabled
+I/ai-chat ( 4224): Backend registry count = 1
+I/ai-chat ( 4224): Backend[0] = CPU
+I/ai-chat ( 4224): Backend initiated; Log handler set.
+I/InferenceEngineImpl( 4224): Native library loaded! System info: 
+I/InferenceEngineImpl( 4224): CPU : NEON = 1 | ARM_FMA = 1 | REPACK = 1 | 
+I/InferenceEngineImpl( 4224): Checking access to model file... 
+I/InferenceEngineImpl( 4224): /data/user/0/com.example.ollamataskerbridge/files/models/smollm2_135m.gguf
+I/InferenceEngineImpl( 4224): Loading model... 
+I/InferenceEngineImpl( 4224): /data/user/0/com.example.ollamataskerbridge/files/models/smollm2_135m.gguf
+I/ai-chat ( 4224): Model path=/data/user/0/com.example.ollamataskerbridge/files/models/smollm2_135m.gguf size=105454432 stat=0
+D/ai-chat ( 4224): Java_com_arm_aichat_internal_InferenceEngineImpl_load: Loading model from: 
+D/ai-chat ( 4224): /data/user/0/com.example.ollamataskerbridge/files/models/smollm2_135m.gguf
+I/ai-chat ( 4224): llama_model_loader: loaded meta data with 37 key-value pairs and 272 tensors from /data/user/0/com.example.ollamataskerbridge/files/models/smollm2_135m.gguf (version GGUF V3 (latest))
+I/ai-chat ( 4224): llama_model_loader: Dumping metadata keys/values. Note: KV overrides do not apply in this output.
+I/ai-chat ( 4224): llama_model_loader: - kv   0:                       general.architecture str              = llama
+I/ai-chat ( 4224): llama_model_loader: - kv   1:                               general.type str              = model
+I/ai-chat ( 4224): llama_model_loader: - kv   2:                               general.name str              = Smollm2 135M 8k Lc100K Mix1 Ep2
+I/ai-chat ( 4224): llama_model_loader: - kv   3:                       general.organization str              = HuggingFaceTB
+I/ai-chat ( 4224): llama_model_loader: - kv   4:                           general.finetune str              = 8k-lc100k-mix1-ep2
+I/ai-chat ( 4224): llama_model_loader: - kv   5:                           general.basename str              = smollm2
+I/ai-chat ( 4224): llama_model_loader: - kv   6:                         general.size_label str              = 135M
+I/ai-chat ( 4224): llama_model_loader: - kv   7:                            general.license str              = apache-2.0
+I/ai-chat ( 4224): llama_model_loader: - kv   8:                          general.languages arr[str,1]       = ["en"]
+I/ai-chat ( 4224): llama_model_loader: - kv   9:                          llama.block_count u32              = 30
+I/ai-chat ( 4224): llama_model_loader: - kv  10:                       llama.context_length u32              = 8192
+I/ai-chat ( 4224): llama_model_loader: - kv  11:                     llama.embedding_length u32              = 576
+I/ai-chat ( 4224): llama_model_loader: - kv  12:                  llama.feed_forward_length u32              = 1536
+I/ai-chat ( 4224): llama_model_loader: - kv  13:                 llama.attention.head_count u32              = 9
+I/ai-chat ( 4224): llama_model_loader: - kv  14:              llama.attention.head_count_kv u32              = 3
+I/ai-chat ( 4224): llama_model_loader: - kv  15:                       llama.rope.freq_base f32              = 100000.000000
+I/ai-chat ( 4224): llama_model_loader: - kv  16:     llama.attention.layer_norm_rms_epsilon f32              = 0.000010
+I/ai-chat ( 4224): llama_model_loader: - kv  17:                          general.file_type u32              = 15
+I/ai-chat ( 4224): llama_model_loader: - kv  18:                           llama.vocab_size u32              = 49152
+I/ai-chat ( 4224): llama_model_loader: - kv  19:                 llama.rope.dimension_count u32              = 64
+I/ai-chat ( 4224): llama_model_loader: - kv  20:            tokenizer.ggml.add_space_prefix bool             = false
+I/ai-chat ( 4224): llama_model_loader: - kv  21:               tokenizer.ggml.add_bos_token bool             = false
+I/ai-chat ( 4224): llama_model_loader: - kv  22:                       tokenizer.ggml.model str              = gpt2
+I/ai-chat ( 4224): llama_model_loader: - kv  23:                         tokenizer.ggml.pre str              = smollm
+I/ai-chat ( 4224): llama_model_loader: - kv  24:                      tokenizer.ggml.tokens arr[str,49152]   = ["<|endoftext|>", "<|im_start|>", "<|...
+I/ai-chat ( 4224): llama_model_loader: - kv  25:                  tokenizer.ggml.token_type arr[i32,49152]   = [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, ...
+I/ai-chat ( 4224): llama_model_loader: - kv  26:                      tokenizer.ggml.merges arr[str,48900]   = ["Ġ t", "Ġ a", "i n", "h e", "Ġ Ġ...
+I/ai-chat ( 4224): llama_model_loader: - kv  27:                tokenizer.ggml.bos_token_id u32              = 1
+I/ai-chat ( 4224): llama_model_loader: - kv  28:                tokenizer.ggml.eos_token_id u32              = 2
+I/ai-chat ( 4224): llama_model_loader: - kv  29:            tokenizer.ggml.unknown_token_id u32              = 0
+I/ai-chat ( 4224): llama_model_loader: - kv  30:            tokenizer.ggml.padding_token_id u32              = 2
+I/ai-chat ( 4224): llama_model_loader: - kv  31:                    tokenizer.chat_template str              = {% for message in messages %}{% if lo...
+I/ai-chat ( 4224): llama_model_loader: - kv  32:               general.quantization_version u32              = 2
+I/ai-chat ( 4224): llama_model_loader: - kv  33:                      quantize.imatrix.file str              = /models_out/SmolLM2-135M-Instruct-GGU...
+I/ai-chat ( 4224): llama_model_loader: - kv  34:                   quantize.imatrix.dataset str              = /training_dir/calibration_datav3.txt
+I/ai-chat ( 4224): llama_model_loader: - kv  35:             quantize.imatrix.entries_count i32              = 210
+I/ai-chat ( 4224): llama_model_loader: - kv  36:              quantize.imatrix.chunks_count i32              = 141
+I/ai-chat ( 4224): llama_model_loader: - type  f32:   61 tensors
+I/ai-chat ( 4224): llama_model_loader: - type q5_0:  166 tensors
+I/ai-chat ( 4224): llama_model_loader: - type q8_0:   15 tensors
+I/ai-chat ( 4224): llama_model_loader: - type q4_K:   16 tensors
+I/ai-chat ( 4224): llama_model_loader: - type q6_K:   14 tensors
+I/ai-chat ( 4224): print_info: file format = GGUF V3 (latest)
+I/ai-chat ( 4224): print_info: file type   = Q4_K - Medium
+I/ai-chat ( 4224): print_info: file size   = 98.87 MiB (6.17 BPW) 
+D/ai-chat ( 4224): init_tokenizer: initializing tokenizer for type 2
+I/ai-chat ( 4224): load: 0 unused tokens
+D/ai-chat ( 4224): load: control token:     15 '<jupyter_script>' is not marked as EOG
+D/ai-chat ( 4224): load: control token:      7 '<gh_stars>' is not marked as EOG
+D/ai-chat ( 4224): load: control token:      5 '<file_sep>' is not marked as EOG
+D/ai-chat ( 4224): load: control token:     12 '<jupyter_text>' is not marked as EOG
+D/ai-chat ( 4224): load: control token:     10 '<issue_closed>' is not marked as EOG
+D/ai-chat ( 4224): load: control token:     11 '<jupyter_start>' is not marked as EOG
+D/ai-chat ( 4224): load: control token:      1 '<|im_start|>' is not marked as EOG
+D/ai-chat ( 4224): load: control token:      9 '<issue_comment>' is not marked as EOG
+D/ai-chat ( 4224): load: control token:      8 '<issue_start>' is not marked as EOG
+D/ai-chat ( 4224): load: control token:     13 '<jupyter_code>' is not marked as EOG
+D/ai-chat ( 4224): load: control token:      3 '<repo_name>' is not marked as EOG
+D/ai-chat ( 4224): load: control token:      6 '<filename>' is not marked as EOG
+D/ai-chat ( 4224): load: control token:     14 '<jupyter_output>' is not marked as EOG
+D/ai-chat ( 4224): load: control token:     16 '<empty_output>' is not marked as EOG
+I/ai-chat ( 4224): load: printing all EOG tokens:
+I/ai-chat ( 4224): load:   - 0 ('<|endoftext|>')
+I/ai-chat ( 4224): load:   - 2 ('<|im_end|>')
+I/ai-chat ( 4224): load:   - 4 ('<reponame>')
+I/ai-chat ( 4224): load: special tokens cache size = 17
+I/ai-chat ( 4224): load: token to piece cache size = 0.3170 MB
+I/ai-chat ( 4224): print_info: arch                  = llama
+I/ai-chat ( 4224): print_info: vocab_only            = 0
+I/ai-chat ( 4224): print_info: no_alloc              = 0
+I/ai-chat ( 4224): print_info: n_ctx_train           = 8192
+I/ai-chat ( 4224): print_info: n_embd_inp            = 576
+I/ai-chat ( 4224): print_info: n_embd                = 576
+I/ai-chat ( 4224): print_info: n_embd_out            = 576
+I/ai-chat ( 4224): print_info: n_layer               = 30
+I/ai-chat ( 4224): print_info: n_layer_all           = 30
+I/ai-chat ( 4224): print_info: n_head                = 9
+I/ai-chat ( 4224): print_info: n_head_kv             = 3
+I/ai-chat ( 4224): print_info: n_rot                 = 64
+I/ai-chat ( 4224): print_info: n_swa                 = 0
+I/ai-chat ( 4224): print_info: is_swa_any            = 0
+I/ai-chat ( 4224): print_info: n_embd_head_k         = 64
+I/ai-chat ( 4224): print_info: n_embd_head_v         = 64
+I/ai-chat ( 4224): print_info: n_gqa                 = 3
+I/ai-chat ( 4224): print_info: n_embd_k_gqa          = 192
+I/ai-chat ( 4224): print_info: n_embd_v_gqa          = 192
+I/ai-chat ( 4224): print_info: f_norm_eps            = 0.0e+00
+I/ai-chat ( 4224): print_info: f_norm_rms_eps        = 1.0e-05
+I/ai-chat ( 4224): print_info: f_clamp_kqv           = 0.0e+00
+I/ai-chat ( 4224): print_info: f_max_alibi_bias      = 0.0e+00
+I/ai-chat ( 4224): print_info: f_logit_scale         = 0.0e+00
+I/ai-chat ( 4224): print_info: f_attn_scale          = 0.0e+00
+I/ai-chat ( 4224): print_info: f_attn_value_scale    = 0.0000
+I/ai-chat ( 4224): print_info: n_ff                  = 1536
+I/ai-chat ( 4224): print_info: n_expert              = 0
+I/ai-chat ( 4224): print_info: n_expert_used         = 0
+I/ai-chat ( 4224): print_info: n_expert_groups       = 0
+I/ai-chat ( 4224): print_info: n_group_used          = 0
+I/ai-chat ( 4224): print_info: causal attn           = 1
+I/ai-chat ( 4224): print_info: pooling type          = -1
+I/ai-chat ( 4224): print_info: rope type             = 0
+I/ai-chat ( 4224): print_info: rope scaling          = linear
+I/ai-chat ( 4224): print_info: freq_base_train       = 100000.0
+I/ai-chat ( 4224): print_info: freq_scale_train      = 1
+I/ai-chat ( 4224): print_info: n_ctx_orig_yarn       = 8192
+I/ai-chat ( 4224): print_info: rope_yarn_log_mul     = 0.0000
+I/ai-chat ( 4224): print_info: rope_finetuned        = unknown
+I/ai-chat ( 4224): print_info: model type            = 256M
+I/ai-chat ( 4224): print_info: model params          = 134.52 M
+I/ai-chat ( 4224): print_info: general.name          = Smollm2 135M 8k Lc100K Mix1 Ep2
+I/ai-chat ( 4224): print_info: vocab type            = BPE
+I/ai-chat ( 4224): print_info: n_vocab               = 49152
+I/ai-chat ( 4224): print_info: n_merges              = 48900
+I/ai-chat ( 4224): print_info: BOS token             = 1 '<|im_start|>'
+I/ai-chat ( 4224): print_info: EOS token             = 2 '<|im_end|>'
+I/ai-chat ( 4224): print_info: EOT token             = 2 '<|im_end|>'
+I/ai-chat ( 4224): print_info: UNK token             = 0 '<|endoftext|>'
+I/ai-chat ( 4224): print_info: PAD token             = 2 '<|im_end|>'
+I/ai-chat ( 4224): print_info: LF token              = 198 'Ċ'
+I/ai-chat ( 4224): print_info: FIM REP token         = 4 '<reponame>'
+I/ai-chat ( 4224): print_info: EOG token             = 0 '<|endoftext|>'
+I/ai-chat ( 4224): print_info: EOG token             = 2 '<|im_end|>'
+I/ai-chat ( 4224): print_info: EOG token             = 4 '<reponame>'
+I/ai-chat ( 4224): print_info: max token length      = 162
+I/ai-chat ( 4224): load_tensors: loading model tensors, this can take a while... (load_mode = mmap)
+D/ai-chat ( 4224): load_tensors: layer   0 assigned to device CPU, is_swa = 0
+D/ai-chat ( 4224): load_tensors: layer   1 assigned to device CPU, is_swa = 0
+D/ai-chat ( 4224): load_tensors: layer   2 assigned to device CPU, is_swa = 0
+D/ai-chat ( 4224): load_tensors: layer   3 assigned to device CPU, is_swa = 0
+D/ai-chat ( 4224): load_tensors: layer   4 assigned to device CPU, is_swa = 0
+D/ai-chat ( 4224): load_tensors: layer   5 assigned to device CPU, is_swa = 0
+D/ai-chat ( 4224): load_tensors: layer   6 assigned to device CPU, is_swa = 0
+D/ai-chat ( 4224): load_tensors: layer   7 assigned to device CPU, is_swa = 0
+D/ai-chat ( 4224): load_tensors: layer   8 assigned to device CPU, is_swa = 0
+D/ai-chat ( 4224): load_tensors: layer   9 assigned to device CPU, is_swa = 0
+D/ai-chat ( 4224): load_tensors: layer  10 assigned to device CPU, is_swa = 0
+D/ai-chat ( 4224): load_tensors: layer  11 assigned to device CPU, is_swa = 0
+D/ai-chat ( 4224): load_tensors: layer  12 assigned to device CPU, is_swa = 0
+D/ai-chat ( 4224): load_tensors: layer  13 assigned to device CPU, is_swa = 0
+D/ai-chat ( 4224): load_tensors: layer  14 assigned to device CPU, is_swa = 0
+D/ai-chat ( 4224): load_tensors: layer  15 assigned to device CPU, is_swa = 0
+D/ai-chat ( 4224): load_tensors: layer  16 assigned to device CPU, is_swa = 0
+D/ai-chat ( 4224): load_tensors: layer  17 assigned to device CPU, is_swa = 0
+D/ai-chat ( 4224): load_tensors: layer  18 assigned to device CPU, is_swa = 0
+D/ai-chat ( 4224): load_tensors: layer  19 assigned to device CPU, is_swa = 0
+D/ai-chat ( 4224): load_tensors: layer  20 assigned to device CPU, is_swa = 0
+D/ai-chat ( 4224): load_tensors: layer  21 assigned to device CPU, is_swa = 0
+D/ai-chat ( 4224): load_tensors: layer  22 assigned to device CPU, is_swa = 0
+D/ai-chat ( 4224): load_tensors: layer  23 assigned to device CPU, is_swa = 0
+D/ai-chat ( 4224): load_tensors: layer  24 assigned to device CPU, is_swa = 0
+D/ai-chat ( 4224): load_tensors: layer  25 assigned to device CPU, is_swa = 0
+D/ai-chat ( 4224): load_tensors: layer  26 assigned to device CPU, is_swa = 0
+D/ai-chat ( 4224): load_tensors: layer  27 assigned to device CPU, is_swa = 0
+D/ai-chat ( 4224): load_tensors: layer  28 assigned to device CPU, is_swa = 0
+D/ai-chat ( 4224): load_tensors: layer  29 assigned to device CPU, is_swa = 0
+D/ai-chat ( 4224): load_tensors: layer  30 assigned to device CPU, is_swa = 0
+D/ai-chat ( 4224): create_tensor: loading tensor token_embd.weight
+D/ai-chat ( 4224): create_tensor: loading tensor output_norm.weight
+D/ai-chat ( 4224): create_tensor: loading tensor output.weight
+D/ai-chat ( 4224): create_tensor: loading tensor token_embd.weight
+D/ai-chat ( 4224): create_tensor: loading tensor blk.0.attn_norm.weight
+D/ai-chat ( 4224): create_tensor: loading tensor blk.0.attn_qkv.weight
+D/ai-chat ( 4224): create_tensor: loading tensor blk.0.attn_q.weight
+D/ai-chat ( 4224): create_tensor: loading tensor blk.0.attn_k.weight
+D/ai-chat ( 4224): create_tensor: loading tensor blk.0.attn_v.weight
+D/ai-chat ( 4224): create_tensor: loading tensor blk.0.attn_q.bias
+D/ai-chat ( 4224): create_tensor: loading tensor blk.0.attn_k.bias
+D/ai-chat ( 4224): create_tensor: loading tensor blk.0.attn_v.bias
+D/ai-chat ( 4224): create_tensor: loading tensor blk.0.attn_output.weight
+D/ai-chat ( 4224): create_tensor: loading tensor blk.0.attn_output.bias
+D/ai-chat ( 4224): create_tensor: loading tensor blk.0.ffn_norm.weight
+D/ai-chat ( 4224): create_tensor: loading tensor rope_freqs.weight
+[rtk] output capped at 200 results
