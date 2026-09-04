@@ -56,8 +56,8 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
   var showPresetDialog by remember { mutableStateOf(false) }
   var systemPresetMenu by remember { mutableStateOf(false) }
   val clipboard = LocalClipboardManager.current
-  val maxBytes = state.maxLocalModelSizeGb.toDoubleOrNull()?.times(1_000_000_000.0)?.toLong() ?: Long.MAX_VALUE
-  val shownModels = state.models.filter { !it.local || it.sizeBytes <= maxBytes }.filter { !state.localOnly || it.local }.filter { state.search.isBlank() || it.name.contains(state.search, true) }
+  val maxBytes = state.maxLocalModelSizeGb.toDoubleOrNull()?.takeIf { it >= 0 }?.times(1_000_000_000.0)?.toLong() ?: Long.MAX_VALUE
+  val shownModels = state.models.filter { it.sizeBytes <= 0L || it.sizeBytes <= maxBytes }.filter { !state.localOnly || it.local }.filter { state.search.isBlank() || it.name.contains(state.search, true) }
   Column(modifier.fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Text("Ollama Tasker Bridge", style = MaterialTheme.typography.headlineSmall)
     Text("本体アプリ", style = MaterialTheme.typography.titleLarge)
@@ -95,7 +95,7 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
       singleLine = true,
       keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
     )
-    Text("${shownModels.size}件（一覧内を上下にスクロールできます）", style = MaterialTheme.typography.bodySmall)
+    Text("${shownModels.size}件（上限以下。未知サイズは取得時に確認）", style = MaterialTheme.typography.bodySmall)
     Column(modifier = Modifier.fillMaxWidth().height(360.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
       shownModels.forEach { model -> ModelRow(model, state.loading, state.selectedModel == model.name, viewModel::selectModel, viewModel::downloadModel) { pendingDelete = it } }
     }
@@ -156,10 +156,10 @@ private fun ModelRow(model: OllamaModel, loading: Boolean, selected: Boolean, on
   Card(onClick = { onSelect(model.name) }, modifier = Modifier.fillMaxWidth(), colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface)) {
     Row(Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
       Column(Modifier.weight(1f)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { Text(model.name); if (model.remote) Text("Cloud", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary) }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { Text(model.name); if (model.remote) Text("Cloud（公式一覧）", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary) }
         Text(if (model.sizeBytes > 0) "%.2f GB".format(model.sizeBytes / 1_000_000_000.0) else "サイズ不明", style = MaterialTheme.typography.bodySmall)
       }
-      if (model.local) Text("✓", color = androidx.compose.ui.graphics.Color(0xFF2E7D32)) else if (model.downloadable) IconButton(onClick = { onDownload(model.name) }, enabled = !loading) { Text("↓") } else Text("Cloud専用", style = MaterialTheme.typography.labelSmall)
+      if (model.local) Text("✓", color = androidx.compose.ui.graphics.Color(0xFF2E7D32)) else if (model.downloadable) IconButton(onClick = { onDownload(model.name) }, enabled = !loading) { Text("↓") } else Text("Cloudのみ（取得不可）", style = MaterialTheme.typography.labelSmall)
     }
   }
 }

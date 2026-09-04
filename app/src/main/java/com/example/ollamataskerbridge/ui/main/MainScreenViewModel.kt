@@ -49,7 +49,14 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   fun deletePreset(id: String) { settings.deletePreset(id); _uiState.value = _uiState.value.copy(presets = settings.presets()) }
 
   fun testConnection() { runRequest("接続テストに失敗しました。APIキーとネットワークを確認してください。") { client().ping(); "接続成功（Ollama APIに到達しました）" } }
-  fun downloadModel(name: String) { runRequest("モデルの取得に失敗しました。ストレージの空き容量とネットワークを確認してください。") { registry.download(name); loadModelsInternal(); "Androidへモデルを保存しました" } }
+  fun downloadModel(name: String) { runRequest("モデルの取得に失敗しました。ストレージの空き容量とネットワークを確認してください。") {
+    val maxBytes = settings.maxLocalModelSizeGb.toDouble().times(1_000_000_000.0).toLong()
+    val metadata = registry.metadata(name)
+    require(metadata.sizeBytes <= 0L || metadata.sizeBytes <= maxBytes) {
+      "上限超過です（%.2fGB）。ローカル上限を上げてください".format(metadata.sizeBytes / 1_000_000_000.0)
+    }
+    registry.download(name); loadModelsInternal(); "Androidへモデルを保存しました"
+  } }
   fun loadModels() { runRequest("モデル一覧の取得に失敗しました。APIキーとネットワークを確認してください。") { loadModelsInternal(); "モデル一覧を更新しました" } }
   fun deleteModel(name: String) { runRequest("モデルの削除に失敗しました。") { localModels.fileFor(name).delete(); loadModelsInternal(); "削除しました: $name" } }
   fun runTest() {
@@ -133,7 +140,7 @@ data class MainScreenUiState(
   val selectedModel: String = "",
   val search: String = "",
   val localOnly: Boolean = false,
-  val maxLocalModelSizeGb: String = "8.0",
+  val maxLocalModelSizeGb: String = "15.0",
   val systemPrompt: String = "",
   val systemPromptPresetId: String = "",
   val apiKeyVisible: Boolean = false,

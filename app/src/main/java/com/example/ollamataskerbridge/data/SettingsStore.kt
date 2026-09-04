@@ -26,7 +26,7 @@ class SettingsStore(context: Context) {
     set(value) { prefs.edit().putString("plugin_platform", value).apply() }
 
   var maxLocalModelSizeGb: Float
-    get() = prefs.getFloat("max_local_model_size_gb", 8f)
+    get() = prefs.getFloat("max_local_model_size_gb", 15f)
     set(value) { prefs.edit().putFloat("max_local_model_size_gb", value.coerceAtLeast(0f)).apply() }
 
   fun cachedModels(): List<OllamaModel> = runCatching {
