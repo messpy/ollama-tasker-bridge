@@ -53,6 +53,7 @@ class OllamaClient(private val baseUrl: String, private val apiKey: String = "")
       connectTimeout = 8_000
       readTimeout = readTimeoutMs
       setRequestProperty("Accept", "application/json")
+      setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14; Pixel 8a) AppleWebKit/537.36 Chrome/131.0 Mobile Safari/537.36")
       if (authenticated && apiKey.isNotBlank()) {
         val token = apiKey.removePrefix("Bearer ").trim()
         setRequestProperty("Authorization", "Bearer " + token)
