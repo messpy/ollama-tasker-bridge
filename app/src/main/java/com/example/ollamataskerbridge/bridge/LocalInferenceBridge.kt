@@ -35,13 +35,17 @@ object LocalInferenceBridge {
     require(file.isFile) { "モデル未取得です。先にPULLを実行してください: " + model }
     val engine = AiChat.getInferenceEngine(context)
     val state = engine.state.first { it is InferenceEngine.State.Initialized || it is InferenceEngine.State.ModelReady || it is InferenceEngine.State.Error }
-    if (state is InferenceEngine.State.Error) engine.cleanUp()
-    if (loadedPath != file.absolutePath) {
+    if (state is InferenceEngine.State.Error) {
+      engine.cleanUp()
+      loadedPath = null
+    }
+    val modelWasLoaded = loadedPath == file.absolutePath && engine.state.value is InferenceEngine.State.ModelReady
+    if (!modelWasLoaded) {
       if (engine.state.value is InferenceEngine.State.ModelReady) engine.cleanUp()
       engine.loadModel(file.absolutePath)
       loadedPath = file.absolutePath
+      if (!system.isNullOrBlank()) engine.setSystemPrompt(system)
     }
-    if (!system.isNullOrBlank()) engine.setSystemPrompt(system)
     buildString { engine.sendUserPrompt(prompt, maxTokens, temperature).collect { append(it) } }
   }
 }
