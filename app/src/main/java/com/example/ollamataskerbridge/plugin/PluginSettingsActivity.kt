@@ -56,7 +56,7 @@ class PluginSettingsActivity : ComponentActivity() {
             val remote = runCatching {
               OllamaClient(settings.endpoint, settings.apiKey).listModels().map { it.name }
             }.getOrDefault(emptyList())
-            (local + remote).distinct().sorted()
+            PluginModelLists(cloud = remote.distinct().sorted(), local = local.distinct().sorted())
           },
           onCancel = { setResult(Activity.RESULT_CANCELED); finish() },
           onSave = { model, prompt, system, mode ->
@@ -85,6 +85,11 @@ class PluginSettingsActivity : ComponentActivity() {
   }
 }
 
+private data class PluginModelLists(
+  val cloud: List<String> = emptyList(),
+  val local: List<String> = emptyList(),
+)
+
 @Composable
 private fun PluginSettingsContent(
   initialModel: String,
@@ -92,7 +97,7 @@ private fun PluginSettingsContent(
   initialSystem: String,
   initialMode: String,
   onOpenApp: () -> Unit,
-  loadModels: suspend () -> List<String>,
+  loadModels: suspend () -> PluginModelLists,
   onCancel: () -> Unit,
   onSave: (String, String, String, String) -> Unit,
 ) {
@@ -101,12 +106,12 @@ private fun PluginSettingsContent(
   var system by remember { mutableStateOf(initialSystem) }
   var mode by remember { mutableStateOf(initialMode) }
   var query by remember { mutableStateOf("") }
-  var models by remember { mutableStateOf<List<String>>(emptyList()) }
+  var modelLists by remember { mutableStateOf(PluginModelLists()) }
   var loadingModels by remember { mutableStateOf(false) }
   val scope = rememberCoroutineScope()
   fun refreshModels() = scope.launch {
     loadingModels = true
-    models = loadModels()
+    modelLists = loadModels()
     loadingModels = false
   }
   LaunchedEffect(Unit) { refreshModels() }
@@ -122,8 +127,17 @@ private fun PluginSettingsContent(
       }
       Text("本体アプリのAPIキーを使用", Modifier.padding(top = 12.dp))
     }
+    val filteredCloud = modelLists.cloud.filter { query.isBlank() || it.contains(query, ignoreCase = true) }
+    val filteredLocal = modelLists.local.filter { query.isBlank() || it.contains(query, ignoreCase = true) }
     LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-      items(models.filter { query.isBlank() || it.contains(query, ignoreCase = true) }, key = { it }) { candidate ->
+      item { Text("Cloudモデル", modifier = Modifier.padding(top = 4.dp)) }
+      if (filteredCloud.isEmpty()) item { Text("Cloudモデルなし（APIキー設定後に候補を更新）") }
+      items(filteredCloud, key = { "cloud:$it" }) { candidate ->
+        Button(onClick = { model = candidate }, modifier = Modifier.fillMaxWidth()) { Text(candidate) }
+      }
+      item { Text("Android内ローカルモデル", modifier = Modifier.padding(top = 8.dp)) }
+      if (filteredLocal.isEmpty()) item { Text("Android内に取得済みのモデルなし") }
+      items(filteredLocal, key = { "local:$it" }) { candidate ->
         Button(onClick = { model = candidate }, modifier = Modifier.fillMaxWidth()) { Text(candidate) }
       }
     }
