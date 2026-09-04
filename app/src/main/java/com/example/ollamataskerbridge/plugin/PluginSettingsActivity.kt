@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import com.example.ollamataskerbridge.data.LocalModelStore
 import com.example.ollamataskerbridge.data.OllamaClient
 import com.example.ollamataskerbridge.data.SettingsStore
+import com.example.ollamataskerbridge.MainActivity
 import kotlinx.coroutines.launch
 import com.example.ollamataskerbridge.theme.MyApplicationTheme
 
@@ -43,6 +44,9 @@ class PluginSettingsActivity : ComponentActivity() {
           initialPrompt = initial?.getString(LocalePluginContract.KEY_PROMPT).orEmpty(),
           initialSystem = initial?.getString(LocalePluginContract.KEY_SYSTEM).orEmpty(),
           initialMode = initial?.getString(LocalePluginContract.KEY_MODE) ?: "auto",
+          onOpenApp = {
+            startActivity(Intent(this@PluginSettingsActivity, MainActivity::class.java))
+          },
           loadModels = {
             val local = LocalModelStore(appContext).directory.listFiles()
               ?.filter { it.extension == "gguf" }
@@ -87,6 +91,7 @@ private fun PluginSettingsContent(
   initialPrompt: String,
   initialSystem: String,
   initialMode: String,
+  onOpenApp: () -> Unit,
   loadModels: suspend () -> List<String>,
   onCancel: () -> Unit,
   onSave: (String, String, String, String) -> Unit,
@@ -106,7 +111,9 @@ private fun PluginSettingsContent(
   }
   LaunchedEffect(Unit) { refreshModels() }
   Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-    Text("Ollama Tasker Bridge")
+    Text("Taskerアクション設定")
+    Text("この画面はTasker/MacroDroid用です。APIキーやモデル取得は本体アプリで行います。")
+    Button(onClick = onOpenApp, modifier = Modifier.fillMaxWidth()) { Text("本体アプリを開く") }
     OutlinedTextField(model, { model = it }, Modifier.fillMaxWidth(), label = { Text("モデル名") })
     OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), label = { Text("モデルを検索") }, singleLine = true)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
