@@ -1,6 +1,7 @@
 package com.example.ollamataskerbridge.data
 
 import android.content.Context
+import android.util.Log
 import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
@@ -21,9 +22,12 @@ class OllamaRegistryClient(
   private val store: LocalModelStore,
   private val registryBase: String = "https://registry.ollama.ai",
 ) {
+  private val logTag = "OllamaRegistry"
   fun download(model: String): File {
     val parsed = parseModel(model)
-    val manifest = requestJson(registryBase + "/v2/library/" + parsed.first + "/manifests/" + parsed.second)
+    val manifestUrl = registryBase + "/v2/library/" + parsed.first + "/manifests/" + parsed.second
+    Log.d(logTag, "GET " + manifestUrl)
+    val manifest = requestJson(manifestUrl)
     val layers = manifest.optJSONArray("layers") ?: error("モデルマニフェストにレイヤーがありません")
     var modelDigest: String? = null
     var modelSize = -1L
@@ -36,6 +40,7 @@ class OllamaRegistryClient(
       }
     }
     val digest = requireNotNull(modelDigest) { "GGUFモデルレイヤーが見つかりません" }
+    Log.d(logTag, "model=" + model + " size=" + modelSize + " digest=" + digest)
     val target = store.fileFor(model)
     val temp = File(target.path + ".download")
     downloadBlob(registryBase + "/v2/library/" + parsed.first + "/blobs/" + digest, digest, modelSize, temp)
@@ -63,6 +68,7 @@ class OllamaRegistryClient(
   }
 
   private fun downloadBlob(url: String, digest: String, expectedSize: Long, temp: File) {
+    Log.d(logTag, "download start url=" + url + " expectedSize=" + expectedSize + " temp=" + temp.name)
     val connection = open(url)
     try {
       check(connection.responseCode in 200..299) { "モデルBlob HTTP " + connection.responseCode }
@@ -83,12 +89,14 @@ class OllamaRegistryClient(
       check(expectedSize < 0 || total == expectedSize) { "モデルサイズが一致しません" }
       val actual = "sha256:" + digestor.digest().joinToString("") { "%02x".format(it) }
       check(actual == digest) { "モデル検証に失敗しました" }
+      Log.d(logTag, "download complete bytes=" + total)
     } finally { connection.disconnect() }
   }
 
   private fun open(url: String) = (URL(url).openConnection() as HttpURLConnection).apply {
     connectTimeout = 15_000
     readTimeout = 15 * 60 * 1000
+    setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14; Pixel 8a) AppleWebKit/537.36 Chrome/131.0 Mobile Safari/537.36")
     setRequestProperty("Accept", "application/vnd.docker.distribution.manifest.v2+json, application/json")
   }
 }
