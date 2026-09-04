@@ -25,6 +25,10 @@ class SettingsStore(context: Context) {
     get() = prefs.getString("plugin_platform", "tasker").orEmpty()
     set(value) { prefs.edit().putString("plugin_platform", value).apply() }
 
+  var maxLocalModelSizeGb: Float
+    get() = prefs.getFloat("max_local_model_size_gb", 8f)
+    set(value) { prefs.edit().putFloat("max_local_model_size_gb", value.coerceAtLeast(0f)).apply() }
+
   fun cachedModels(): List<OllamaModel> = runCatching {
     val array = JSONArray(prefs.getString("cached_models", "[]"))
     (0 until array.length()).mapNotNull { index -> array.optJSONObject(index)?.let {

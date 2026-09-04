@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -39,6 +40,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ollamataskerbridge.data.OllamaModel
@@ -52,7 +54,8 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
   var editingPreset by remember { mutableStateOf<SystemPromptPreset?>(null) }
   var showPresetDialog by remember { mutableStateOf(false) }
   val clipboard = LocalClipboardManager.current
-  val shownModels = state.models.filter { !state.localOnly || it.local }.filter { state.search.isBlank() || it.name.contains(state.search, true) }
+  val maxBytes = state.maxLocalModelSizeGb.toDoubleOrNull()?.times(1_000_000_000.0)?.toLong() ?: Long.MAX_VALUE
+  val shownModels = state.models.filter { !it.local || it.sizeBytes <= maxBytes }.filter { !state.localOnly || it.local }.filter { state.search.isBlank() || it.name.contains(state.search, true) }
   Column(modifier.fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Text("Ollama Tasker Bridge", style = MaterialTheme.typography.headlineSmall)
     Text("本体アプリ", style = MaterialTheme.typography.titleLarge)
@@ -81,6 +84,15 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
       Checkbox(state.localOnly, viewModel::localOnlyChanged)
       Text("ローカル取得済みのみ表示")
     }
+    OutlinedTextField(
+      value = state.maxLocalModelSizeGb,
+      onValueChange = viewModel::maxLocalModelSizeChanged,
+      modifier = Modifier.width(150.dp),
+      label = { Text("ローカル上限(GB)", fontSize = 12.sp) },
+      supportingText = { Text("上限超過モデルを非表示", fontSize = 10.sp) },
+      singleLine = true,
+      keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+    )
     LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
       items(shownModels, key = { it.name }) { model -> ModelRow(model, state.loading, state.selectedModel == model.name, viewModel::selectModel, viewModel::downloadModel) { pendingDelete = it } }
     }

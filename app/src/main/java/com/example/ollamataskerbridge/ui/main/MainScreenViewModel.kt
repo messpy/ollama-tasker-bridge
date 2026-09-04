@@ -18,7 +18,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   private val settings = SettingsStore(application)
   private val localModels = LocalModelStore(application)
   private val registry = OllamaRegistryClient(localModels)
-  private val _uiState = MutableStateFlow(MainScreenUiState(endpoint = settings.endpoint, apiKey = settings.apiKey, presets = settings.presets()))
+  private val _uiState = MutableStateFlow(MainScreenUiState(endpoint = settings.endpoint, apiKey = settings.apiKey, maxLocalModelSizeGb = settings.maxLocalModelSizeGb.toString(), presets = settings.presets()))
   val uiState: StateFlow<MainScreenUiState> = _uiState.asStateFlow()
 
   fun endpointChanged(value: String) { _uiState.value = _uiState.value.copy(endpoint = value, message = null) }
@@ -28,12 +28,16 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   fun systemPromptChanged(value: String) { _uiState.value = _uiState.value.copy(systemPrompt = value, message = null) }
   fun searchChanged(value: String) { _uiState.value = _uiState.value.copy(search = value) }
   fun localOnlyChanged(value: Boolean) { _uiState.value = _uiState.value.copy(localOnly = value) }
+  fun maxLocalModelSizeChanged(value: String) {
+    _uiState.value = _uiState.value.copy(maxLocalModelSizeGb = value)
+    value.toFloatOrNull()?.takeIf { it >= 0f }?.let { settings.maxLocalModelSizeGb = it }
+  }
   fun selectModel(name: String) { _uiState.value = _uiState.value.copy(selectedModel = name, downloadModel = name, message = null) }
   fun apiKeyVisibleChanged(value: Boolean) { _uiState.value = _uiState.value.copy(apiKeyVisible = value) }
   fun savePreset(name: String, body: String, id: String = java.util.UUID.randomUUID().toString()) { settings.savePreset(SystemPromptPreset(id, name, body)); _uiState.value = _uiState.value.copy(presets = settings.presets()) }
   fun deletePreset(id: String) { settings.deletePreset(id); _uiState.value = _uiState.value.copy(presets = settings.presets()) }
 
-  fun testConnection() { runRequest("接続テストに失敗しました。APIキーとネットワークを確認してください。") { val model = _uiState.value.selectedModel; require(model.isNotBlank()) { "先にモデルを選択してください" }; if (localModels.fileFor(model).isFile) com.example.ollamataskerbridge.bridge.LocalInferenceBridge.generate(getApplication(), model, _uiState.value.testPrompt, _uiState.value.systemPrompt) else client().generate(model, _uiState.value.testPrompt, _uiState.value.systemPrompt); "接続成功（実際の応答を確認しました）" } }
+  fun testConnection() { runRequest("接続テストに失敗しました。APIキーとネットワークを確認してください。") { client().ping(); "接続成功（Ollama APIに到達しました）" } }
   fun downloadModel(name: String) { runRequest("モデルの取得に失敗しました。ストレージの空き容量とネットワークを確認してください。") { registry.download(name); loadModelsInternal(); "Androidへモデルを保存しました" } }
   fun loadModels() { runRequest("モデル一覧の取得に失敗しました。APIキーとネットワークを確認してください。") { loadModelsInternal(); "モデル一覧を更新しました" } }
   fun deleteModel(name: String) { runRequest("モデルの削除に失敗しました。") { localModels.fileFor(name).delete(); loadModelsInternal(); "削除しました: $name" } }
@@ -118,6 +122,7 @@ data class MainScreenUiState(
   val selectedModel: String = "",
   val search: String = "",
   val localOnly: Boolean = false,
+  val maxLocalModelSizeGb: String = "8.0",
   val systemPrompt: String = "",
   val apiKeyVisible: Boolean = false,
   val testPrompt: String = "Tasker連携テストです。成功したら『テスト成功』とだけ返してください。",
