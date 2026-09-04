@@ -32,12 +32,12 @@ class SettingsStore(context: Context) {
   fun cachedModels(): List<OllamaModel> = runCatching {
     val array = JSONArray(prefs.getString("cached_models", "[]"))
     (0 until array.length()).mapNotNull { index -> array.optJSONObject(index)?.let {
-      OllamaModel(it.optString("name"), true, it.optBoolean("downloadable", true), it.optLong("size", -1L), it.optBoolean("local", false))
+      OllamaModel(it.optString("name"), it.optBoolean("remote", false), it.optBoolean("downloadable", true), it.optLong("size", -1L), it.optBoolean("local", false))
     } }
   }.getOrDefault(emptyList())
 
   fun saveCachedModels(models: List<OllamaModel>) {
-    val array = JSONArray().apply { models.forEach { put(JSONObject().put("name", it.name).put("downloadable", it.downloadable).put("size", it.sizeBytes).put("local", it.local)) } }
+    val array = JSONArray().apply { models.forEach { put(JSONObject().put("name", it.name).put("remote", it.remote).put("downloadable", it.downloadable).put("size", it.sizeBytes).put("local", it.local)) } }
     prefs.edit().putString("cached_models", array.toString()).apply()
   }
 

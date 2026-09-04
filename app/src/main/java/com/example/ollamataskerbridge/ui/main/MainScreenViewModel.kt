@@ -25,7 +25,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     ?.filter { it.extension == "gguf" }
     ?.map { com.example.ollamataskerbridge.data.OllamaModel(it.nameWithoutExtension, false, true, it.length(), true) }
     .orEmpty()
-  private val initialModels = (settings.cachedModels() + installedModels()).distinctBy { it.name }
+  private val initialModels = (installedModels() + settings.cachedModels()).distinctBy { it.name }
   private val initialPresets = settings.presets()
   private val initialPreset = initialPresets.firstOrNull { it.id == settings.lastPresetId } ?: initialPresets.firstOrNull()
   private val _uiState = MutableStateFlow(MainScreenUiState(endpoint = settings.endpoint, apiKey = settings.apiKey, maxLocalModelSizeGb = settings.maxLocalModelSizeGb.toString(), systemPromptPresetId = initialPreset?.id.orEmpty(), systemPrompt = initialPreset?.body.orEmpty(), presets = initialPresets, models = initialModels))
