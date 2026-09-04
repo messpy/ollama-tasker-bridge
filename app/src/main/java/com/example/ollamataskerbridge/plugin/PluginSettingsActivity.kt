@@ -26,8 +26,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.ollamataskerbridge.data.LocalModelStore
-import com.example.ollamataskerbridge.data.OllamaClient
-import com.example.ollamataskerbridge.data.SettingsStore
 import com.example.ollamataskerbridge.MainActivity
 import kotlinx.coroutines.launch
 import com.example.ollamataskerbridge.theme.MyApplicationTheme
@@ -53,11 +51,7 @@ class PluginSettingsActivity : ComponentActivity() {
               ?.filter { it.extension == "gguf" }
               ?.map { it.nameWithoutExtension }
               .orEmpty()
-            val settings = SettingsStore(appContext)
-            val remote = runCatching {
-              OllamaClient(settings.endpoint, settings.apiKey).listModels().map { it.name }
-            }.getOrDefault(emptyList())
-            PluginModelLists(cloud = remote.distinct().sorted(), local = local.distinct().sorted())
+            PluginModelLists(local = local.distinct().sorted())
           },
           onCancel = { setResult(Activity.RESULT_CANCELED); finish() },
           onSave = { model, prompt, system, mode, resultVariable ->
@@ -127,7 +121,7 @@ private fun PluginSettingsContent(
   LaunchedEffect(Unit) { refreshModels() }
   Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Text("Taskerアクション設定")
-    Text("この画面はTasker/MacroDroid用です。APIキーやモデル取得は本体アプリで行います。")
+    Text("この画面はTasker/MacroDroid用です。モデルの取得とCloud設定は本体アプリで行います。")
     Button(onClick = onOpenApp, modifier = Modifier.fillMaxWidth()) { Text("本体アプリを開く") }
     OutlinedTextField(model, { model = it }, Modifier.fillMaxWidth(), label = { Text("モデル名") })
     OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), label = { Text("モデルを検索") }, singleLine = true)
@@ -137,14 +131,8 @@ private fun PluginSettingsContent(
       }
       Text("本体アプリのAPIキーを使用", Modifier.padding(top = 12.dp))
     }
-    val filteredCloud = modelLists.cloud.filter { query.isBlank() || it.contains(query, ignoreCase = true) }
     val filteredLocal = modelLists.local.filter { query.isBlank() || it.contains(query, ignoreCase = true) }
     LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-      item { Text("Cloudモデル", modifier = Modifier.padding(top = 4.dp)) }
-      if (filteredCloud.isEmpty()) item { Text("Cloudモデルなし（APIキー設定後に候補を更新）") }
-      items(filteredCloud, key = { "cloud:$it" }) { candidate ->
-        Button(onClick = { model = candidate }, modifier = Modifier.fillMaxWidth()) { Text(candidate) }
-      }
       item { Text("Android内ローカルモデル", modifier = Modifier.padding(top = 8.dp)) }
       if (filteredLocal.isEmpty()) item { Text("Android内に取得済みのモデルなし") }
       items(filteredLocal, key = { "local:$it" }) { candidate ->

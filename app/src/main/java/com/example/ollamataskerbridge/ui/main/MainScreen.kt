@@ -86,10 +86,18 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
       singleLine = true,
       modifier = Modifier.fillMaxWidth(),
     )
+    OutlinedTextField(
+      value = state.testPrompt,
+      onValueChange = viewModel::testPromptChanged,
+      label = { Text("テスト用プロンプト") },
+      supportingText = { Text("ここで本体のCloud/ローカル実行を確認できます") },
+      modifier = Modifier.fillMaxWidth(),
+    )
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       Button(onClick = viewModel::testConnection, enabled = !state.loading) { Text("接続テスト") }
       OutlinedButton(onClick = viewModel::loadModels, enabled = !state.loading) { Text("モデル一覧") }
       Button(onClick = { viewModel.downloadModel(state.downloadModel) }, enabled = !state.loading && state.downloadModel.isNotBlank()) { Text("取得") }
+      OutlinedButton(onClick = viewModel::runTest, enabled = !state.loading && state.downloadModel.isNotBlank() && state.testPrompt.isNotBlank()) { Text("テスト実行") }
     }
     state.message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
     if (state.loading) CircularProgressIndicator()

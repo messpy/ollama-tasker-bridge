@@ -23,11 +23,26 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   fun endpointChanged(value: String) { _uiState.value = _uiState.value.copy(endpoint = value, message = null) }
   fun apiKeyChanged(value: String) { _uiState.value = _uiState.value.copy(apiKey = value, message = null) }
   fun downloadModelChanged(value: String) { _uiState.value = _uiState.value.copy(downloadModel = value, message = null) }
+  fun testPromptChanged(value: String) { _uiState.value = _uiState.value.copy(testPrompt = value, message = null) }
 
   fun testConnection() { runRequest { client().ping(); "接続成功" } }
   fun downloadModel(name: String) { runRequest { registry.download(name); loadModelsInternal(); "Androidへモデルを保存しました" } }
   fun loadModels() { runRequest { loadModelsInternal(); "OllamaとAndroid内のモデル一覧を更新しました" } }
   fun deleteModel(name: String) { runRequest { localModels.fileFor(name).delete(); loadModelsInternal(); "削除しました: $name" } }
+  fun runTest() {
+    runRequest {
+      val model = _uiState.value.downloadModel.trim()
+      val prompt = _uiState.value.testPrompt.trim()
+      require(model.isNotBlank()) { "テストするモデル名を入力してください" }
+      require(prompt.isNotBlank()) { "テスト用プロンプトを入力してください" }
+      val result = if (localModels.fileFor(model).isFile) {
+        com.example.ollamataskerbridge.bridge.LocalInferenceBridge.generate(getApplication(), model, prompt, null)
+      } else {
+        client().generate(model, prompt)
+      }
+      "テスト結果:\n$result"
+    }
+  }
 
   private suspend fun loadModelsInternal() {
     val local = localModels.directory.listFiles()
@@ -72,6 +87,7 @@ data class MainScreenUiState(
   val endpoint: String,
   val apiKey: String = "",
   val downloadModel: String = "",
+  val testPrompt: String = "Tasker連携テストです。成功したら『テスト成功』とだけ返してください。",
   val models: List<com.example.ollamataskerbridge.data.OllamaModel> = emptyList(),
   val loading: Boolean = false,
   val message: String? = null,
