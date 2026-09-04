@@ -31,15 +31,27 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ollamataskerbridge.theme.MyApplicationTheme
 
-private const val SHOW_REMOTE_OLLAMA = false
+private const val SHOW_REMOTE_OLLAMA = true
 
 @Composable
 fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier = Modifier) {
   val state by viewModel.uiState.collectAsStateWithLifecycle()
   var pendingDelete by remember { mutableStateOf<String?>(null) }
   if (!SHOW_REMOTE_OLLAMA) {
-    Text("端末内モデル実行は準備中です", style = MaterialTheme.typography.titleMedium)
-    Text("Ollama API接続機能は将来用に内部保持しています。")
+    Column(
+      modifier = modifier.fillMaxSize().padding(24.dp),
+      verticalArrangement = Arrangement.spacedBy(20.dp),
+    ) {
+      Text("Ollama Tasker Bridge", style = MaterialTheme.typography.headlineSmall)
+      Text("端末内AI", style = MaterialTheme.typography.titleLarge)
+      Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+          Text("準備中", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+          Text("スマートフォン上でモデルをダウンロードして実行する機能を準備しています。")
+          Text("モデル管理とTasker連携は、この画面から利用できるようになります。", style = MaterialTheme.typography.bodyMedium)
+        }
+      }
+    }
     return
   }
 
@@ -48,12 +60,12 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
     verticalArrangement = Arrangement.spacedBy(16.dp),
   ) {
     Text("Ollama Tasker Bridge", style = MaterialTheme.typography.headlineSmall)
-    Text("ローカルOllama接続", style = MaterialTheme.typography.titleMedium)
+    Text("Ollama RegistryからAndroidへ取得", style = MaterialTheme.typography.titleMedium)
     OutlinedTextField(
       value = state.endpoint,
       onValueChange = viewModel::endpointChanged,
-      label = { Text("Ollama URL") },
-      supportingText = { Text("例: http://192.168.1.10:11434") },
+      label = { Text("Ollama URL（接続テスト用）") },
+      supportingText = { Text("モデル取得はOllama RegistryからAndroidへ直接行います") },
       keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
       singleLine = true,
       modifier = Modifier.fillMaxWidth(),
@@ -74,7 +86,7 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
     state.message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
     if (state.loading) CircularProgressIndicator()
     HorizontalDivider()
-    Text("モデル", style = MaterialTheme.typography.titleMedium)
+    Text("Android内のモデル", style = MaterialTheme.typography.titleMedium)
     if (state.models.isEmpty()) Text("まだ取得していません")
     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
       items(state.models.sortedBy { it.remote }, key = { it.name }) { model ->

@@ -19,3 +19,4 @@ plugins {
 
 rootProject.name = "Ollama Tasker Bridge"
 include(":app")
+include(":lib")

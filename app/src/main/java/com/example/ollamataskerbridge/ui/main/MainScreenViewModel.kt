@@ -4,6 +4,8 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.ollamataskerbridge.data.OllamaClient
+import com.example.ollamataskerbridge.data.LocalModelStore
+import com.example.ollamataskerbridge.data.OllamaRegistryClient
 import com.example.ollamataskerbridge.data.SettingsStore
 import java.net.URI
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -13,6 +15,8 @@ import kotlinx.coroutines.launch
 
 class MainScreenViewModel(application: Application) : AndroidViewModel(application) {
   private val settings = SettingsStore(application)
+  private val localModels = LocalModelStore(application)
+  private val registry = OllamaRegistryClient(localModels)
   private val _uiState = MutableStateFlow(MainScreenUiState(endpoint = settings.endpoint))
   val uiState: StateFlow<MainScreenUiState> = _uiState.asStateFlow()
 
@@ -20,11 +24,16 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   fun downloadModelChanged(value: String) { _uiState.value = _uiState.value.copy(downloadModel = value, message = null) }
 
   fun testConnection() { runRequest { client().ping(); "接続成功" } }
-  fun downloadModel(name: String) { runRequest { client().pullModel(name); loadModelsInternal(); "モデルを取得しました" } }
-  fun loadModels() { runRequest { client().listModels().also { models -> _uiState.value = _uiState.value.copy(models = models) }; "モデル一覧を更新しました" } }
-  fun deleteModel(name: String) { runRequest { client().deleteModel(name); _uiState.value = _uiState.value.copy(models = _uiState.value.models.filterNot { it.name == name }); "削除しました: $name" } }
+  fun downloadModel(name: String) { runRequest { registry.download(name); loadModelsInternal(); "Androidへモデルを保存しました" } }
+  fun loadModels() { runRequest { loadModelsInternal(); "Android内のモデル一覧を更新しました" } }
+  fun deleteModel(name: String) { runRequest { localModels.fileFor(name).delete(); loadModelsInternal(); "削除しました: $name" } }
 
-  private suspend fun loadModelsInternal() { _uiState.value = _uiState.value.copy(models = client().listModels()) }
+  private suspend fun loadModelsInternal() {
+    _uiState.value = _uiState.value.copy(models = localModels.directory.listFiles()
+      ?.filter { it.extension == "gguf" }
+      ?.map { com.example.ollamataskerbridge.data.OllamaModel(it.nameWithoutExtension, false) }
+      .orEmpty())
+  }
 
   private fun isLocalHost(host: String): Boolean {
     val normalized = host.lowercase()
