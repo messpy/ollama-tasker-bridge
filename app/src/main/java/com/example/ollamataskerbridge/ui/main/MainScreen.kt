@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -94,8 +95,9 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
       singleLine = true,
       keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
     )
-    LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-      items(shownModels, key = { it.name }) { model -> ModelRow(model, state.loading, state.selectedModel == model.name, viewModel::selectModel, viewModel::downloadModel) { pendingDelete = it } }
+    Text("${shownModels.size}件（一覧内を上下にスクロールできます）", style = MaterialTheme.typography.bodySmall)
+    Column(modifier = Modifier.fillMaxWidth().height(360.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+      shownModels.forEach { model -> ModelRow(model, state.loading, state.selectedModel == model.name, viewModel::selectModel, viewModel::downloadModel) { pendingDelete = it } }
     }
     Text(if (state.selectedModel.isBlank()) "モデル未選択" else "選択中: ${state.selectedModel}（${if (state.models.firstOrNull { it.name == state.selectedModel }?.local == true) "ローカル実行" else "Cloud実行"}）")
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
