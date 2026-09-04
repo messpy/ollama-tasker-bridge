@@ -9,7 +9,7 @@ import java.net.URL
 
 class OllamaModel(val name: String, val remote: Boolean)
 
-class OllamaClient(private val baseUrl: String) {
+class OllamaClient(private val baseUrl: String, private val apiKey: String = "") {
   suspend fun listModels(): List<OllamaModel> = withContext(Dispatchers.IO) {
     request("GET", "/api/tags").let { body ->
       val models = JSONArray(org.json.JSONObject(body).optJSONArray("models")?.toString() ?: "[]")
@@ -50,6 +50,7 @@ class OllamaClient(private val baseUrl: String) {
       connectTimeout = 8_000
       readTimeout = readTimeoutMs
       setRequestProperty("Accept", "application/json")
+      if (apiKey.isNotBlank()) setRequestProperty("Authorization", "Bearer $apiKey")
       if (body != null) {
         doOutput = true
         setRequestProperty("Content-Type", "application/json")

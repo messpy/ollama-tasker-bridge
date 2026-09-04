@@ -17,26 +17,30 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   private val settings = SettingsStore(application)
   private val localModels = LocalModelStore(application)
   private val registry = OllamaRegistryClient(localModels)
-  private val _uiState = MutableStateFlow(MainScreenUiState(endpoint = settings.endpoint))
+  private val _uiState = MutableStateFlow(MainScreenUiState(endpoint = settings.endpoint, apiKey = settings.apiKey))
   val uiState: StateFlow<MainScreenUiState> = _uiState.asStateFlow()
 
   fun endpointChanged(value: String) { _uiState.value = _uiState.value.copy(endpoint = value, message = null) }
+  fun apiKeyChanged(value: String) { _uiState.value = _uiState.value.copy(apiKey = value, message = null) }
   fun downloadModelChanged(value: String) { _uiState.value = _uiState.value.copy(downloadModel = value, message = null) }
 
   fun testConnection() { runRequest { client().ping(); "接続成功" } }
   fun downloadModel(name: String) { runRequest { registry.download(name); loadModelsInternal(); "Androidへモデルを保存しました" } }
-  fun loadModels() { runRequest { loadModelsInternal(); "Android内のモデル一覧を更新しました" } }
+  fun loadModels() { runRequest { loadModelsInternal(); "OllamaとAndroid内のモデル一覧を更新しました" } }
   fun deleteModel(name: String) { runRequest { localModels.fileFor(name).delete(); loadModelsInternal(); "削除しました: $name" } }
 
   private suspend fun loadModelsInternal() {
-    _uiState.value = _uiState.value.copy(models = localModels.directory.listFiles()
+    val local = localModels.directory.listFiles()
       ?.filter { it.extension == "gguf" }
       ?.map { com.example.ollamataskerbridge.data.OllamaModel(it.nameWithoutExtension, false) }
-      .orEmpty())
+      .orEmpty()
+    val remote = client().listModels().map { com.example.ollamataskerbridge.data.OllamaModel(it.name, true) }
+    _uiState.value = _uiState.value.copy(models = remote + local)
   }
 
   private fun isLocalHost(host: String): Boolean {
     val normalized = host.lowercase()
+    if (normalized == "ollama.com" || normalized.endsWith(".ollama.com")) return true
     if (normalized == "localhost" || normalized.endsWith(".local") || normalized.endsWith(".ts.net")) return true
     val octets = normalized.split(".").mapNotNull { it.toIntOrNull() }
     if (octets.size != 4) return normalized == "::1" || normalized.startsWith("fc") || normalized.startsWith("fd")
@@ -50,7 +54,8 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     require(!uri.host.isNullOrBlank()) { "URLのホストが必要です" }
     require(isLocalHost(uri.host!!)) { "安全のためローカル接続先のみ許可しています" }
     settings.endpoint = value
-    return OllamaClient(value)
+    settings.apiKey = _uiState.value.apiKey
+    return OllamaClient(value, _uiState.value.apiKey)
   }
 
   private fun runRequest(action: suspend () -> String) {
@@ -65,6 +70,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
 
 data class MainScreenUiState(
   val endpoint: String,
+  val apiKey: String = "",
   val downloadModel: String = "",
   val models: List<com.example.ollamataskerbridge.data.OllamaModel> = emptyList(),
   val loading: Boolean = false,
