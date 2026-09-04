@@ -58,7 +58,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
       ?.map { com.example.ollamataskerbridge.data.OllamaModel(it.nameWithoutExtension, false, true, it.length(), true) }
       .orEmpty()
     val localByName = local.associateBy { it.name }
-    val remote = client().listModels().map { item ->
+    val remote = (client().listModels() + registry.catalog()).distinctBy { it.name }.map { item ->
       val registryInfo = runCatching { registry.metadata(item.name) }.getOrNull()
       item.copy(
         local = localByName[item.name] != null,

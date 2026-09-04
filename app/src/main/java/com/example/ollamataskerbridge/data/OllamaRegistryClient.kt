@@ -23,6 +23,19 @@ class OllamaRegistryClient(
   private val registryBase: String = "https://registry.ollama.ai",
 ) {
   data class ModelMetadata(val downloadable: Boolean, val sizeBytes: Long)
+  suspend fun catalog(): List<OllamaModel> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+    val connection = open("https://ollama.com/search?o=newest", readTimeoutMs = 30_000)
+    try {
+      check(connection.responseCode in 200..299) { "モデル検索 HTTP " + connection.responseCode }
+      val html = connection.inputStream.bufferedReader().use { it.readText() }
+      Regex("href=\\\"/library/([a-zA-Z0-9._/-]+)\\\"")
+        .findAll(html)
+        .map { it.groupValues[1] }
+        .distinct()
+        .map { OllamaModel(it, true, true, -1L, false) }
+        .toList()
+    } finally { connection.disconnect() }
+  }
   private val logTag = "OllamaRegistry"
   suspend fun metadata(model: String): ModelMetadata = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
     val parsed = parseModel(model)
