@@ -1,5 +1,6 @@
 package com.example.ollamataskerbridge.data
 
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -10,6 +11,7 @@ import java.net.URL
 class OllamaModel(val name: String, val remote: Boolean)
 
 class OllamaClient(private val baseUrl: String, private val apiKey: String = "") {
+  private val logTag = "OllamaClient"
   suspend fun listModels(): List<OllamaModel> = withContext(Dispatchers.IO) {
     request("GET", "/api/tags").let { body ->
       val models = JSONArray(org.json.JSONObject(body).optJSONArray("models")?.toString() ?: "[]")
@@ -45,6 +47,7 @@ class OllamaClient(private val baseUrl: String, private val apiKey: String = "")
   }
 
   private fun request(method: String, path: String, body: String? = null, readTimeoutMs: Int = 30_000): String {
+    Log.d(logTag, method + " " + baseUrl + path + " apiKeyPresent=" + apiKey.isNotBlank() + " apiKeyLength=" + apiKey.trim().removePrefix("Bearer ").length)
     val connection = (URL(baseUrl.trimEnd('/') + path).openConnection() as HttpURLConnection).apply {
       requestMethod = method
       connectTimeout = 8_000
@@ -66,6 +69,7 @@ class OllamaClient(private val baseUrl: String, private val apiKey: String = "")
       val response = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
       if (code !in 200..299) {
         val detail = response.take(240).replace(Regex("\\s+"), " ")
+        Log.e(logTag, "HTTP " + code + " for " + path + ": " + detail)
         throw IOException("Ollama HTTP " + code + if (detail.isNotBlank()) ": " + detail else "")
       }
       return response
