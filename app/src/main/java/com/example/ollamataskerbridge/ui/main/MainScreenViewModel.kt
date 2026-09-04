@@ -59,7 +59,12 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
       .orEmpty()
     val localByName = local.associateBy { it.name }
     val remote = client().listModels().map { item ->
-      item.copy(local = localByName[item.name] != null, sizeBytes = localByName[item.name]?.sizeBytes ?: item.sizeBytes)
+      val registryInfo = runCatching { registry.metadata(item.name) }.getOrNull()
+      item.copy(
+        local = localByName[item.name] != null,
+        downloadable = registryInfo?.downloadable ?: item.downloadable,
+        sizeBytes = localByName[item.name]?.sizeBytes ?: registryInfo?.sizeBytes?.takeIf { it > 0 } ?: item.sizeBytes,
+      )
     }
     val merged = (remote + local.filter { item -> remote.none { it.name == item.name } })
     settings.saveCachedModels(merged)

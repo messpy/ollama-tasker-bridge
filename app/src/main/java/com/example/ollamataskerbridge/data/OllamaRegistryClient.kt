@@ -22,7 +22,24 @@ class OllamaRegistryClient(
   private val store: LocalModelStore,
   private val registryBase: String = "https://registry.ollama.ai",
 ) {
+  data class ModelMetadata(val downloadable: Boolean, val sizeBytes: Long)
   private val logTag = "OllamaRegistry"
+  suspend fun metadata(model: String): ModelMetadata = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+    val parsed = parseModel(model)
+    val manifestUrl = registryBase + "/v2/library/" + parsed.first + "/manifests/" + parsed.second
+    val layers = requestJson(manifestUrl).optJSONArray("layers") ?: return@withContext ModelMetadata(false, -1L)
+    var size = -1L
+    var downloadable = false
+    for (i in 0 until layers.length()) {
+      val layer = layers.getJSONObject(i)
+      if (layer.optString("mediaType") == "application/vnd.ollama.image.model") {
+        downloadable = true
+        size = layer.optLong("size", -1L)
+        break
+      }
+    }
+    ModelMetadata(downloadable, size)
+  }
   fun download(model: String): File {
     val parsed = parseModel(model)
     val manifestUrl = registryBase + "/v2/library/" + parsed.first + "/manifests/" + parsed.second
