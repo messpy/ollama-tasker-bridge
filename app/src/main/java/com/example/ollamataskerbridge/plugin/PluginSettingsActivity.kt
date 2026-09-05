@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
@@ -66,7 +68,11 @@ class PluginSettingsActivity : ComponentActivity() {
               putString(LocalePluginContract.KEY_PRESET_ID, presetId)
               putString(LocalePluginContract.KEY_CUSTOM_SYSTEM, customSystem)
               putString(LocalePluginContract.KEY_PLATFORM, platform)
-              putString(LocalePluginContract.KEY_RESULT_VARIABLE, normalizeResultVariable(resultVariable))
+              val normalizedResult = normalizeResultVariable(resultVariable)
+              putString(LocalePluginContract.KEY_RESULT_VARIABLE, normalizedResult)
+              if (platform == "tasker") {
+                putString(LocalePluginContract.TASKER_VARIABLE_REPLACE_KEYS, LocalePluginContract.KEY_PROMPT + " " + LocalePluginContract.KEY_CUSTOM_SYSTEM)
+              }
             }
             setResult(Activity.RESULT_OK, Intent().putExtra(LocalePluginContract.EXTRA_BUNDLE, values)
               .putExtra(LocalePluginContract.EXTRA_STRING_BLURB, "$model / $platform"))
@@ -107,7 +113,7 @@ private fun PluginSettingsContent(
   val selectedPreset = presets.firstOrNull { it.id == presetId }
   val shown = models.filter { !localOnly || it.local }.filter { query.isBlank() || it.name.contains(query, true) }
   val platformName = if (platform == "macrodroid") "MacroDroid" else "Tasker"
-  Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+  Column(Modifier.padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
     Text("$platformName アクション設定")
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       OutlinedButton(onClick = { platform = "tasker" }) { Text("Tasker") }
