@@ -154,7 +154,7 @@ private fun PluginSettingsContent(
     }
     Text(if (backend == "local") "実行先: ローカル" else "実行先: Ollama Cloud")
     OutlinedTextField(prompt, { prompt = it }, Modifier.fillMaxWidth(), label = { Text("プロンプト") }, minLines = 2)
-    Text(if (platform == "macrodroid") "入力例: {lv=変数名}" else "入力例: %変数名")
+    Text(if (platform == "macrodroid") "入力例: {lv=prompt} こんにちは" else "入力例: %prompt こんにちは")
     Row {
       OutlinedButton(onClick = { presetMenu = true }, modifier = Modifier.weight(1f)) { Text(selectedPreset?.name ?: "カスタム入力…") }
       DropdownMenu(expanded = presetMenu, onDismissRequest = { presetMenu = false }) {
