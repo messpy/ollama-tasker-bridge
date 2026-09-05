@@ -138,7 +138,7 @@ private fun PluginSettingsContent(
     Row { Checkbox(checked = true, onCheckedChange = null); Text("本体アプリのAPIキーを使用") }
     Button(onClick = onOpenApp, modifier = Modifier.fillMaxWidth()) { Text("本体アプリを開く") }
     OutlinedTextField(model, { }, Modifier.fillMaxWidth(), label = { Text("モデル") }, singleLine = true, readOnly = true)
-    OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), label = { Text("本体のモデル一覧を検索") }, singleLine = true)
+    if (platform == "macrodroid") OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), label = { Text("本体のモデル一覧を検索") }, singleLine = true)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       if (localOnly) OutlinedButton(onClick = { localOnly = false }) { Text("すべて") } else Button(onClick = { localOnly = false }) { Text("すべて") }
       if (localOnly) Button(onClick = { localOnly = true }) { Text("取得済みのみ") } else OutlinedButton(onClick = { localOnly = true }) { Text("取得済みのみ") }
