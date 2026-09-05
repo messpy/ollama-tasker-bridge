@@ -42,6 +42,7 @@ class PluginSettingsActivity : ComponentActivity() {
     super.onCreate(savedInstanceState)
     val initial = intent.extras?.getBundle(LocalePluginContract.EXTRA_BUNDLE)
     val settings = SettingsStore(this)
+    val hostPlatform = detectHostPlatform()
     val local = LocalModelStore(this).directory.listFiles().orEmpty()
       .filter { it.extension == "gguf" }
       .map { OllamaModel(it.nameWithoutExtension, false, true, it.length(), true) }
@@ -53,7 +54,7 @@ class PluginSettingsActivity : ComponentActivity() {
           initialPrompt = initial?.getString(LocalePluginContract.KEY_PROMPT).orEmpty(),
           initialPresetId = initial?.getString(LocalePluginContract.KEY_PRESET_ID) ?: settings.lastPresetId,
           initialCustomSystem = initial?.getString(LocalePluginContract.KEY_CUSTOM_SYSTEM).orEmpty(),
-          initialPlatform = initial?.getString(LocalePluginContract.KEY_PLATFORM) ?: settings.pluginPlatform,
+          initialPlatform = hostPlatform ?: initial?.getString(LocalePluginContract.KEY_PLATFORM) ?: settings.pluginPlatform,
           initialResultVariable = initial?.getString(LocalePluginContract.KEY_RESULT_VARIABLE).orEmpty(),
           initialBackend = initial?.getString(LocalePluginContract.KEY_BACKEND).orEmpty().ifBlank { if (local.any { it.name == initial?.getString(LocalePluginContract.KEY_MODEL).orEmpty() }) "local" else "ollama" },
           models = models,
@@ -82,6 +83,15 @@ class PluginSettingsActivity : ComponentActivity() {
           },
         )
       }
+    }
+  }
+
+  private fun detectHostPlatform(): String? {
+    val packageNames = listOfNotNull(callingActivity?.packageName, referrer?.host).map(String::lowercase)
+    return when {
+      packageNames.any { it.contains("macrodroid") } -> "macrodroid"
+      packageNames.any { it.contains("tasker") } -> "tasker"
+      else -> null
     }
   }
 
