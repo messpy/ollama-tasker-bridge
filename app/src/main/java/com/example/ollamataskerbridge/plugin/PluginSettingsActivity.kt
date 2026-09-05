@@ -43,6 +43,7 @@ class PluginSettingsActivity : ComponentActivity() {
     val initial = intent.extras?.getBundle(LocalePluginContract.EXTRA_BUNDLE)
     val settings = SettingsStore(this)
     val hostPlatform = detectHostPlatform()
+    val resolvedPlatform = hostPlatform ?: initial?.getString(LocalePluginContract.KEY_PLATFORM) ?: settings.pluginPlatform
     val local = LocalModelStore(this).directory.listFiles().orEmpty()
       .filter { it.extension == "gguf" }
       .map { OllamaModel(it.nameWithoutExtension, false, true, it.length(), true) }
@@ -51,11 +52,11 @@ class PluginSettingsActivity : ComponentActivity() {
       MyApplicationTheme {
         PluginSettingsContent(
           initialModel = initial?.getString(LocalePluginContract.KEY_MODEL).orEmpty(),
-          initialPrompt = initial?.getString(LocalePluginContract.KEY_PROMPT).orEmpty(),
+          initialPrompt = initial?.getString(LocalePluginContract.KEY_PROMPT).orEmpty().ifBlank { if (resolvedPlatform == "macrodroid") "{lv=prompt}" else "%prompt" },
           initialPresetId = initial?.getString(LocalePluginContract.KEY_PRESET_ID) ?: settings.lastPresetId,
           initialCustomSystem = initial?.getString(LocalePluginContract.KEY_CUSTOM_SYSTEM).orEmpty(),
-          initialPlatform = hostPlatform ?: initial?.getString(LocalePluginContract.KEY_PLATFORM) ?: settings.pluginPlatform,
-          initialResultVariable = initial?.getString(LocalePluginContract.KEY_RESULT_VARIABLE).orEmpty(),
+          initialPlatform = resolvedPlatform,
+          initialResultVariable = initial?.getString(LocalePluginContract.KEY_RESULT_VARIABLE).orEmpty().ifBlank { if (resolvedPlatform == "macrodroid") "{lv=answer}" else "%answer" },
           initialBackend = initial?.getString(LocalePluginContract.KEY_BACKEND).orEmpty().ifBlank { if (local.any { it.name == initial?.getString(LocalePluginContract.KEY_MODEL).orEmpty() }) "local" else "ollama" },
           models = models,
           presets = settings.presets(),
