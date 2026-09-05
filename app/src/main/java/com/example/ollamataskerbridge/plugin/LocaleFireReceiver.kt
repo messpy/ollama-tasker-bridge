@@ -41,7 +41,7 @@ class LocaleFireReceiver : BroadcastReceiver() {
         val backend = when (configuredBackend) {
           "local" -> Backend.LOCAL
           "ollama" -> Backend.OLLAMA
-          else -> if (LocalModelStore(appContext).fileFor(model).isFile) Backend.LOCAL else Backend.OLLAMA
+          else -> throw IllegalArgumentException("実行先backendが未設定です。Tasker設定を保存し直してください")
         }
         val result = DefaultInferenceRepository.generateText(appContext, GenerateRequest(backend, model, prompt, system))
         finish(pending, appContext, intent, true, result, null, resultVariable)

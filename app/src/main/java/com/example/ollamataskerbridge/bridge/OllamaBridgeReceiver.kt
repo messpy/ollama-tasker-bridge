@@ -7,7 +7,6 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.util.Log
-import com.example.ollamataskerbridge.data.LocalModelStore
 import com.example.ollamataskerbridge.bridge.Backend
 import com.example.ollamataskerbridge.bridge.DefaultInferenceRepository
 import com.example.ollamataskerbridge.bridge.GenerateRequest
@@ -30,8 +29,8 @@ class OllamaBridgeReceiver : BroadcastReceiver() {
             val backend = intent.getStringExtra(BridgeContract.EXTRA_BACKEND)?.lowercase()
             val maxTokens = intent.getIntExtra(BridgeContract.EXTRA_MAX_TOKENS, 256)
             val temperature = intent.getFloatExtra(BridgeContract.EXTRA_TEMPERATURE, 0.7f)
-            val localFile = LocalModelStore(appContext).fileFor(model)
-            val resolvedBackend = backend ?: if (localFile.isFile) "local" else "ollama"
+
+            val resolvedBackend = backend ?: throw IllegalArgumentException("backendを明示指定してください（local または ollama）")
             require(resolvedBackend == "local" || resolvedBackend == "ollama") { "backendはlocalまたはollamaを指定してください" }
             DefaultInferenceRepository.generateText(appContext, GenerateRequest(if (resolvedBackend == "local") Backend.LOCAL else Backend.OLLAMA, model, prompt, system, maxTokens, temperature))
           }
