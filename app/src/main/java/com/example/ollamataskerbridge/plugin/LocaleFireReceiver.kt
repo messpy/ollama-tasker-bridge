@@ -21,12 +21,15 @@ import kotlinx.coroutines.launch
 class LocaleFireReceiver : BroadcastReceiver() {
   override fun onReceive(context: Context, intent: Intent) {
     if (intent.action != LocalePluginContract.ACTION_FIRE_SETTING) return
-    val serviceIntent = Intent(context, com.example.ollamataskerbridge.bridge.InferenceForegroundService::class.java).putExtras(intent).putExtra(com.example.ollamataskerbridge.bridge.InferenceForegroundService.EXTRA_ORIGIN, com.example.ollamataskerbridge.bridge.InferenceForegroundService.ORIGIN_LOCALE)
-    if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(serviceIntent) else context.startService(serviceIntent)
-    return
     val pending = goAsync()
     val appContext = context.applicationContext
     val values = intent.extras?.getBundle(LocalePluginContract.EXTRA_BUNDLE)
+    if (values?.getString(LocalePluginContract.KEY_PLATFORM) != "macrodroid") {
+      val serviceIntent = Intent(context, com.example.ollamataskerbridge.bridge.InferenceForegroundService::class.java).putExtras(intent).putExtra(com.example.ollamataskerbridge.bridge.InferenceForegroundService.EXTRA_ORIGIN, com.example.ollamataskerbridge.bridge.InferenceForegroundService.ORIGIN_LOCALE)
+      if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(serviceIntent) else context.startService(serviceIntent)
+      pending.finish()
+      return
+    }
     CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
       try {
         val model = values?.getString(LocalePluginContract.KEY_MODEL).orEmpty()
