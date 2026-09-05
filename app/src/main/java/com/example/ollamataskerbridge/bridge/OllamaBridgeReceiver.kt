@@ -6,6 +6,7 @@ import android.app.job.JobScheduler
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.util.Log
 import com.example.ollamataskerbridge.bridge.Backend
 import com.example.ollamataskerbridge.bridge.DefaultInferenceRepository
@@ -17,6 +18,11 @@ import kotlinx.coroutines.launch
 
 class OllamaBridgeReceiver : BroadcastReceiver() {
   override fun onReceive(context: Context, intent: Intent) {
+    if (intent.action == BridgeContract.ACTION_GENERATE) {
+      val serviceIntent = Intent(context, InferenceForegroundService::class.java).putExtras(intent).putExtra(InferenceForegroundService.EXTRA_ORIGIN, "bridge")
+      if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(serviceIntent) else context.startService(serviceIntent)
+      return
+    }
     val pending = goAsync()
     val appContext = context.applicationContext
     CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {

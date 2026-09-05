@@ -55,6 +55,7 @@
             android:name=".bridge.ModelDownloadService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+        <service android:name=".bridge.InferenceForegroundService" android:exported="false" android:foregroundServiceType="dataSync" />
         <service
             android:name=".bridge.ModelDownloadJobService"
             android:permission="android.permission.BIND_JOB_SERVICE"

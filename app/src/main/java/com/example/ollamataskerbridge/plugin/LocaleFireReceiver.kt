@@ -3,6 +3,7 @@ package com.example.ollamataskerbridge.plugin
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import com.example.ollamataskerbridge.bridge.BridgeContract
 import com.example.ollamataskerbridge.bridge.Backend
@@ -20,6 +21,9 @@ import kotlinx.coroutines.launch
 class LocaleFireReceiver : BroadcastReceiver() {
   override fun onReceive(context: Context, intent: Intent) {
     if (intent.action != LocalePluginContract.ACTION_FIRE_SETTING) return
+    val serviceIntent = Intent(context, com.example.ollamataskerbridge.bridge.InferenceForegroundService::class.java).putExtras(intent).putExtra(com.example.ollamataskerbridge.bridge.InferenceForegroundService.EXTRA_ORIGIN, com.example.ollamataskerbridge.bridge.InferenceForegroundService.ORIGIN_LOCALE)
+    if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(serviceIntent) else context.startService(serviceIntent)
+    return
     val pending = goAsync()
     val appContext = context.applicationContext
     val values = intent.extras?.getBundle(LocalePluginContract.EXTRA_BUNDLE)
