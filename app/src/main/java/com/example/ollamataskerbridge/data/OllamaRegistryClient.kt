@@ -76,8 +76,18 @@ class OllamaRegistryClient(
     val target = store.fileFor(model)
     val temp = File(target.path + ".download")
     downloadBlob(registryBase + "/v2/library/" + parsed.first + "/blobs/" + digest, digest, modelSize, temp)
-    check(temp.renameTo(target)) { "モデルファイルを保存できません" }
+    if (!temp.renameTo(target)) {
+        try { temp.copyTo(target, overwrite = true); check(temp.delete()) { "一時ファイルを削除できません" } }
+        catch (error: Exception) { throw java.io.IOException("モデル保存に失敗しました: " + (error.message ?: target.absolutePath), error) }
+      }
     return target
+  }
+
+  fun downloadFromUrl(url: String, model: String, onProgress: (Long, Long) -> Unit = { _, _ -> }): File {
+    require(url.startsWith("https://huggingface.co/")) { "Hugging Face URLが不正です" }
+    val resolvedUrl = if (url.contains("?")) url + "&download=true" else url + "?download=true"
+    Log.d(logTag, "HF download URL=" + resolvedUrl)
+    return downloadHf(resolvedUrl, model, onProgress)
   }
 
   private fun hfUrlFor(model: String): String? = when (model.lowercase()) {
@@ -86,21 +96,41 @@ class OllamaRegistryClient(
     else -> null
   }
 
-  private fun downloadHf(url: String, model: String): File {
+  private fun downloadHf(url: String, model: String, onProgress: (Long, Long) -> Unit = { _, _ -> }): File {
     val target = store.fileFor(model)
     val temp = File(target.path + ".download")
+    val available = store.directory.usableSpace
+    require(available >= 128L * 1024L * 1024L) { "アプリ保存領域が不足しています（空き%.0fMB）".format(available / 1_000_000.0) }
     var resumeBytes = temp.takeIf { it.isFile }?.length() ?: 0L
-    val connection = open(url, readTimeoutMs = 15 * 60 * 1000)
+    val connection = open(url, readTimeoutMs = 15 * 60 * 1000).apply {
+      instanceFollowRedirects = true
+      setRequestProperty("Accept", "application/octet-stream")
+      setRequestProperty("Accept-Encoding", "identity")
+    }
     if (resumeBytes > 0L) connection.setRequestProperty("Range", "bytes=" + resumeBytes + "-")
+    Log.d(logTag, "HF resume bytes=" + resumeBytes)
     try {
       if (resumeBytes > 0L && connection.responseCode == HttpURLConnection.HTTP_OK) { temp.delete(); resumeBytes = 0L }
       check(connection.responseCode in 200..299) { "Hugging Face HTTP " + connection.responseCode }
+      val contentLength = connection.contentLengthLong
+      val totalBytes = if (contentLength > 0L) contentLength + resumeBytes else -1L
+      var downloadedBytes = resumeBytes
+      onProgress(downloadedBytes, totalBytes)
       FileOutputStream(temp, resumeBytes > 0L).use { output -> connection.inputStream.use { input ->
         val buffer = ByteArray(1024 * 1024)
-        while (true) { val count = input.read(buffer); if (count < 0) break; output.write(buffer, 0, count) }
+        while (true) {
+          val count = input.read(buffer)
+          if (count < 0) break
+          output.write(buffer, 0, count)
+          downloadedBytes += count
+          onProgress(downloadedBytes, totalBytes)
+        }
       } }
       check(temp.length() > 0L) { "GGUFファイルが空です" }
-      check(temp.renameTo(target)) { "モデルファイルを保存できません" }
+      if (!temp.renameTo(target)) {
+        try { temp.copyTo(target, overwrite = true); check(temp.delete()) { "一時ファイルを削除できません" } }
+        catch (error: Exception) { throw java.io.IOException("モデル保存に失敗しました: " + (error.message ?: target.absolutePath), error) }
+      }
       Log.i(logTag, "Hugging Face download complete: " + target.name + " bytes=" + target.length())
       return target
     } finally { connection.disconnect() }
@@ -130,6 +160,7 @@ class OllamaRegistryClient(
     var resumeBytes = temp.takeIf { it.isFile }?.length() ?: 0L
     val connection = open(url, readTimeoutMs = 15 * 60 * 1000)
     if (resumeBytes > 0L) connection.setRequestProperty("Range", "bytes=" + resumeBytes + "-")
+    Log.d(logTag, "HF resume bytes=" + resumeBytes)
     try {
       if (resumeBytes > 0L && connection.responseCode == HttpURLConnection.HTTP_OK) {
         Log.w(logTag, "registry ignored Range; restarting download")

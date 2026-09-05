@@ -25,6 +25,10 @@ class SettingsStore(context: Context) {
     get() = prefs.getString("plugin_platform", "tasker").orEmpty()
     set(value) { prefs.edit().putString("plugin_platform", value).apply() }
 
+  var modelSource: String
+    get() = prefs.getString("model_source", "").orEmpty()
+    set(value) { prefs.edit().putString("model_source", value).apply() }
+
   var maxLocalModelSizeGb: Float
     get() = prefs.getFloat("max_local_model_size_gb", 15f)
     set(value) { prefs.edit().putFloat("max_local_model_size_gb", value.coerceAtLeast(0f)).apply() }
@@ -32,12 +36,12 @@ class SettingsStore(context: Context) {
   fun cachedModels(): List<OllamaModel> = runCatching {
     val array = JSONArray(prefs.getString("cached_models", "[]"))
     (0 until array.length()).mapNotNull { index -> array.optJSONObject(index)?.let {
-      OllamaModel(it.optString("name"), it.optBoolean("remote", false), it.optBoolean("downloadable", true), it.optLong("size", -1L), it.optBoolean("local", false))
+      OllamaModel(it.optString("name"), it.optBoolean("remote", false), it.optBoolean("downloadable", true), it.optLong("size", -1L), it.optBoolean("local", false), runCatching { ModelSource.valueOf(it.optString("source", ModelSource.OLLAMA.name)) }.getOrDefault(ModelSource.OLLAMA), it.optString("downloadUrl"))
     } }
   }.getOrDefault(emptyList())
 
   fun saveCachedModels(models: List<OllamaModel>) {
-    val array = JSONArray().apply { models.forEach { put(JSONObject().put("name", it.name).put("remote", it.remote).put("downloadable", it.downloadable).put("size", it.sizeBytes).put("local", it.local)) } }
+    val array = JSONArray().apply { models.forEach { put(JSONObject().put("name", it.name).put("remote", it.remote).put("downloadable", it.downloadable).put("size", it.sizeBytes).put("local", it.local).put("source", it.source.name).put("downloadUrl", it.downloadUrl)) } }
     prefs.edit().putString("cached_models", array.toString()).apply()
   }
 

@@ -23,6 +23,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -45,11 +46,12 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ollamataskerbridge.data.OllamaModel
+import com.example.ollamataskerbridge.data.ModelSource
 import com.example.ollamataskerbridge.data.SystemPromptPreset
 import com.example.ollamataskerbridge.theme.MyApplicationTheme
 
 @Composable
-fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier = Modifier) {
+fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier = Modifier, onOpenChat: () -> Unit = {}) {
   val state by viewModel.uiState.collectAsStateWithLifecycle()
   var pendingDelete by remember { mutableStateOf<String?>(null) }
   var editingPreset by remember { mutableStateOf<SystemPromptPreset?>(null) }
@@ -57,7 +59,7 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
   var systemPresetMenu by remember { mutableStateOf(false) }
   val clipboard = LocalClipboardManager.current
   val maxBytes = state.maxLocalModelSizeGb.toDoubleOrNull()?.takeIf { it >= 0 }?.times(1_000_000_000.0)?.toLong() ?: Long.MAX_VALUE
-  val shownModels = state.models.filter { it.sizeBytes <= 0L || it.sizeBytes <= maxBytes }.filter { !state.localOnly || it.local }.filter { state.search.isBlank() || it.name.contains(state.search, true) }
+  val shownModels = state.models.filter { it.source == state.source }.filter { it.sizeBytes <= 0L || it.sizeBytes <= maxBytes }.filter { !state.localOnly || it.local }.filter { state.search.isBlank() || it.name.contains(state.search, true) }
   Column(modifier.fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Text("Ollama Tasker Bridge", style = MaterialTheme.typography.headlineSmall)
     Text("本体アプリ", style = MaterialTheme.typography.titleLarge)
@@ -78,23 +80,28 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
     )
 
     Text("モデル管理", style = MaterialTheme.typography.titleMedium)
-    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+      if (state.source == ModelSource.OLLAMA) Button(onClick = { viewModel.sourceChanged(ModelSource.OLLAMA) }) { Text("Ollama") } else OutlinedButton(onClick = { viewModel.sourceChanged(ModelSource.OLLAMA) }) { Text("Ollama") }
+      if (state.source == ModelSource.HUGGING_FACE) Button(onClick = { viewModel.sourceChanged(ModelSource.HUGGING_FACE) }) { Text("Hugging Face") } else OutlinedButton(onClick = { viewModel.sourceChanged(ModelSource.HUGGING_FACE) }) { Text("Hugging Face") }
+    }
+    Text(if (state.source == ModelSource.OLLAMA) "Ollama公式・接続先のモデル" else "Hugging FaceのAndroid向けGGUFモデル", style = MaterialTheme.typography.bodySmall)
+    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
       OutlinedTextField(state.search, viewModel::searchChanged, Modifier.weight(1f), label = { Text("モデルを検索") }, singleLine = true)
-      OutlinedButton(onClick = viewModel::loadModels, enabled = !state.loading, modifier = Modifier.padding(start = 8.dp)) { Text("↻") }
+      OutlinedTextField(
+        value = state.maxLocalModelSizeGb,
+        onValueChange = viewModel::maxLocalModelSizeChanged,
+        modifier = Modifier.width(132.dp),
+        label = { Text("上限GB", fontSize = 11.sp) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+      )
+      OutlinedButton(onClick = viewModel::loadModels, enabled = !state.loading) { Text("↻") }
     }
     Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
       Checkbox(state.localOnly, viewModel::localOnlyChanged)
       Text("ローカル取得済みのみ表示")
     }
-    OutlinedTextField(
-      value = state.maxLocalModelSizeGb,
-      onValueChange = viewModel::maxLocalModelSizeChanged,
-      modifier = Modifier.width(150.dp),
-      label = { Text("ローカル上限(GB)", fontSize = 12.sp) },
-      supportingText = { Text("上限超過モデルを非表示", fontSize = 10.sp) },
-      singleLine = true,
-      keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-    )
+    
     Text("${shownModels.size}件（上限以下。未知サイズは取得時に確認）", style = MaterialTheme.typography.bodySmall)
     if (shownModels.isEmpty()) {
       Text("表示できるモデルはありません。上限値または検索条件を確認してください。", style = MaterialTheme.typography.bodySmall)
@@ -108,36 +115,15 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
       OutlinedButton(onClick = viewModel::testConnection, enabled = !state.loading) { Text("接続テスト") }
       Button(onClick = { viewModel.downloadModel(state.selectedModel) }, enabled = !state.loading && state.selectedModel.isNotBlank() && state.models.firstOrNull { it.name == state.selectedModel }?.local != true) { Text("選択モデルを取得") }
     }
+    if (state.downloadTotalBytes > 0L) {
+      val progress = (state.downloadedBytes.toFloat() / state.downloadTotalBytes.toFloat()).coerceIn(0f, 1f)
+      LinearProgressIndicator(progress = progress, modifier = Modifier.fillMaxWidth())
+      Text("モデル取得中: %.0f%% (%.1f / %.1f GB)".format(progress * 100f, state.downloadedBytes / 1_000_000_000f, state.downloadTotalBytes / 1_000_000_000f), style = MaterialTheme.typography.bodySmall)
+    }
     state.message?.let { Text(it, color = if (it.startsWith("エラー")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary) }
     if (state.loading) CircularProgressIndicator()
 
-    Text("動作検証", style = MaterialTheme.typography.titleMedium)
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-      OutlinedTextField(state.maxTokens, viewModel::maxTokensChanged, Modifier.weight(1f), label = { Text("最大トークン") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-      OutlinedTextField(state.temperature, viewModel::temperatureChanged, Modifier.weight(1f), label = { Text("Temperature") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
-    }
-    val selectedSystemPreset = state.presets.firstOrNull { it.id == state.systemPromptPresetId }
-    Text("システムプロンプト", style = MaterialTheme.typography.labelLarge)
-    Row {
-      OutlinedButton(onClick = { systemPresetMenu = true }) {
-        Text(selectedSystemPreset?.name ?: if (state.systemPromptPresetId == CUSTOM_SYSTEM_PROMPT_ID) "カスタム入力" else "プリセットを選択")
-      }
-      DropdownMenu(expanded = systemPresetMenu, onDismissRequest = { systemPresetMenu = false }) {
-        state.presets.forEach { preset ->
-          DropdownMenuItem(text = { Text(preset.name) }, onClick = { viewModel.selectSystemPromptPreset(preset.id); systemPresetMenu = false })
-        }
-        DropdownMenuItem(text = { Text("カスタム入力…") }, onClick = { viewModel.selectSystemPromptPreset(CUSTOM_SYSTEM_PROMPT_ID); systemPresetMenu = false })
-      }
-    }
-    if (selectedSystemPreset != null) {
-      Text(selectedSystemPreset.body, style = MaterialTheme.typography.bodySmall, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp))
-    } else if (state.systemPromptPresetId == CUSTOM_SYSTEM_PROMPT_ID) {
-      OutlinedTextField(state.systemPrompt, viewModel::systemPromptChanged, Modifier.fillMaxWidth(), label = { Text("カスタムシステムプロンプト") }, minLines = 3)
-    } else {
-      Text("プリセットを選ぶとシステムプロンプトが適用されます。", style = MaterialTheme.typography.bodySmall)
-    }
-    OutlinedTextField(state.testPrompt, viewModel::testPromptChanged, Modifier.fillMaxWidth(), label = { Text("テスト用プロンプト") }, minLines = 2)
-    Button(onClick = viewModel::runTest, enabled = !state.loading && state.selectedModel.isNotBlank() && state.testPrompt.isNotBlank()) { Text("テスト実行") }
+    OutlinedButton(onClick = onOpenChat, modifier = Modifier.fillMaxWidth()) { Text("テストチャットを開く") }
 
     HorizontalDivider()
     Text("システムプロンプト管理", style = MaterialTheme.typography.titleMedium)
@@ -164,10 +150,10 @@ private fun ModelRow(model: OllamaModel, loading: Boolean, selected: Boolean, on
   Card(onClick = { onSelect(model.name) }, modifier = Modifier.fillMaxWidth(), colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface)) {
     Row(Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
       Column(Modifier.weight(1f)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { Text(model.name); if (model.remote) Text("Cloud（公式一覧）", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary) }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { Text(model.name); Text(if (model.source == ModelSource.OLLAMA) "Ollama" else "Hugging Face", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary) }
         Text(if (model.sizeBytes > 0) "%.2f GB".format(model.sizeBytes / 1_000_000_000.0) else "サイズ不明", style = MaterialTheme.typography.bodySmall)
       }
-      if (model.local) Text("✓", color = androidx.compose.ui.graphics.Color(0xFF2E7D32)) else if (model.downloadable) IconButton(onClick = { onDownload(model.name) }, enabled = !loading) { Text("↓") } else Text("Cloudのみ（取得不可）", style = MaterialTheme.typography.labelSmall)
+      if (model.local) TextButton(onClick = { onDelete(model.name) }, enabled = !loading) { Text("選択モデル削除", color = MaterialTheme.colorScheme.error) } else if (model.downloadable) IconButton(onClick = { onDownload(model.name) }, enabled = !loading) { Text("↓") } else Text("Cloudのみ（取得不可）", style = MaterialTheme.typography.labelSmall)
     }
   }
 }

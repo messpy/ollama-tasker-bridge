@@ -8,12 +8,16 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 
+enum class ModelSource { OLLAMA, HUGGING_FACE }
+
 data class OllamaModel(
   val name: String,
   val remote: Boolean,
   val downloadable: Boolean = true,
   val sizeBytes: Long = -1L,
   val local: Boolean = false,
+  val source: ModelSource = ModelSource.OLLAMA,
+  val downloadUrl: String = "",
 )
 
 class OllamaClient(private val baseUrl: String, private val apiKey: String = "") {

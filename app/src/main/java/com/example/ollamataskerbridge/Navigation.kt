@@ -7,6 +7,7 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import com.example.ollamataskerbridge.ui.main.MainScreen
+import com.example.ollamataskerbridge.ui.chat.ChatScreen
 
 @Composable
 fun MainNavigation() {
@@ -17,9 +18,8 @@ fun MainNavigation() {
     onBack = { backStack.removeLastOrNull() },
     entryProvider =
       entryProvider {
-        entry<Main> {
-          MainScreen(modifier = Modifier.safeDrawingPadding())
-        }
+        entry<Main> { MainScreen(modifier = Modifier.safeDrawingPadding(), onOpenChat = { backStack.add(Chat) }) }
+        entry<Chat> { ChatScreen(modifier = Modifier.safeDrawingPadding()) }
       },
   )
 }
