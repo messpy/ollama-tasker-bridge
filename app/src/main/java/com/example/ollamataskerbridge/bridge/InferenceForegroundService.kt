@@ -72,7 +72,12 @@ class InferenceForegroundService : Service() {
       putBoolean(BridgeContract.EXTRA_OK, true);
       putString(BridgeContract.EXTRA_RESULT, result);
       putString("response", result);
-      if (resultVariable.isNotBlank()) putString(resultVariable, result);
+      putString("answer", result);
+      if (resultVariable.isNotBlank()) {
+        putString(resultVariable, result);
+        putString("%" + resultVariable, result);
+        putString("{lv=" + resultVariable + "}", result);
+      }
       if (values?.getString(LocalePluginContract.KEY_PLATFORM) == "tasker" && resultVariable.isNotBlank()) {
         putBundle(LocalePluginContract.TASKER_VARIABLES, Bundle().apply { putString("%" + resultVariable, result) });
       }

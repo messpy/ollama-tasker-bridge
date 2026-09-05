@@ -77,6 +77,7 @@ class LocaleFireReceiver : BroadcastReceiver() {
       result?.let {
         putString(BridgeContract.EXTRA_RESULT, it)
         putString("response", it)
+        putString("answer", it)
         if (resultVariable.isNotBlank()) {
           putString(resultVariable, it)
           putString("%" + resultVariable, it)
