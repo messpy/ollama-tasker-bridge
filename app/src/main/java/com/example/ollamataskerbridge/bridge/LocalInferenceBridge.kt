@@ -1,6 +1,9 @@
 package com.example.ollamataskerbridge.bridge
 
 import android.content.Context
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.os.Build
 import com.arm.aichat.AiChat
 import com.arm.aichat.InferenceEngine
 import com.example.ollamataskerbridge.data.LocalModelStore
@@ -31,11 +34,14 @@ object DefaultInferenceRepository : InferenceRepository {
   override fun generate(context: Context, request: GenerateRequest): Flow<GenerateEvent> = when (request.backend) {
     Backend.LOCAL -> LocalInferenceBridge.generate(context, request.model, request.prompt, request.systemPrompt, request.maxTokens, request.temperature)
     Backend.OLLAMA -> flow {
+      InferenceNotification.start(context, request.model)
       try {
         val settings = SettingsStore(context)
         emit(GenerateEvent.Done(OllamaClient(settings.endpoint, settings.apiKey).generate(request.model, request.prompt, request.systemPrompt, request.maxTokens, request.temperature)))
       } catch (error: Exception) {
         emit(GenerateEvent.Error(error.message ?: "生成に失敗しました"))
+      } finally {
+        InferenceNotification.finish(context)
       }
     }
   }
@@ -62,6 +68,7 @@ object LocalInferenceBridge {
   private var loadedSystemPrompt: String? = null
 
   fun generate(context: Context, model: String, prompt: String, system: String?, maxTokens: Int = 256, temperature: Float = 0.7f): Flow<GenerateEvent> = flow {
+    InferenceNotification.start(context, model)
     try {
       mutex.withLock {
         val file = LocalModelStore(context).fileFor(model)
@@ -97,6 +104,28 @@ object LocalInferenceBridge {
       loadedPath = null
       loadedSystemPrompt = null
       emit(GenerateEvent.Error(error.message ?: "生成に失敗しました"))
+    } finally {
+      InferenceNotification.finish(context)
     }
+  }
+}
+
+object InferenceNotification {
+  private const val CHANNEL_ID = "inference"
+  private const val NOTIFICATION_ID = 2001
+
+  fun start(context: Context, model: String) {
+    val manager = context.getSystemService(NotificationManager::class.java)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) manager.createNotificationChannel(NotificationChannel(CHANNEL_ID, "LLM推論", NotificationManager.IMPORTANCE_LOW))
+    manager.notify(NOTIFICATION_ID, android.app.Notification.Builder(context, CHANNEL_ID)
+      .setContentTitle("推論中")
+      .setContentText(model + " を実行しています")
+      .setSmallIcon(android.R.drawable.stat_sys_upload)
+      .setOngoing(true)
+      .build())
+  }
+
+  fun finish(context: Context) {
+    context.getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
   }
 }
