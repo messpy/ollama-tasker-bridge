@@ -52,11 +52,11 @@ class PluginSettingsActivity : ComponentActivity() {
       MyApplicationTheme {
         PluginSettingsContent(
           initialModel = initial?.getString(LocalePluginContract.KEY_MODEL).orEmpty(),
-          initialPrompt = initial?.getString(LocalePluginContract.KEY_PROMPT).orEmpty().ifBlank { if (resolvedPlatform == "macrodroid") "{lv=prompt}" else "%prompt" },
+          initialPrompt = normalizePromptForPlatform(initial?.getString(LocalePluginContract.KEY_PROMPT).orEmpty().ifBlank { if (resolvedPlatform == "macrodroid") "{lv=prompt}" else "%prompt" }, resolvedPlatform),
           initialPresetId = initial?.getString(LocalePluginContract.KEY_PRESET_ID) ?: settings.lastPresetId,
           initialCustomSystem = initial?.getString(LocalePluginContract.KEY_CUSTOM_SYSTEM).orEmpty(),
           initialPlatform = resolvedPlatform,
-          initialResultVariable = initial?.getString(LocalePluginContract.KEY_RESULT_VARIABLE).orEmpty().ifBlank { if (resolvedPlatform == "macrodroid") "{lv=answer}" else "%answer" },
+          initialResultVariable = normalizeResultForPlatform(initial?.getString(LocalePluginContract.KEY_RESULT_VARIABLE).orEmpty().ifBlank { if (resolvedPlatform == "macrodroid") "{lv=answer}" else "%answer" }, resolvedPlatform),
           initialBackend = initial?.getString(LocalePluginContract.KEY_BACKEND).orEmpty().ifBlank { if (local.any { it.name == initial?.getString(LocalePluginContract.KEY_MODEL).orEmpty() }) "local" else "ollama" },
           models = models,
           presets = settings.presets(),
@@ -65,6 +65,7 @@ class PluginSettingsActivity : ComponentActivity() {
           onSave = { model, prompt, presetId, customSystem, platform, resultVariable, backend ->
             settings.pluginPlatform = platform
             if (presetId.isNotBlank() && presetId != "custom") settings.lastPresetId = presetId
+            val normalizedResult = normalizeResultVariable(resultVariable)
             val values = Bundle().apply {
               putString(LocalePluginContract.KEY_MODEL, model)
               putString(LocalePluginContract.KEY_PROMPT, prompt)
@@ -72,14 +73,15 @@ class PluginSettingsActivity : ComponentActivity() {
               putString(LocalePluginContract.KEY_CUSTOM_SYSTEM, customSystem)
               putString(LocalePluginContract.KEY_PLATFORM, platform)
               putString(LocalePluginContract.KEY_BACKEND, backend)
-              val normalizedResult = normalizeResultVariable(resultVariable)
               putString(LocalePluginContract.KEY_RESULT_VARIABLE, normalizedResult)
               if (platform == "tasker") {
                 putString(LocalePluginContract.TASKER_VARIABLE_REPLACE_KEYS, LocalePluginContract.KEY_PROMPT + " " + LocalePluginContract.KEY_CUSTOM_SYSTEM)
               }
             }
-            setResult(Activity.RESULT_OK, Intent().putExtra(LocalePluginContract.EXTRA_BUNDLE, values)
-              .putExtra(LocalePluginContract.EXTRA_STRING_BLURB, "$model / $platform"))
+            val resultIntent = Intent().putExtra(LocalePluginContract.EXTRA_BUNDLE, values)
+              .putExtra(LocalePluginContract.EXTRA_STRING_BLURB, "$model / $platform")
+            if (platform == "macrodroid" && normalizedResult.isNotBlank()) resultIntent.putExtra(LocalePluginContract.TASKER_RELEVANT_VARIABLES, arrayOf("%" + normalizedResult + "\n回答\nLLMの生成結果"))
+            setResult(Activity.RESULT_OK, resultIntent)
             finish()
           },
         )
@@ -95,6 +97,10 @@ class PluginSettingsActivity : ComponentActivity() {
       else -> null
     }
   }
+
+  private fun normalizePromptForPlatform(value: String, platform: String): String = if (platform == "macrodroid") value.replace("%prompt", "{lv=prompt}").replace("{iv=prompt}", "{lv=prompt}") else value.replace("{lv=prompt}", "%prompt").replace("{iv=prompt}", "%prompt")
+
+  private fun normalizeResultForPlatform(value: String, platform: String): String = if (platform == "macrodroid") value.replace("%answer", "{lv=answer}").replace("{iv=answer}", "{lv=answer}") else value.replace("{lv=answer}", "%answer").replace("{iv=answer}", "%answer")
 
   private fun normalizeResultVariable(value: String) = value.trim()
     .removePrefix("{lv=").removePrefix("%").removeSuffix("}").trim()

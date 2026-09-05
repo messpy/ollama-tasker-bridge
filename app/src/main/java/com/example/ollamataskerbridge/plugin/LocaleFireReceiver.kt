@@ -77,7 +77,11 @@ class LocaleFireReceiver : BroadcastReceiver() {
       result?.let {
         putString(BridgeContract.EXTRA_RESULT, it)
         putString("response", it)
-        if (resultVariable.isNotBlank()) putString(resultVariable, it)
+        if (resultVariable.isNotBlank()) {
+          putString(resultVariable, it)
+          putString("%" + resultVariable, it)
+          putString("{lv=" + resultVariable + "}", it)
+        }
       }
       error?.let { putString(BridgeContract.EXTRA_ERROR, it) }
       if (request.getBundleExtra(LocalePluginContract.EXTRA_BUNDLE)?.getString(LocalePluginContract.KEY_PLATFORM) == "tasker" && resultVariable.isNotBlank()) {
