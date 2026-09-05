@@ -84,6 +84,9 @@ class InferenceForegroundService : Service() {
     };
     sendReply(intent.getStringExtra(BridgeContract.EXTRA_REPLY_ACTION)?.takeIf(String::isNotBlank) ?: BridgeContract.ACTION_RESULT,
       intent.getStringExtra(BridgeContract.EXTRA_REPLY_PACKAGE), extras);
+    if (values?.getString(LocalePluginContract.KEY_PLATFORM) == "macrodroid") {
+      sendBroadcast(Intent(BridgeContract.ACTION_MACRODROID_RESULT).putExtras(extras).putExtra(BridgeContract.EXTRA_MODEL, model));
+    }
   }
 
   private fun sendReply(action: String, packageName: String?, ok: Boolean, result: String?, error: String?) {

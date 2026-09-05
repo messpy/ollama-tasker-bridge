@@ -96,5 +96,10 @@ class LocaleFireReceiver : BroadcastReceiver() {
     val reply = Intent(replyAction).putExtras(extras)
     request.getStringExtra(BridgeContract.EXTRA_REPLY_PACKAGE)?.takeIf(String::isNotBlank)?.let(reply::setPackage)
     context.sendBroadcast(reply)
+    if (request.getBundleExtra(LocalePluginContract.EXTRA_BUNDLE)?.getString(LocalePluginContract.KEY_PLATFORM) == "macrodroid") {
+      val macroReply = Intent(BridgeContract.ACTION_MACRODROID_RESULT).putExtras(extras)
+        .putExtra(BridgeContract.EXTRA_MODEL, request.getBundleExtra(LocalePluginContract.EXTRA_BUNDLE)?.getString(LocalePluginContract.KEY_MODEL).orEmpty())
+      context.sendBroadcast(macroReply)
+    }
   }
 }
