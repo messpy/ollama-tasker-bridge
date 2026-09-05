@@ -67,7 +67,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   fun testConnection() { runRequest("接続テストに失敗しました。モデル・APIキー・ネットワークを確認してください。") {
     val model = _uiState.value.selectedModel.trim()
     require(model.isNotBlank()) { "先にモデルを選択してください" }
-    DefaultInferenceRepository.generate(getApplication(), GenerateRequest(if (localModels.fileFor(model).isFile) Backend.LOCAL else Backend.OLLAMA, model, "接続テスト", _uiState.value.systemPrompt, _uiState.value.maxTokens.toIntOrNull() ?: 256, _uiState.value.temperature.toFloatOrNull() ?: 0.7f))
+    DefaultInferenceRepository.generateText(getApplication(), GenerateRequest(if (localModels.fileFor(model).isFile) Backend.LOCAL else Backend.OLLAMA, model, "接続テスト", _uiState.value.systemPrompt, _uiState.value.maxTokens.toIntOrNull() ?: 256, _uiState.value.temperature.toFloatOrNull() ?: 0.7f))
     "接続成功（選択モデルで応答を確認しました）"
   } }
   fun downloadModel(name: String) { runRequest("モデルの取得に失敗しました。HTTP応答・保存先・空き容量を確認してください。") {
@@ -97,7 +97,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
       val prompt = _uiState.value.testPrompt.trim()
       require(model.isNotBlank()) { "テストするモデル名を入力してください" }
       require(prompt.isNotBlank()) { "テスト用プロンプトを入力してください" }
-      val result = DefaultInferenceRepository.generate(getApplication(), GenerateRequest(if (localModels.fileFor(model).isFile) Backend.LOCAL else Backend.OLLAMA, model, prompt, _uiState.value.systemPrompt, _uiState.value.maxTokens.toIntOrNull() ?: 256, _uiState.value.temperature.toFloatOrNull() ?: 0.7f))
+      val result = DefaultInferenceRepository.generateText(getApplication(), GenerateRequest(if (localModels.fileFor(model).isFile) Backend.LOCAL else Backend.OLLAMA, model, prompt, _uiState.value.systemPrompt, _uiState.value.maxTokens.toIntOrNull() ?: 256, _uiState.value.temperature.toFloatOrNull() ?: 0.7f))
       "テスト結果:\n$result"
     }
   }

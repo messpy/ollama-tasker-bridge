@@ -8,9 +8,9 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import com.example.ollamataskerbridge.data.LocalModelStore
-import com.example.ollamataskerbridge.data.OllamaClient
-import com.example.ollamataskerbridge.data.OllamaRegistryClient
-import com.example.ollamataskerbridge.data.SettingsStore
+import com.example.ollamataskerbridge.bridge.Backend
+import com.example.ollamataskerbridge.bridge.DefaultInferenceRepository
+import com.example.ollamataskerbridge.bridge.GenerateRequest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -33,12 +33,7 @@ class OllamaBridgeReceiver : BroadcastReceiver() {
             val localFile = LocalModelStore(appContext).fileFor(model)
             val resolvedBackend = backend ?: if (localFile.isFile) "local" else "ollama"
             require(resolvedBackend == "local" || resolvedBackend == "ollama") { "backendはlocalまたはollamaを指定してください" }
-            if (resolvedBackend == "local") {
-              LocalInferenceBridge.generate(appContext, model, prompt, system, maxTokens, temperature)
-            } else {
-              val settings = SettingsStore(appContext)
-              OllamaClient(settings.endpoint, settings.apiKey).generate(model, prompt, system, maxTokens, temperature)
-            }
+            DefaultInferenceRepository.generateText(appContext, GenerateRequest(if (resolvedBackend == "local") Backend.LOCAL else Backend.OLLAMA, model, prompt, system, maxTokens, temperature))
           }
           BridgeContract.ACTION_PULL -> {
             val extras = android.os.PersistableBundle().apply {

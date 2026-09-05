@@ -37,7 +37,7 @@ class LocaleFireReceiver : BroadcastReceiver() {
         }
         val resultVariable = normalizeResultVariable(values?.getString(LocalePluginContract.KEY_RESULT_VARIABLE).orEmpty())
         val backend = if (LocalModelStore(appContext).fileFor(model).isFile) Backend.LOCAL else Backend.OLLAMA
-        val result = DefaultInferenceRepository.generate(appContext, GenerateRequest(backend, model, prompt, system))
+        val result = DefaultInferenceRepository.generateText(appContext, GenerateRequest(backend, model, prompt, system))
         finish(pending, appContext, intent, true, result, null, resultVariable)
       } catch (error: Exception) {
         finish(pending, appContext, intent, false, null, error.message ?: "実行に失敗しました", "")

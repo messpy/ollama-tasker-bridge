@@ -27,9 +27,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.collect
 
 data class ChatMessage(val user: Boolean, val text: String, val model: String = "", val generating: Boolean = false, val error: Boolean = false, val retryPrompt: String = "")
-data class ChatUiState(val messages: List<ChatMessage> = emptyList(), val selectedModel: String = "", val maxTokens: String = "256", val temperature: String = "0.7", val systemPromptId: String = "", val systemPrompt: String = "", val presets: List<SystemPromptPreset> = emptyList(), val generating: Boolean = false, val input: String = "")
+data class ChatUiState(val messages: List<ChatMessage> = emptyList(), val selectedModel: String = "", val maxTokens: String = "256", val temperature: String = "0.7", val systemPromptId: String = "", val systemPrompt: String = "", val presets: List<SystemPromptPreset> = emptyList(), val generating: Boolean = false, val input: String = "", val notice: String? = null)
 
 class ChatViewModel(application: Application) : AndroidViewModel(application) {
   private val settings = SettingsStore(application)
@@ -43,7 +44,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
   fun selectModel(value: String) { _state.value = _state.value.copy(selectedModel = value) }
   fun maxTokens(value: String) { _state.value = _state.value.copy(maxTokens = value) }
   fun temperature(value: String) { _state.value = _state.value.copy(temperature = value) }
-  fun selectPreset(value: SystemPromptPreset?) { _state.value = _state.value.copy(systemPromptId = value?.id.orEmpty(), systemPrompt = value?.body.orEmpty()) }
+  fun selectPreset(value: SystemPromptPreset?) {
+    val old = _state.value
+    val changed = old.systemPrompt != value?.body.orEmpty()
+    _state.value = old.copy(systemPromptId = value?.id.orEmpty(), systemPrompt = value?.body.orEmpty(), messages = if (changed && old.messages.isNotEmpty()) emptyList() else old.messages, notice = if (changed && old.messages.isNotEmpty()) "システムプロンプトを変更したため、会話をリセットしました。" else old.notice)
+  }
   fun stop() { running?.cancel(); _state.value = _state.value.copy(generating = false) }
   fun retry(prompt: String) = send(prompt)
   fun send(value: String = _state.value.input) {
@@ -53,7 +58,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     _state.value = old.copy(input = "", generating = true, messages = old.messages + ChatMessage(true, prompt) + ChatMessage(false, "", old.selectedModel, true, retryPrompt = prompt))
     val request = GenerateRequest(Backend.LOCAL, old.selectedModel, prompt, old.systemPrompt.takeIf { it.isNotBlank() }, old.maxTokens.toIntOrNull()?.coerceAtLeast(1) ?: 256, old.temperature.toFloatOrNull()?.coerceIn(0f, 2f) ?: 0.7f)
     running = viewModelScope.launch {
-      try { update(index, ChatMessage(false, DefaultInferenceRepository.generate(getApplication(), request), request.model)) }
+      try { DefaultInferenceRepository.generate(getApplication(), request).collect { event -> when (event) { is GenerateEvent.Token -> update(index, ChatMessage(false, _state.value.messages.getOrNull(index)?.text.orEmpty() + event.text, request.model, true, retryPrompt = prompt)); is GenerateEvent.Done -> update(index, ChatMessage(false, event.fullText, request.model, false, retryPrompt = prompt)); is GenerateEvent.Error -> update(index, ChatMessage(false, event.message, request.model, false, true, prompt)) } } }
       catch (e: CancellationException) { update(index, ChatMessage(false, "生成を中断しました", request.model, error = true, retryPrompt = prompt)) }
       catch (e: Exception) { update(index, ChatMessage(false, "生成に失敗しました: ${e.message ?: "モデルを確認してください"}", request.model, error = true, retryPrompt = prompt)) }
       finally { _state.value = _state.value.copy(generating = false) }
@@ -69,6 +74,7 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), modifier: Modifier = Modi
   LaunchedEffect(state.messages.size, state.messages.lastOrNull()?.text) { if (state.messages.isNotEmpty()) list.animateScrollToItem(state.messages.lastIndex) }
   Column(modifier.fillMaxSize().padding(horizontal = 12.dp)) {
     Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) { Text("テストチャット", style = MaterialTheme.typography.titleLarge); Spacer(Modifier.weight(1f)); Text(state.selectedModel.ifBlank { "モデル未選択" }, style = MaterialTheme.typography.labelSmall) }
+    state.notice?.let { Text(it, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(bottom = 4.dp)) }
     LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = list, verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 8.dp)) { items(state.messages) { MessageBubble(it, { viewModel.retry(it.retryPrompt) }) } }
     Box(Modifier.fillMaxWidth()) {
       DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
