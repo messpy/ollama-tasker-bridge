@@ -55,11 +55,12 @@ class PluginSettingsActivity : ComponentActivity() {
           initialCustomSystem = initial?.getString(LocalePluginContract.KEY_CUSTOM_SYSTEM).orEmpty(),
           initialPlatform = initial?.getString(LocalePluginContract.KEY_PLATFORM) ?: settings.pluginPlatform,
           initialResultVariable = initial?.getString(LocalePluginContract.KEY_RESULT_VARIABLE).orEmpty(),
+          initialBackend = initial?.getString(LocalePluginContract.KEY_BACKEND).orEmpty().ifBlank { if (local.any { it.name == initial?.getString(LocalePluginContract.KEY_MODEL).orEmpty() }) "local" else "ollama" },
           models = models,
           presets = settings.presets(),
           onOpenApp = { startActivity(Intent(this@PluginSettingsActivity, MainActivity::class.java)) },
           onCancel = { setResult(Activity.RESULT_CANCELED); finish() },
-          onSave = { model, prompt, presetId, customSystem, platform, resultVariable ->
+          onSave = { model, prompt, presetId, customSystem, platform, resultVariable, backend ->
             settings.pluginPlatform = platform
             if (presetId.isNotBlank() && presetId != "custom") settings.lastPresetId = presetId
             val values = Bundle().apply {
@@ -68,6 +69,7 @@ class PluginSettingsActivity : ComponentActivity() {
               putString(LocalePluginContract.KEY_PRESET_ID, presetId)
               putString(LocalePluginContract.KEY_CUSTOM_SYSTEM, customSystem)
               putString(LocalePluginContract.KEY_PLATFORM, platform)
+              putString(LocalePluginContract.KEY_BACKEND, backend)
               val normalizedResult = normalizeResultVariable(resultVariable)
               putString(LocalePluginContract.KEY_RESULT_VARIABLE, normalizedResult)
               if (platform == "tasker") {
@@ -95,17 +97,19 @@ private fun PluginSettingsContent(
   initialCustomSystem: String,
   initialPlatform: String,
   initialResultVariable: String,
+  initialBackend: String,
   models: List<OllamaModel>,
   presets: List<SystemPromptPreset>,
   onOpenApp: () -> Unit,
   onCancel: () -> Unit,
-  onSave: (String, String, String, String, String, String) -> Unit,
+  onSave: (String, String, String, String, String, String, String) -> Unit,
 ) {
   var platform by remember { mutableStateOf(initialPlatform.ifBlank { "tasker" }) }
   var model by remember { mutableStateOf(initialModel) }
   var prompt by remember { mutableStateOf(initialPrompt) }
   var query by remember { mutableStateOf("") }
-  var localOnly by remember { mutableStateOf(false) }
+  var localOnly by remember { mutableStateOf(true) }
+  var backend by remember { mutableStateOf(initialBackend.ifBlank { "ollama" }) }
   var presetId by remember { mutableStateOf(initialPresetId) }
   var customSystem by remember { mutableStateOf(initialCustomSystem) }
   var resultVariable by remember { mutableStateOf(initialResultVariable) }
@@ -122,12 +126,15 @@ private fun PluginSettingsContent(
     Text("モデルの取得・APIキー・プリセット管理は本体アプリで行います。")
     Row { Checkbox(checked = true, onCheckedChange = null); Text("本体アプリのAPIキーを使用") }
     Button(onClick = onOpenApp, modifier = Modifier.fillMaxWidth()) { Text("本体アプリを開く") }
-    OutlinedTextField(model, { model = it }, Modifier.fillMaxWidth(), label = { Text("モデル") }, singleLine = true)
+    OutlinedTextField(model, { }, Modifier.fillMaxWidth(), label = { Text("モデル") }, singleLine = true, readOnly = true)
     OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), label = { Text("本体のモデル一覧を検索") }, singleLine = true)
-    Row { androidx.compose.material3.Checkbox(localOnly, { localOnly = it }); Text("ローカル取得済みのみ") }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+      if (localOnly) OutlinedButton(onClick = { localOnly = false }) { Text("すべて") } else Button(onClick = { localOnly = false }) { Text("すべて") }
+      if (localOnly) Button(onClick = { localOnly = true }) { Text("取得済みのみ") } else OutlinedButton(onClick = { localOnly = true }) { Text("取得済みのみ") }
+    }
     LazyColumn(Modifier.fillMaxWidth().heightIn(max = 260.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
       items(shown, key = { it.name }) { item ->
-        Card(onClick = { model = item.name }, Modifier.fillMaxWidth()) {
+        Card(onClick = { model = item.name; backend = if (item.local) "local" else "ollama" }, Modifier.fillMaxWidth()) {
           Row(Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             Column(Modifier.weight(1f)) { Text(item.name); if (item.remote) Text("Cloud", style = androidx.compose.material3.MaterialTheme.typography.labelSmall); Text(if (item.sizeBytes > 0) "%.2f GB".format(item.sizeBytes / 1_000_000_000.0) else "サイズ不明", style = androidx.compose.material3.MaterialTheme.typography.bodySmall) }
             Text(if (item.local) "✓" else "未取得")
@@ -135,6 +142,7 @@ private fun PluginSettingsContent(
         }
       }
     }
+    Text(if (backend == "local") "実行先: ローカル" else "実行先: Ollama Cloud")
     OutlinedTextField(prompt, { prompt = it }, Modifier.fillMaxWidth(), label = { Text("プロンプト") }, minLines = 2)
     Text(if (platform == "macrodroid") "入力例: {lv=変数名}" else "入力例: %変数名")
     Row {
@@ -148,6 +156,6 @@ private fun PluginSettingsContent(
     if (presetId == "custom") OutlinedTextField(customSystem, { customSystem = it }, Modifier.fillMaxWidth(), label = { Text("システムプロンプト（カスタム）") }, minLines = 3)
     OutlinedTextField(resultVariable, { resultVariable = it }, Modifier.fillMaxWidth(), label = { Text("${platformName}変数名（結果）") }, singleLine = true)
     Text(if (platform == "macrodroid") "結果例: {lv=answer}" else "結果例: %answer")
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { OutlinedButton(onClick = onCancel) { Text("キャンセル") }; Button(onClick = { onSave(model.trim(), prompt, presetId, customSystem, platform, resultVariable) }, enabled = model.isNotBlank() && prompt.isNotBlank()) { Text("保存") } }
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { OutlinedButton(onClick = onCancel) { Text("キャンセル") }; Button(onClick = { onSave(model.trim(), prompt, presetId, customSystem, platform, resultVariable, backend) }, enabled = model.isNotBlank() && prompt.isNotBlank()) { Text("保存") } }
   }
 }

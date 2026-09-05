@@ -16,6 +16,7 @@ object LocalePluginContract {
   const val KEY_PLATFORM = "com.example.ollamataskerbridge.plugin.PLATFORM"
   const val KEY_PRESET_ID = "com.example.ollamataskerbridge.plugin.PRESET_ID"
   const val KEY_CUSTOM_SYSTEM = "com.example.ollamataskerbridge.plugin.CUSTOM_SYSTEM"
+  const val KEY_BACKEND = "com.example.ollamataskerbridge.plugin.BACKEND"
   const val TASKER_VARIABLE_REPLACE_KEYS = "net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS"
   const val TASKER_VARIABLES = "net.dinglisch.android.tasker.extras.VARIABLES"
   const val TASKER_RELEVANT_VARIABLES = "net.dinglisch.android.tasker.RELEVANT_VARIABLES"

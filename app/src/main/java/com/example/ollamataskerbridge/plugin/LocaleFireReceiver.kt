@@ -36,7 +36,13 @@ class LocaleFireReceiver : BroadcastReceiver() {
           customSystem.ifBlank { values?.getString(LocalePluginContract.KEY_SYSTEM) }
         }
         val resultVariable = normalizeResultVariable(values?.getString(LocalePluginContract.KEY_RESULT_VARIABLE).orEmpty())
-        val backend = if (LocalModelStore(appContext).fileFor(model).isFile) Backend.LOCAL else Backend.OLLAMA
+        val configuredBackend = values?.getString(LocalePluginContract.KEY_BACKEND).orEmpty().lowercase()
+        // Legacy settings without BACKEND keep the old fallback; new settings use the saved value.
+        val backend = when (configuredBackend) {
+          "local" -> Backend.LOCAL
+          "ollama" -> Backend.OLLAMA
+          else -> if (LocalModelStore(appContext).fileFor(model).isFile) Backend.LOCAL else Backend.OLLAMA
+        }
         val result = DefaultInferenceRepository.generateText(appContext, GenerateRequest(backend, model, prompt, system))
         finish(pending, appContext, intent, true, result, null, resultVariable)
       } catch (error: Exception) {
