@@ -1,0 +1,8 @@
+This project includes source derived from Arm's AI Chat Android project
+(https://github.com/arm/ai-chat), licensed under the MIT License.
+
+The Arm AI Chat source retains the original copyright notice:
+Copyright (c) 2023-2024 The ggml authors
+
+The llama.cpp source is included as the third_party/llama.cpp submodule and is
+licensed under the MIT License by its respective authors.
