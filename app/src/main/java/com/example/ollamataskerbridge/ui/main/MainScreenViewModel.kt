@@ -37,7 +37,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   private val initialModels = (installed + cached + listOf(
     com.example.ollamataskerbridge.data.OllamaModel("gpt-oss:120b", true, false),
     com.example.ollamataskerbridge.data.OllamaModel("gpt-oss:20b", true, false),
-  )).distinctBy { it.name }.map { it.copy(remote = it.remote || isOllamaCloudModel(it.name)) }
+  )).distinctBy { it.name }.map { it.copy(remote = if (it.source == ModelSource.OLLAMA) isOllamaCloudModel(it.name) else it.remote) }
   // Cloud/Ollama is the primary catalog. Do not switch to HF just because local GGUFs exist.
   // Ollama is the primary catalog. Older installs may have persisted the HF tab.
   private val initialSource = ModelSource.OLLAMA
