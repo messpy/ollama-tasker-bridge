@@ -60,7 +60,7 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
   val clipboard = LocalClipboardManager.current
   val maxBytes = state.maxLocalModelSizeGb.toDoubleOrNull()?.takeIf { it >= 0 }?.times(1_000_000_000.0)?.toLong() ?: Long.MAX_VALUE
   val shownModels = state.models.filter { it.source == state.source }
-    .filter { (state.showDownloaded && it.local) || (state.showCloud && it.remote) || (state.showDownloaded && state.showCloud && !it.local && !it.remote) }
+    .filter { (state.showLocal && !it.remote) || (state.showCloud && it.remote) }
     .filter { it.sizeBytes <= 0L || it.sizeBytes <= maxBytes }
     .filter { state.search.isBlank() || it.name.contains(state.search, true) }
   Column(modifier.fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -101,8 +101,8 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
       OutlinedButton(onClick = viewModel::loadModels, enabled = !state.loading) { Text("↻") }
     }
     Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-      Checkbox(checked = state.showDownloaded, onCheckedChange = { viewModel.showDownloadedChanged(it) })
-      Text("ダウンロード済")
+      Checkbox(checked = state.showLocal, onCheckedChange = { viewModel.showLocalChanged(it) })
+      Text("ローカル")
       Checkbox(checked = state.showCloud, onCheckedChange = { viewModel.showCloudChanged(it) })
       Text("Cloud")
     }

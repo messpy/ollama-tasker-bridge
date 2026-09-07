@@ -33,7 +33,7 @@ class OllamaRegistryClient(
         .findAll(html)
         .map { it.groupValues[1] }
         .distinct()
-        .map { OllamaModel(it, true, true, -1L, false) }
+        .map { OllamaModel(it, false, true, -1L, false) }
         .toList()
       // The public catalog page is rendered dynamically and may omit cloud-only
       // models from its HTML. Keep the documented OSS cloud model discoverable.

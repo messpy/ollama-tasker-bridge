@@ -61,13 +61,13 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     }
   }
   fun searchChanged(value: String) { _uiState.value = _uiState.value.copy(search = value) }
-  fun showDownloadedChanged(value: Boolean) { _uiState.value = _uiState.value.copy(showDownloaded = value) }
+  fun showLocalChanged(value: Boolean) { _uiState.value = _uiState.value.copy(showLocal = value) }
   fun showCloudChanged(value: Boolean) { _uiState.value = _uiState.value.copy(showCloud = value) }
   fun maxLocalModelSizeChanged(value: String) { _uiState.value = _uiState.value.copy(maxLocalModelSizeGb = value); value.toFloatOrNull()?.takeIf { it >= 0f }?.let { settings.maxLocalModelSizeGb = it } }
   fun maxTokensChanged(value: String) { _uiState.value = _uiState.value.copy(maxTokens = value) }
   fun temperatureChanged(value: String) { _uiState.value = _uiState.value.copy(temperature = value) }
   fun selectModel(name: String) { _uiState.value = _uiState.value.copy(selectedModel = name, downloadModel = name, message = null) }
-  fun sourceChanged(source: ModelSource) { settings.modelSource = source.name; _uiState.value = _uiState.value.copy(source = source, search = "", showDownloaded = true, showCloud = true, message = null) }
+  fun sourceChanged(source: ModelSource) { settings.modelSource = source.name; _uiState.value = _uiState.value.copy(source = source, search = "", showLocal = true, showCloud = true, message = null) }
   fun apiKeyVisibleChanged(value: Boolean) { _uiState.value = _uiState.value.copy(apiKeyVisible = value) }
   fun savePreset(name: String, body: String, id: String = java.util.UUID.randomUUID().toString()) { settings.savePreset(SystemPromptPreset(id, name, body)); _uiState.value = _uiState.value.copy(presets = settings.presets()) }
   fun deletePreset(id: String) { settings.deletePreset(id); _uiState.value = _uiState.value.copy(presets = settings.presets()) }
@@ -197,7 +197,7 @@ data class MainScreenUiState(
   val downloadModel: String = "",
   val selectedModel: String = "",
   val search: String = "",
-  val showDownloaded: Boolean = true,
+  val showLocal: Boolean = true,
   val showCloud: Boolean = true,
   val maxLocalModelSizeGb: String = "15.0",
   val systemPrompt: String = "",
