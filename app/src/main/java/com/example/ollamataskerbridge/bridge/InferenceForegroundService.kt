@@ -70,6 +70,7 @@ class InferenceForegroundService : Service() {
     val result = DefaultInferenceRepository.generateText(applicationContext, request);
     val extras = Bundle().apply {
       putBoolean(BridgeContract.EXTRA_OK, true);
+      putString(BridgeContract.EXTRA_REQUEST_ID, intent.getStringExtra(BridgeContract.EXTRA_REQUEST_ID));
       putString(BridgeContract.EXTRA_RESULT, result);
       putString("response", result);
       putString("answer", result);
