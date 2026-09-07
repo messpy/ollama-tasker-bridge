@@ -32,7 +32,10 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     .orEmpty()
   private val installed = installedModels()
   private val cached = settings.cachedModels()
-  private val initialModels = (installed + cached).distinctBy { it.name }
+  private val initialModels = (installed + cached + listOf(
+    com.example.ollamataskerbridge.data.OllamaModel("gpt-oss:120b", true, false),
+    com.example.ollamataskerbridge.data.OllamaModel("gpt-oss:20b", true, false),
+  )).distinctBy { it.name }
   // Cloud/Ollama is the primary catalog. Do not switch to HF just because local GGUFs exist.
   private val initialSource = runCatching { ModelSource.valueOf(settings.modelSource) }.getOrElse { ModelSource.OLLAMA }
   private val initialPresets = settings.presets()
