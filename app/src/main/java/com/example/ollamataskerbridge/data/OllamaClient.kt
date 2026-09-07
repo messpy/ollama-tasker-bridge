@@ -23,7 +23,7 @@ data class OllamaModel(
 class OllamaClient(private val baseUrl: String, private val apiKey: String = "") {
   private val logTag = "OllamaClient"
   suspend fun listModels(): List<OllamaModel> = withContext(Dispatchers.IO) {
-    request("GET", "/api/tags", authenticated = false).let { body ->
+    request("GET", "/api/tags").let { body ->
       val models = JSONArray(org.json.JSONObject(body).optJSONArray("models")?.toString() ?: "[]")
       (0 until models.length()).mapNotNull { models.optJSONObject(it)?.let { item ->
         item.optString("name").takeIf(String::isNotBlank)?.let { name ->
@@ -44,7 +44,7 @@ class OllamaClient(private val baseUrl: String, private val apiKey: String = "")
     request("DELETE", "/api/delete", org.json.JSONObject().put("model", name).toString())
   }
 
-  suspend fun ping() = withContext(Dispatchers.IO) { request("GET", "/api/tags", authenticated = false); Unit }
+  suspend fun ping() = withContext(Dispatchers.IO) { request("GET", "/api/tags"); Unit }
 
   suspend fun generate(model: String, prompt: String, system: String? = null, maxTokens: Int = 256, temperature: Float = 0.7f): String = withContext(Dispatchers.IO) {
     require(model.isNotBlank()) { "モデル名が必要です" }
