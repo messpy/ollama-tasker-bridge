@@ -21,6 +21,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+private fun isOllamaCloudModel(name: String): Boolean = name.contains(":cloud", ignoreCase = true) || name.startsWith("gpt-oss", ignoreCase = true)
+
 class MainScreenViewModel(application: Application) : AndroidViewModel(application) {
   private val settings = SettingsStore(application)
   private val localModels = LocalModelStore(application)
@@ -35,9 +37,10 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   private val initialModels = (installed + cached + listOf(
     com.example.ollamataskerbridge.data.OllamaModel("gpt-oss:120b", true, false),
     com.example.ollamataskerbridge.data.OllamaModel("gpt-oss:20b", true, false),
-  )).distinctBy { it.name }
+  )).distinctBy { it.name }.map { it.copy(remote = it.remote || isOllamaCloudModel(it.name)) }
   // Cloud/Ollama is the primary catalog. Do not switch to HF just because local GGUFs exist.
-  private val initialSource = runCatching { ModelSource.valueOf(settings.modelSource) }.getOrElse { ModelSource.OLLAMA }
+  // Ollama is the primary catalog. Older installs may have persisted the HF tab.
+  private val initialSource = ModelSource.OLLAMA
   private val initialPresets = settings.presets()
   private val initialPreset = initialPresets.firstOrNull { it.id == settings.lastPresetId } ?: initialPresets.firstOrNull()
   private val _uiState = MutableStateFlow(MainScreenUiState(endpoint = settings.endpoint, apiKey = settings.apiKey, maxLocalModelSizeGb = settings.maxLocalModelSizeGb.toString(), systemPromptPresetId = initialPreset?.id.orEmpty(), systemPrompt = initialPreset?.body.orEmpty(), presets = initialPresets, models = initialModels, source = initialSource))
@@ -58,12 +61,13 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     }
   }
   fun searchChanged(value: String) { _uiState.value = _uiState.value.copy(search = value) }
-  fun localOnlyChanged(value: Boolean) { _uiState.value = _uiState.value.copy(localOnly = value) }
+  fun showDownloadedChanged(value: Boolean) { _uiState.value = _uiState.value.copy(showDownloaded = value) }
+  fun showCloudChanged(value: Boolean) { _uiState.value = _uiState.value.copy(showCloud = value) }
   fun maxLocalModelSizeChanged(value: String) { _uiState.value = _uiState.value.copy(maxLocalModelSizeGb = value); value.toFloatOrNull()?.takeIf { it >= 0f }?.let { settings.maxLocalModelSizeGb = it } }
   fun maxTokensChanged(value: String) { _uiState.value = _uiState.value.copy(maxTokens = value) }
   fun temperatureChanged(value: String) { _uiState.value = _uiState.value.copy(temperature = value) }
   fun selectModel(name: String) { _uiState.value = _uiState.value.copy(selectedModel = name, downloadModel = name, message = null) }
-  fun sourceChanged(source: ModelSource) { settings.modelSource = source.name; _uiState.value = _uiState.value.copy(source = source, search = "", localOnly = false, message = null) }
+  fun sourceChanged(source: ModelSource) { settings.modelSource = source.name; _uiState.value = _uiState.value.copy(source = source, search = "", showDownloaded = true, showCloud = true, message = null) }
   fun apiKeyVisibleChanged(value: Boolean) { _uiState.value = _uiState.value.copy(apiKeyVisible = value) }
   fun savePreset(name: String, body: String, id: String = java.util.UUID.randomUUID().toString()) { settings.savePreset(SystemPromptPreset(id, name, body)); _uiState.value = _uiState.value.copy(presets = settings.presets()) }
   fun deletePreset(id: String) { settings.deletePreset(id); _uiState.value = _uiState.value.copy(presets = settings.presets()) }
@@ -77,6 +81,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   fun downloadModel(name: String) { runRequest("モデルの取得に失敗しました。HTTP応答・保存先・空き容量を確認してください。") {
     val maxBytes = settings.maxLocalModelSizeGb.toDouble().times(1_000_000_000.0).toLong()
     val model = _uiState.value.models.firstOrNull { it.name == name } ?: error("モデルが一覧にありません")
+    require(model.downloadable && !model.local) { "このモデルはCloud専用のため、Androidへダウンロードできません" }
     require(model.sizeBytes <= 0L || model.sizeBytes <= maxBytes) {
       "上限超過です（%.2fGB）。ローカル上限を上げてください".format(model.sizeBytes / 1_000_000_000.0)
     }
@@ -123,6 +128,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
       .distinctBy { it.name }.map { item ->
       val registryInfo = runCatching { registry.metadata(item.name) }.getOrNull()
       item.copy(
+        remote = item.remote || isOllamaCloudModel(item.name),
         local = localByName[item.name] != null,
         downloadable = registryInfo?.downloadable ?: item.downloadable,
         sizeBytes = localByName[item.name]?.sizeBytes ?: registryInfo?.sizeBytes?.takeIf { it > 0 } ?: item.sizeBytes,
@@ -191,7 +197,8 @@ data class MainScreenUiState(
   val downloadModel: String = "",
   val selectedModel: String = "",
   val search: String = "",
-  val localOnly: Boolean = false,
+  val showDownloaded: Boolean = true,
+  val showCloud: Boolean = true,
   val maxLocalModelSizeGb: String = "15.0",
   val systemPrompt: String = "",
   val systemPromptPresetId: String = "",

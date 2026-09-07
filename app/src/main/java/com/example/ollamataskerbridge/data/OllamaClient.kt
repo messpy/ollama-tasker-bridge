@@ -28,7 +28,9 @@ class OllamaClient(private val baseUrl: String, private val apiKey: String = "")
       (0 until models.length()).mapNotNull { models.optJSONObject(it)?.let { item ->
         item.optString("name").takeIf(String::isNotBlank)?.let { name ->
           val format = item.optJSONObject("details")?.optString("format").orEmpty()
-          OllamaModel(name, !item.optString("remote_host").isNullOrBlank(), format == "gguf", item.optLong("size", -1L))
+          val remoteHost = item.optString("remote_host")
+          val cloudModel = remoteHost.isNotBlank() || name.contains(":cloud", ignoreCase = true) || name.startsWith("gpt-oss", ignoreCase = true)
+          OllamaModel(name, cloudModel, format == "gguf", item.optLong("size", -1L))
         }
       } }
     }

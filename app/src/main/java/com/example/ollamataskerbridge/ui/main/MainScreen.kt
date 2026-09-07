@@ -59,7 +59,10 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
   var systemPresetMenu by remember { mutableStateOf(false) }
   val clipboard = LocalClipboardManager.current
   val maxBytes = state.maxLocalModelSizeGb.toDoubleOrNull()?.takeIf { it >= 0 }?.times(1_000_000_000.0)?.toLong() ?: Long.MAX_VALUE
-  val shownModels = state.models.filter { it.source == state.source }.filter { it.sizeBytes <= 0L || it.sizeBytes <= maxBytes }.filter { !state.localOnly || it.local }.filter { state.search.isBlank() || it.name.contains(state.search, true) }
+  val shownModels = state.models.filter { it.source == state.source }
+    .filter { (state.showDownloaded && it.local) || (state.showCloud && it.remote) || (state.showDownloaded && state.showCloud && !it.local && !it.remote) }
+    .filter { it.sizeBytes <= 0L || it.sizeBytes <= maxBytes }
+    .filter { state.search.isBlank() || it.name.contains(state.search, true) }
   Column(modifier.fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Text("Ollama Tasker Bridge", style = MaterialTheme.typography.headlineSmall)
     Text("本体アプリ", style = MaterialTheme.typography.titleLarge)
@@ -97,9 +100,11 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
       )
       OutlinedButton(onClick = viewModel::loadModels, enabled = !state.loading) { Text("↻") }
     }
-    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-      Checkbox(state.localOnly, viewModel::localOnlyChanged)
-      Text("ローカル取得済みのみ表示")
+    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+      Checkbox(checked = state.showDownloaded, onCheckedChange = { viewModel.showDownloadedChanged(it) })
+      Text("ダウンロード済")
+      Checkbox(checked = state.showCloud, onCheckedChange = { viewModel.showCloudChanged(it) })
+      Text("Cloud")
     }
     
     Text("${shownModels.size}件（上限以下。未知サイズは取得時に確認）", style = MaterialTheme.typography.bodySmall)
@@ -113,7 +118,7 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
     Text(if (state.selectedModel.isBlank()) "モデル未選択" else "選択中: ${state.selectedModel}（${if (state.models.firstOrNull { it.name == state.selectedModel }?.local == true) "ローカル実行" else "Cloud実行"}）")
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       OutlinedButton(onClick = viewModel::testConnection, enabled = !state.loading) { Text("接続テスト") }
-      Button(onClick = { viewModel.downloadModel(state.selectedModel) }, enabled = !state.loading && state.selectedModel.isNotBlank() && state.models.firstOrNull { it.name == state.selectedModel }?.local != true) { Text("選択モデルを取得") }
+      Button(onClick = { viewModel.downloadModel(state.selectedModel) }, enabled = !state.loading && state.selectedModel.isNotBlank() && state.models.firstOrNull { it.name == state.selectedModel }?.let { !it.local && it.downloadable } == true) { Text("選択モデルを取得") }
     }
     if (state.downloadTotalBytes > 0L) {
       val progress = (state.downloadedBytes.toFloat() / state.downloadTotalBytes.toFloat()).coerceIn(0f, 1f)
