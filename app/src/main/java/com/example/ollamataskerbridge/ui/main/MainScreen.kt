@@ -61,7 +61,7 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
   val maxBytes = state.maxLocalModelSizeGb.toDoubleOrNull()?.takeIf { it >= 0 }?.times(1_000_000_000.0)?.toLong() ?: Long.MAX_VALUE
   val shownModels = state.models.filter { it.source == state.source }
     .filter { (state.showLocal && !it.remote) || (state.showCloud && it.remote) }
-    .filter { it.sizeBytes <= 0L || it.sizeBytes <= maxBytes }
+    .filter { it.remote || it.sizeBytes <= 0L || it.sizeBytes <= maxBytes }
     .filter { state.search.isBlank() || it.name.contains(state.search, true) }
   Column(modifier.fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Text("Ollama Tasker Bridge", style = MaterialTheme.typography.headlineSmall)

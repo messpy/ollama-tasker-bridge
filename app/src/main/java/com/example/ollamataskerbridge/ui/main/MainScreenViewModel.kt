@@ -37,7 +37,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   private val initialModels = (installed + cached + listOf(
     com.example.ollamataskerbridge.data.OllamaModel("gpt-oss:120b", true, false),
     com.example.ollamataskerbridge.data.OllamaModel("gpt-oss:20b", true, false),
-  )).distinctBy { it.name }.map { it.copy(remote = if (it.source == ModelSource.OLLAMA) isOllamaCloudModel(it.name) else it.remote) }
+  )).distinctBy { it.name }.map { it.copy(remote = if (it.source == ModelSource.OLLAMA) isOllamaCloudModel(it.name) else it.remote, downloadable = if (it.source == ModelSource.OLLAMA && isOllamaCloudModel(it.name)) false else it.downloadable) }
   // Cloud/Ollama is the primary catalog. Do not switch to HF just because local GGUFs exist.
   // Ollama is the primary catalog. Older installs may have persisted the HF tab.
   private val initialSource = ModelSource.OLLAMA
@@ -129,8 +129,8 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
       val registryInfo = runCatching { registry.metadata(item.name) }.getOrNull()
       item.copy(
         remote = item.remote || isOllamaCloudModel(item.name),
+        downloadable = if (item.remote || isOllamaCloudModel(item.name)) false else (registryInfo?.downloadable ?: item.downloadable),
         local = localByName[item.name] != null,
-        downloadable = registryInfo?.downloadable ?: item.downloadable,
         sizeBytes = localByName[item.name]?.sizeBytes ?: registryInfo?.sizeBytes?.takeIf { it > 0 } ?: item.sizeBytes,
       )
     }
