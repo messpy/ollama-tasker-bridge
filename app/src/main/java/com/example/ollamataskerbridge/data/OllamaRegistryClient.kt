@@ -29,12 +29,15 @@ class OllamaRegistryClient(
     try {
       check(connection.responseCode in 200..299) { "モデル検索 HTTP " + connection.responseCode }
       val html = connection.inputStream.bufferedReader().use { it.readText() }
-      Regex("href=\\\"/library/([a-zA-Z0-9._/-]+)\\\"")
+      val discovered = Regex("href=\\\"/library/([a-zA-Z0-9._/-]+)\\\"")
         .findAll(html)
         .map { it.groupValues[1] }
         .distinct()
         .map { OllamaModel(it, true, true, -1L, false) }
         .toList()
+      // The public catalog page is rendered dynamically and may omit cloud-only
+      // models from its HTML. Keep the documented OSS cloud model discoverable.
+      (discovered + OllamaModel("gpt-oss:120b", true, false, -1L, false)).distinctBy { it.name }
     } finally { connection.disconnect() }
   }
   private val logTag = "OllamaRegistry"

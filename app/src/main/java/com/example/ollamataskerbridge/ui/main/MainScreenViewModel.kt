@@ -33,7 +33,8 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   private val installed = installedModels()
   private val cached = settings.cachedModels()
   private val initialModels = (installed + cached).distinctBy { it.name }
-  private val initialSource = runCatching { ModelSource.valueOf(settings.modelSource) }.getOrElse { if (installed.isNotEmpty() || cached.any { it.source == ModelSource.HUGGING_FACE }) ModelSource.HUGGING_FACE else ModelSource.OLLAMA }
+  // Cloud/Ollama is the primary catalog. Do not switch to HF just because local GGUFs exist.
+  private val initialSource = runCatching { ModelSource.valueOf(settings.modelSource) }.getOrElse { ModelSource.OLLAMA }
   private val initialPresets = settings.presets()
   private val initialPreset = initialPresets.firstOrNull { it.id == settings.lastPresetId } ?: initialPresets.firstOrNull()
   private val _uiState = MutableStateFlow(MainScreenUiState(endpoint = settings.endpoint, apiKey = settings.apiKey, maxLocalModelSizeGb = settings.maxLocalModelSizeGb.toString(), systemPromptPresetId = initialPreset?.id.orEmpty(), systemPrompt = initialPreset?.body.orEmpty(), presets = initialPresets, models = initialModels, source = initialSource))
@@ -108,7 +109,11 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
       ?.map { com.example.ollamataskerbridge.data.OllamaModel(it.nameWithoutExtension, false, true, it.length(), true) }
       .orEmpty()
     val localByName = local.associateBy { it.name }
-    val ollama = runCatching { (client().listModels() + registry.catalog()).distinctBy { it.name } }.getOrDefault(emptyList()).map { item ->
+    // Keep the two sources independent: a 401/403 from /api/tags must not hide the
+    // public Ollama catalog (and vice versa).
+    val ollama = (runCatching { client().listModels() }.getOrDefault(emptyList()) +
+      runCatching { registry.catalog() }.getOrDefault(emptyList()))
+      .distinctBy { it.name }.map { item ->
       val registryInfo = runCatching { registry.metadata(item.name) }.getOrNull()
       item.copy(
         local = localByName[item.name] != null,
