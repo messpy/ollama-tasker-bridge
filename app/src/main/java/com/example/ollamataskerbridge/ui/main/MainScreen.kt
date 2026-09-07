@@ -150,7 +150,11 @@ private fun ModelRow(model: OllamaModel, loading: Boolean, selected: Boolean, on
   Card(onClick = { onSelect(model.name) }, modifier = Modifier.fillMaxWidth(), colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface)) {
     Row(Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
       Column(Modifier.weight(1f)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { Text(model.name); Text(if (model.source == ModelSource.OLLAMA) "Ollama" else "Hugging Face", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary) }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+          Text(model.name)
+          if (model.source == ModelSource.OLLAMA && model.remote) Text("Cloud", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+          else Text("ローカル候補", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+        }
         Text(if (model.sizeBytes > 0) "%.2f GB".format(model.sizeBytes / 1_000_000_000.0) else "サイズ不明", style = MaterialTheme.typography.bodySmall)
       }
       if (model.local) TextButton(onClick = { onDelete(model.name) }, enabled = !loading) { Text("選択モデル削除", color = MaterialTheme.colorScheme.error) } else if (model.downloadable) IconButton(onClick = { onDownload(model.name) }, enabled = !loading) { Text("↓") } else Text("Cloudのみ（取得不可）", style = MaterialTheme.typography.labelSmall)

@@ -111,8 +111,12 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     val localByName = local.associateBy { it.name }
     // Keep the two sources independent: a 401/403 from /api/tags must not hide the
     // public Ollama catalog (and vice versa).
+    val ollamaCloudFallback = listOf(
+      com.example.ollamataskerbridge.data.OllamaModel("gpt-oss:120b", true, false, -1L, false),
+      com.example.ollamataskerbridge.data.OllamaModel("gpt-oss:20b", true, false, -1L, false),
+    )
     val ollama = (runCatching { client().listModels() }.getOrDefault(emptyList()) +
-      runCatching { registry.catalog() }.getOrDefault(emptyList()))
+      runCatching { registry.catalog() }.getOrDefault(emptyList()) + ollamaCloudFallback)
       .distinctBy { it.name }.map { item ->
       val registryInfo = runCatching { registry.metadata(item.name) }.getOrNull()
       item.copy(
