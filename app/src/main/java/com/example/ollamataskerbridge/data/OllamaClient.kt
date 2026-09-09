@@ -8,7 +8,7 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 
-enum class ModelSource { OLLAMA, HUGGING_FACE }
+enum class ModelSource { OLLAMA, HUGGING_FACE, LITERT_LM }
 
 data class OllamaModel(
   val name: String,

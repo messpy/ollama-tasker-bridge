@@ -32,7 +32,7 @@ interface InferenceRepository {
 
 object DefaultInferenceRepository : InferenceRepository {
   override fun generate(context: Context, request: GenerateRequest): Flow<GenerateEvent> = when (request.backend) {
-    Backend.LOCAL -> LocalInferenceBridge.generate(context, request.model, request.prompt, request.systemPrompt, request.maxTokens, request.temperature)
+    Backend.LOCAL -> if (LocalModelStore(context).liteRtFileFor(request.model).isFile) LiteRtLmInferenceBridge.generate(context, request.model, request.prompt, request.systemPrompt, request.maxTokens, request.temperature) else LocalInferenceBridge.generate(context, request.model, request.prompt, request.systemPrompt, request.maxTokens, request.temperature)
     Backend.OLLAMA -> flow {
       InferenceNotification.start(context, request.model)
       try {

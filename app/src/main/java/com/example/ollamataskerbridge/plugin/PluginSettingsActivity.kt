@@ -45,7 +45,7 @@ class PluginSettingsActivity : ComponentActivity() {
     val hostPlatform = detectHostPlatform()
     val resolvedPlatform = hostPlatform ?: initial?.getString(LocalePluginContract.KEY_PLATFORM) ?: settings.pluginPlatform
     val local = LocalModelStore(this).directory.listFiles().orEmpty()
-      .filter { it.extension == "gguf" }
+      .filter { it.extension == "gguf" || it.extension == "litertlm" }
       .map { OllamaModel(it.nameWithoutExtension, false, true, it.length(), true) }
     val models = (settings.cachedModels() + local).distinctBy { it.name }
     setContent {

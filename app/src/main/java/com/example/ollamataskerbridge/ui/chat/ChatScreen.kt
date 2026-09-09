@@ -36,7 +36,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
   private val settings = SettingsStore(application)
   private val store = LocalModelStore(application)
   private var running: Job? = null
-  private fun localModels() = store.directory.listFiles().orEmpty().filter { it.extension == "gguf" }.map { it.nameWithoutExtension }
+  private fun localModels() = store.directory.listFiles().orEmpty().filter { it.extension == "gguf" || it.extension == "litertlm" }.map { it.nameWithoutExtension }
   private val _state = MutableStateFlow(ChatUiState(selectedModel = localModels().firstOrNull().orEmpty(), presets = settings.presets(), systemPromptId = settings.lastPresetId, systemPrompt = settings.presets().firstOrNull { it.id == settings.lastPresetId }?.body.orEmpty()))
   val state = _state.asStateFlow()
   fun models() = localModels()

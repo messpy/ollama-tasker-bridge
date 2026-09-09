@@ -29,12 +29,12 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   private val registry = OllamaRegistryClient(localModels)
   private val huggingFace = HuggingFaceClient()
   private fun installedModels() = localModels.directory.listFiles()
-    ?.filter { it.extension == "gguf" }
-    ?.map { com.example.ollamataskerbridge.data.OllamaModel(it.nameWithoutExtension, false, true, it.length(), true) }
+    ?.filter { it.extension == "gguf" || it.extension == "litertlm" }
+    ?.map { com.example.ollamataskerbridge.data.OllamaModel(it.nameWithoutExtension, false, true, it.length(), true, if (it.extension == "litertlm") ModelSource.LITERT_LM else ModelSource.HUGGING_FACE) }
     .orEmpty()
   private val installed = installedModels()
   private val cached = settings.cachedModels()
-  private val initialModels = (installed + cached + listOf(
+  private val initialModels = (installed + cached + huggingFace.catalog() + listOf(
     com.example.ollamataskerbridge.data.OllamaModel("gpt-oss:120b", true, false),
     com.example.ollamataskerbridge.data.OllamaModel("gpt-oss:20b", true, false),
   )).distinctBy { it.name }.map { it.copy(remote = if (it.source == ModelSource.OLLAMA) isOllamaCloudModel(it.name) else it.remote, downloadable = if (it.source == ModelSource.OLLAMA && isOllamaCloudModel(it.name)) false else it.downloadable) }
@@ -77,7 +77,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   fun testConnection() { runRequest("接続テストに失敗しました。モデル・APIキー・ネットワークを確認してください。") {
     val model = _uiState.value.selectedModel.trim()
     require(model.isNotBlank()) { "先にモデルを選択してください" }
-    DefaultInferenceRepository.generateText(getApplication(), GenerateRequest(if (localModels.fileFor(model).isFile) Backend.LOCAL else Backend.OLLAMA, model, "接続テスト", _uiState.value.systemPrompt, _uiState.value.maxTokens.toIntOrNull() ?: 256, _uiState.value.temperature.toFloatOrNull() ?: 0.7f))
+    DefaultInferenceRepository.generateText(getApplication(), GenerateRequest(if (localModels.fileFor(model).isFile || localModels.liteRtFileFor(model).isFile) Backend.LOCAL else Backend.OLLAMA, model, "接続テスト", _uiState.value.systemPrompt, _uiState.value.maxTokens.toIntOrNull() ?: 256, _uiState.value.temperature.toFloatOrNull() ?: 0.7f))
     "接続成功（選択モデルで応答を確認しました）"
   } }
   fun downloadModel(name: String) { runRequest("モデルの取得に失敗しました。HTTP応答・保存先・空き容量を確認してください。") {
@@ -87,8 +87,8 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     require(model.sizeBytes <= 0L || model.sizeBytes <= maxBytes) {
       "上限超過です（%.2fGB）。ローカル上限を上げてください".format(model.sizeBytes / 1_000_000_000.0)
     }
-    if (model.source == ModelSource.HUGGING_FACE) {
-      registry.downloadFromUrl(model.downloadUrl, model.name) { downloaded, total ->
+    if (model.source == ModelSource.HUGGING_FACE || model.source == ModelSource.LITERT_LM) {
+      registry.downloadFromUrl(model.downloadUrl, model.name, if (model.source == ModelSource.LITERT_LM) ".litertlm" else ".gguf") { downloaded, total ->
         _uiState.value = _uiState.value.copy(downloadedBytes = downloaded, downloadTotalBytes = total)
       }
     } else {
@@ -101,22 +101,22 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     loadModelsInternal(); "Androidへモデルを保存しました"
   } }
   fun loadModels() { runRequest("モデル一覧の取得に失敗しました。APIキーとネットワークを確認してください。") { loadModelsInternal(); "モデル一覧を更新しました" } }
-  fun deleteModel(name: String) { runRequest("モデルの削除に失敗しました。") { localModels.fileFor(name).delete(); loadModelsInternal(); "削除しました: $name" } }
+  fun deleteModel(name: String) { runRequest("モデルの削除に失敗しました。") { ((localModels.fileFor(name).takeIf { it.isFile } ?: localModels.liteRtFileFor(name))).delete(); loadModelsInternal(); "削除しました: $name" } }
   fun runTest() {
     runRequest("動作検証に失敗しました。モデル・APIキー・ネットワークを確認してください。") {
       val model = _uiState.value.selectedModel.trim()
       val prompt = _uiState.value.testPrompt.trim()
       require(model.isNotBlank()) { "テストするモデル名を入力してください" }
       require(prompt.isNotBlank()) { "テスト用プロンプトを入力してください" }
-      val result = DefaultInferenceRepository.generateText(getApplication(), GenerateRequest(if (localModels.fileFor(model).isFile) Backend.LOCAL else Backend.OLLAMA, model, prompt, _uiState.value.systemPrompt, _uiState.value.maxTokens.toIntOrNull() ?: 256, _uiState.value.temperature.toFloatOrNull() ?: 0.7f))
+      val result = DefaultInferenceRepository.generateText(getApplication(), GenerateRequest(if (localModels.fileFor(model).isFile || localModels.liteRtFileFor(model).isFile) Backend.LOCAL else Backend.OLLAMA, model, prompt, _uiState.value.systemPrompt, _uiState.value.maxTokens.toIntOrNull() ?: 256, _uiState.value.temperature.toFloatOrNull() ?: 0.7f))
       "テスト結果:\n$result"
     }
   }
 
   private suspend fun loadModelsInternal() {
     val local = localModels.directory.listFiles()
-      ?.filter { it.extension == "gguf" }
-      ?.map { com.example.ollamataskerbridge.data.OllamaModel(it.nameWithoutExtension, false, true, it.length(), true) }
+      ?.filter { it.extension == "gguf" || it.extension == "litertlm" }
+      ?.map { com.example.ollamataskerbridge.data.OllamaModel(it.nameWithoutExtension, false, true, it.length(), true, if (it.extension == "litertlm") ModelSource.LITERT_LM else ModelSource.HUGGING_FACE) }
       .orEmpty()
     val localByName = local.associateBy { it.name }
     // Keep the two sources independent: a 401/403 from /api/tags must not hide the

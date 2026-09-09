@@ -17,6 +17,11 @@ class LocalModelStore(context: Context) {
     val safe = model.replace(Regex("[^A-Za-z0-9._-]"), "_")
     return File(directory, safe + ".gguf")
   }
+  fun liteRtFileFor(model: String): File {
+    require(model.isNotBlank()) { "モデル名が必要です" }
+    val safe = model.replace(Regex("[^A-Za-z0-9._-]"), "_")
+    return File(directory, safe + ".litertlm")
+  }
 }
 
 class OllamaRegistryClient(
@@ -86,11 +91,11 @@ class OllamaRegistryClient(
     return target
   }
 
-  fun downloadFromUrl(url: String, model: String, onProgress: (Long, Long) -> Unit = { _, _ -> }): File {
+  fun downloadFromUrl(url: String, model: String, fileExtension: String = ".gguf", onProgress: (Long, Long) -> Unit = { _, _ -> }): File {
     require(url.startsWith("https://huggingface.co/")) { "Hugging Face URLが不正です" }
     val resolvedUrl = if (url.contains("?")) url + "&download=true" else url + "?download=true"
     Log.d(logTag, "HF download URL=" + resolvedUrl)
-    return downloadHf(resolvedUrl, model, onProgress)
+    return downloadHf(resolvedUrl, model, onProgress, fileExtension)
   }
 
   private fun hfUrlFor(model: String): String? = when (model.lowercase()) {
@@ -99,8 +104,8 @@ class OllamaRegistryClient(
     else -> null
   }
 
-  private fun downloadHf(url: String, model: String, onProgress: (Long, Long) -> Unit = { _, _ -> }): File {
-    val target = store.fileFor(model)
+  private fun downloadHf(url: String, model: String, onProgress: (Long, Long) -> Unit = { _, _ -> }, fileExtension: String = ".gguf"): File {
+    val target = if (fileExtension == ".litertlm") store.liteRtFileFor(model) else store.fileFor(model)
     val temp = File(target.path + ".download")
     val available = store.directory.usableSpace
     require(available >= 128L * 1024L * 1024L) { "アプリ保存領域が不足しています（空き%.0fMB）".format(available / 1_000_000.0) }

@@ -88,8 +88,9 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       if (state.source == ModelSource.OLLAMA) Button(onClick = { viewModel.sourceChanged(ModelSource.OLLAMA) }) { Text("Ollama") } else OutlinedButton(onClick = { viewModel.sourceChanged(ModelSource.OLLAMA) }) { Text("Ollama") }
       if (state.source == ModelSource.HUGGING_FACE) Button(onClick = { viewModel.sourceChanged(ModelSource.HUGGING_FACE) }) { Text("Hugging Face") } else OutlinedButton(onClick = { viewModel.sourceChanged(ModelSource.HUGGING_FACE) }) { Text("Hugging Face") }
+      if (state.source == ModelSource.LITERT_LM) Button(onClick = { viewModel.sourceChanged(ModelSource.LITERT_LM) }) { Text("LiteRT-LM") } else OutlinedButton(onClick = { viewModel.sourceChanged(ModelSource.LITERT_LM) }) { Text("LiteRT-LM") }
     }
-    Text(if (state.source == ModelSource.OLLAMA) "Ollama公式・接続先のモデル" else "Hugging FaceのAndroid向けGGUFモデル", style = MaterialTheme.typography.bodySmall)
+    Text(if (state.source == ModelSource.OLLAMA) "Ollama公式・接続先のモデル" else if (state.source == ModelSource.HUGGING_FACE) "Hugging FaceのAndroid向けGGUFモデル" else "Google AI Edge Gallery互換のLiteRT-LMモデル", style = MaterialTheme.typography.bodySmall)
     Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
       OutlinedTextField(state.search, viewModel::searchChanged, Modifier.weight(1f), label = { Text("モデルを検索") }, singleLine = true)
       OutlinedTextField(
@@ -161,6 +162,7 @@ private fun ModelRow(model: OllamaModel, loading: Boolean, selected: Boolean, on
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
           Text(model.name)
           if (model.source == ModelSource.OLLAMA && model.remote) Text("Cloud", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+          else if (model.source == ModelSource.LITERT_LM) Text("LiteRT-LM", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
           else Text("ローカル候補", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
         }
         Text(if (model.sizeBytes > 0) "%.2f GB".format(model.sizeBytes / 1_000_000_000.0) else "サイズ不明", style = MaterialTheme.typography.bodySmall)
