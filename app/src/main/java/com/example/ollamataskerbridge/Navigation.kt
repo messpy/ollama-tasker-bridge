@@ -34,7 +34,7 @@ fun MainNavigation() {
     drawerState = drawerState,
     drawerContent = {
       ModalDrawerSheet {
-        Text("Ollama Tasker Bridge", modifier = Modifier.padding(20.dp))
+        Text("AI Model Bridge", modifier = Modifier.padding(20.dp))
         NavigationDrawerItem(label = { Text("接続・モデル管理") }, selected = backStack.lastOrNull() == Main, onClick = { selectedSection = MainSection.SETTINGS; scope.launch { drawerState.close() }; backStack.removeAll { it != Main } })
         NavigationDrawerItem(label = { Text("モデル管理・ダウンロード") }, selected = selectedSection == MainSection.MODELS, onClick = { selectedSection = MainSection.MODELS; scope.launch { drawerState.close() }; backStack.removeAll { it != Main }; backStack.add(Models) })
         NavigationDrawerItem(label = { Text("システムプロンプト") }, selected = selectedSection == MainSection.PROMPTS, onClick = { selectedSection = MainSection.PROMPTS; scope.launch { drawerState.close() }; backStack.removeAll { it != Main }; backStack.add(Prompts) })
