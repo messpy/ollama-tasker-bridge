@@ -1,6 +1,9 @@
 package com.example.ollamataskerbridge.ui.chat
 
 import android.app.Application
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -30,12 +33,18 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collect
 
 data class ChatMessage(val user: Boolean, val text: String, val model: String = "", val generating: Boolean = false, val error: Boolean = false, val retryPrompt: String = "")
-data class ChatUiState(val messages: List<ChatMessage> = emptyList(), val selectedModel: String = "", val maxTokens: String = "256", val temperature: String = "0.7", val systemPromptId: String = "", val systemPrompt: String = "", val presets: List<SystemPromptPreset> = emptyList(), val generating: Boolean = false, val input: String = "", val notice: String? = null)
+data class ChatUiState(val messages: List<ChatMessage> = emptyList(), val selectedModel: String = "", val maxTokens: String = "256", val temperature: String = "0.7", val systemPromptId: String = "", val systemPrompt: String = "", val presets: List<SystemPromptPreset> = emptyList(), val generating: Boolean = false, val input: String = "", val notice: String? = null, val imageBytes: ByteArray? = null, val imageName: String = "")
 
 class ChatViewModel(application: Application) : AndroidViewModel(application) {
   private val settings = SettingsStore(application)
   private val store = LocalModelStore(application)
   private var running: Job? = null
+  fun selectImage(uri: Uri) {
+    val resolver = getApplication<Application>().contentResolver
+    runCatching { resolver.openInputStream(uri)?.use { it.readBytes() } ?: error("Image cannot be read") }
+      .onSuccess { bytes -> if (bytes.size > 20 * 1024 * 1024) _state.value = _state.value.copy(notice = "Image is larger than 20MB") else _state.value = _state.value.copy(imageBytes = bytes, imageName = uri.lastPathSegment ?: "image", notice = null) }
+      .onFailure { _state.value = _state.value.copy(notice = "Image load failed: " + it.message) }
+  }
   private fun localModels() = store.directory.listFiles().orEmpty().filter { it.extension == "gguf" || it.extension == "litertlm" }.map { it.nameWithoutExtension }
   private val _state = MutableStateFlow(ChatUiState(selectedModel = localModels().firstOrNull().orEmpty(), presets = settings.presets(), systemPromptId = settings.lastPresetId, systemPrompt = settings.presets().firstOrNull { it.id == settings.lastPresetId }?.body.orEmpty()))
   val state = _state.asStateFlow()
@@ -55,8 +64,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val prompt = value.trim(); val old = _state.value
     if (prompt.isBlank() || old.generating || old.selectedModel.isBlank()) return
     val index = old.messages.size + 1
-    _state.value = old.copy(input = "", generating = true, messages = old.messages + ChatMessage(true, prompt) + ChatMessage(false, "", old.selectedModel, true, retryPrompt = prompt))
-    val request = GenerateRequest(Backend.LOCAL, old.selectedModel, prompt, old.systemPrompt.takeIf { it.isNotBlank() }, old.maxTokens.toIntOrNull()?.coerceAtLeast(1) ?: 256, old.temperature.toFloatOrNull()?.coerceIn(0f, 2f) ?: 0.7f)
+    _state.value = old.copy(input = "", imageBytes = null, imageName = "", generating = true, messages = old.messages + ChatMessage(true, prompt) + ChatMessage(false, "", old.selectedModel, true, retryPrompt = prompt))
+    val request = GenerateRequest(Backend.LOCAL, old.selectedModel, prompt, old.systemPrompt.takeIf { it.isNotBlank() }, old.maxTokens.toIntOrNull()?.coerceAtLeast(1) ?: 256, old.temperature.toFloatOrNull()?.coerceIn(0f, 2f) ?: 0.7f, old.imageBytes)
     running = viewModelScope.launch {
       try { DefaultInferenceRepository.generate(getApplication(), request).collect { event -> when (event) { is GenerateEvent.Token -> update(index, ChatMessage(false, _state.value.messages.getOrNull(index)?.text.orEmpty() + event.text, request.model, true, retryPrompt = prompt)); is GenerateEvent.Done -> update(index, ChatMessage(false, event.fullText, request.model, false, retryPrompt = prompt)); is GenerateEvent.Error -> update(index, ChatMessage(false, event.message, request.model, false, true, prompt)) } } }
       catch (e: CancellationException) { update(index, ChatMessage(false, "生成を中断しました", request.model, error = true, retryPrompt = prompt)) }
@@ -69,15 +78,17 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
 @Composable
 fun ChatScreen(viewModel: ChatViewModel = viewModel(), modifier: Modifier = Modifier) {
-  val state by viewModel.state.collectAsStateWithLifecycle(); val list = rememberLazyListState()
+  val state by viewModel.state.collectAsStateWithLifecycle(); val imageLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri -> uri?.let(viewModel::selectImage) }; val list = rememberLazyListState()
   var menu by remember { mutableStateOf(false) }; var models by remember { mutableStateOf(false) }; var tokens by remember { mutableStateOf(false) }; var temp by remember { mutableStateOf(false) }; var prompts by remember { mutableStateOf(false) }
   LaunchedEffect(state.messages.size, state.messages.lastOrNull()?.text) { if (state.messages.isNotEmpty()) list.animateScrollToItem(state.messages.lastIndex) }
   Column(modifier.fillMaxSize().padding(horizontal = 12.dp)) {
     Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) { Text("テストチャット", style = MaterialTheme.typography.titleLarge); Spacer(Modifier.weight(1f)); Text(state.selectedModel.ifBlank { "モデル未選択" }, style = MaterialTheme.typography.labelSmall) }
     state.notice?.let { Text(it, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(bottom = 4.dp)) }
+    state.imageName.takeIf { it.isNotBlank() }?.let { name -> Text("Image: " + name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary) }
     LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = list, verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 8.dp)) { items(state.messages) { MessageBubble(it, { viewModel.retry(it.retryPrompt) }) } }
     Box(Modifier.fillMaxWidth()) {
       DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+        DropdownMenuItem({ Text("Select image") }, { menu = false; imageLauncher.launch("image/*") })
         DropdownMenuItem({ Text("モデルを選択  ${state.selectedModel.ifBlank { "未選択" }}") }, { menu = false; models = true })
         DropdownMenuItem({ Text("最大トークン数  ${state.maxTokens}") }, { menu = false; tokens = true })
         DropdownMenuItem({ Text("Temperature  ${state.temperature}") }, { menu = false; temp = true })

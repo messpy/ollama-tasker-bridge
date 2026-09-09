@@ -7,6 +7,7 @@ import org.json.JSONArray
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.Base64
 
 enum class ModelSource { OLLAMA, HUGGING_FACE, LITERT_LM }
 
@@ -48,7 +49,7 @@ class OllamaClient(private val baseUrl: String, private val apiKey: String = "")
 
   suspend fun ping() = withContext(Dispatchers.IO) { request("GET", "/api/tags"); Unit }
 
-  suspend fun generate(model: String, prompt: String, system: String? = null, maxTokens: Int = 256, temperature: Float = 0.7f): String = withContext(Dispatchers.IO) {
+  suspend fun generate(model: String, prompt: String, system: String? = null, maxTokens: Int = 256, temperature: Float = 0.7f, imageBytes: ByteArray? = null): String = withContext(Dispatchers.IO) {
     require(model.isNotBlank()) { "モデル名が必要です" }
     require(prompt.isNotBlank()) { "プロンプトが必要です" }
     val payload = org.json.JSONObject()
@@ -56,6 +57,7 @@ class OllamaClient(private val baseUrl: String, private val apiKey: String = "")
       .put("prompt", prompt)
       .put("stream", false)
     if (!system.isNullOrBlank()) payload.put("system", system)
+    imageBytes?.let { payload.put("images", org.json.JSONArray().put(Base64.getEncoder().encodeToString(it))) }
     payload.put("options", org.json.JSONObject().put("num_predict", maxTokens.coerceAtLeast(1)).put("temperature", temperature.coerceIn(0f, 2f)))
     val response = org.json.JSONObject(request("POST", "/api/generate", payload.toString()))
     response.optString("response").takeIf { it.isNotBlank() }

@@ -27,7 +27,7 @@ object LiteRtLmInferenceBridge {
   private var engine: Engine? = null
   private var conversation: Conversation? = null
 
-  fun generate(context: Context, model: String, prompt: String, system: String?, maxTokens: Int, temperature: Float): Flow<GenerateEvent> = flow {
+  fun generate(context: Context, model: String, prompt: String, system: String?, maxTokens: Int, temperature: Float, imageBytes: ByteArray? = null): Flow<GenerateEvent> = flow {
     InferenceNotification.start(context, model)
     try {
       mutex.withLock {
@@ -48,7 +48,8 @@ object LiteRtLmInferenceBridge {
         }
         val activeConversation = requireNotNull(conversation)
         val fullText = StringBuilder()
-        activeConversation.sendMessageAsync(prompt).collect { message ->
+        val contents = imageBytes?.let { Contents.of(Content.ImageBytes(it), Content.Text(prompt)) } ?: Contents.of(prompt)
+        activeConversation.sendMessageAsync(contents).collect { message ->
           message.contents.contents.filterIsInstance<Content.Text>().forEach { text ->
             if (text.text.isNotEmpty()) { fullText.append(text.text); emit(GenerateEvent.Token(text.text)) }
           }

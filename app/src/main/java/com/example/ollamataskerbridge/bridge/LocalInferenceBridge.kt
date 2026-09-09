@@ -17,7 +17,7 @@ import kotlinx.coroutines.sync.withLock
 import com.example.ollamataskerbridge.data.OllamaClient
 import com.example.ollamataskerbridge.data.SettingsStore
 
-data class GenerateRequest(val backend: Backend, val model: String, val prompt: String, val systemPrompt: String? = null, val maxTokens: Int = 256, val temperature: Float = 0.7f)
+data class GenerateRequest(val backend: Backend, val model: String, val prompt: String, val systemPrompt: String? = null, val maxTokens: Int = 256, val temperature: Float = 0.7f, val imageBytes: ByteArray? = null)
 enum class Backend { LOCAL, OLLAMA }
 
 sealed interface GenerateEvent {
@@ -32,12 +32,12 @@ interface InferenceRepository {
 
 object DefaultInferenceRepository : InferenceRepository {
   override fun generate(context: Context, request: GenerateRequest): Flow<GenerateEvent> = when (request.backend) {
-    Backend.LOCAL -> if (LocalModelStore(context).liteRtFileFor(request.model).isFile) LiteRtLmInferenceBridge.generate(context, request.model, request.prompt, request.systemPrompt, request.maxTokens, request.temperature) else LocalInferenceBridge.generate(context, request.model, request.prompt, request.systemPrompt, request.maxTokens, request.temperature)
+    Backend.LOCAL -> if (LocalModelStore(context).liteRtFileFor(request.model).isFile) LiteRtLmInferenceBridge.generate(context, request.model, request.prompt, request.systemPrompt, request.maxTokens, request.temperature, request.imageBytes) else if (request.imageBytes != null) flow { emit(GenerateEvent.Error("画像認識はLiteRT-LM対応モデルでのみ利用できます")) } else LocalInferenceBridge.generate(context, request.model, request.prompt, request.systemPrompt, request.maxTokens, request.temperature)
     Backend.OLLAMA -> flow {
       InferenceNotification.start(context, request.model)
       try {
         val settings = SettingsStore(context)
-        emit(GenerateEvent.Done(OllamaClient(settings.endpoint, settings.apiKey).generate(request.model, request.prompt, request.systemPrompt, request.maxTokens, request.temperature)))
+        emit(GenerateEvent.Done(OllamaClient(settings.endpoint, settings.apiKey).generate(request.model, request.prompt, request.systemPrompt, request.maxTokens, request.temperature, request.imageBytes)))
       } catch (error: Exception) {
         emit(GenerateEvent.Error(error.message ?: "生成に失敗しました"))
       } finally {

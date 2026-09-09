@@ -11,6 +11,7 @@ class HuggingFaceClient {
     model("gemma3-1b-it-q4_k_m", "bartowski/google_gemma-3-1b-it-GGUF", "google_gemma-3-1b-it-Q4_K_M.gguf", 806_000_000L),
     liteRt("gemma3-1b-it-litert", "litert-community/Gemma3-1B-IT", "gemma3-1b-it-int4.litertlm", 584_417_280L, "42d538a932e8d5b12e6b3b455f5572560bd60b2c"),
     liteRt("qwen2.5-1.5b-litert", "litert-community/Qwen2.5-1.5B-Instruct", "Qwen2.5-1.5B-Instruct_multi-prefill-seq_q8_ekv4096.litertlm", 1_597_931_520L, "19edb84c69a0212f29a6ef17ba0d6f278b6a1614"),
+    liteRt("gemma3n-e2b-it-litert", "google/gemma-3n-E2B-it-litert-lm", "gemma-3n-E2B-it-int4.litertlm", 3_655_827_456L, "ba9ca88da013b537b6ed38108be609b8db1c3a16"),
     // Gallery uses LiteRT-LM for Gemma; these GGUF variants use this app
     model("smollm2_135m", "bartowski/SmolLM2-135M-Instruct-GGUF", "SmolLM2-135M-Instruct-Q4_K_M.gguf", 105_000_000L),
     model("tinyllama_1.1b", "bartowski/TinyLlama-1.1B-Chat-v1.0-GGUF", "TinyLlama-1.1B-Chat-v1.0-Q4_K_M.gguf", 638_000_000L)
