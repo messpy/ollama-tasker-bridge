@@ -16,6 +16,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import com.example.ollamataskerbridge.data.OllamaClient
 import com.example.ollamataskerbridge.data.SettingsStore
+import com.example.ollamataskerbridge.diagnostics.DiagnosticsLog
 
 data class GenerateRequest(val backend: Backend, val model: String, val prompt: String, val systemPrompt: String? = null, val maxTokens: Int = 256, val temperature: Float = 0.7f, val imageBytes: ByteArray? = null)
 enum class Backend { LOCAL, OLLAMA }
@@ -101,6 +102,7 @@ object LocalInferenceBridge {
     } catch (error: CancellationException) {
       throw error
     } catch (error: Exception) {
+      DiagnosticsLog.error(error.message ?: "ローカル推論に失敗しました")
       loadedPath = null
       loadedSystemPrompt = null
       emit(GenerateEvent.Error(error.message ?: "生成に失敗しました"))

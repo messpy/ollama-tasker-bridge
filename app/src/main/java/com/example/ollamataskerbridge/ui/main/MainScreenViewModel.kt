@@ -10,6 +10,7 @@ import com.example.ollamataskerbridge.data.HuggingFaceClient
 import com.example.ollamataskerbridge.data.ModelSource
 import com.example.ollamataskerbridge.data.SettingsStore
 import com.example.ollamataskerbridge.data.SystemPromptPreset
+import com.example.ollamataskerbridge.diagnostics.DiagnosticsLog
 import com.example.ollamataskerbridge.bridge.Backend
 import com.example.ollamataskerbridge.bridge.DefaultInferenceRepository
 import com.example.ollamataskerbridge.bridge.GenerateRequest
@@ -174,6 +175,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         .onSuccess { message -> _uiState.value = _uiState.value.copy(loading = false, message = message, downloadedBytes = 0L, downloadTotalBytes = 0L) }
         .onFailure { error ->
           val raw = error.message.orEmpty()
+          DiagnosticsLog.error(raw)
           val isModelDownload = failureMessage.startsWith("モデルの取得")
           val detail = when {
             failureMessage.startsWith("モデルの取得") && raw.matches(Regex(".*(?:HTTP \\d{3}|HTTP応答|Hugging Face HTTP|モデルBlob HTTP|Registry HTTP|Ollama HTTP).*")) -> "HTTP応答エラーです。サーバーの応答を確認してください。 ($raw)"
