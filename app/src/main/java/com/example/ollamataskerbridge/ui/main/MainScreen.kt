@@ -63,6 +63,15 @@ import com.example.ollamataskerbridge.theme.MyApplicationTheme
 
 private fun OllamaModel.isCloudOnly(): Boolean = source == ModelSource.OLLAMA && !local && (remote || !downloadable)
 
+private fun OllamaModel.modelKind(): String {
+  val value = name.lowercase()
+  return when {
+    listOf("vlm", "vision", "gemma3", "gemma-3", "llava", "minicpm-v", "moondream").any { value.contains(it) } -> "VLM"
+    listOf("whisper", "speech", "audio", "tts", "voice").any { value.contains(it) } -> "音声"
+    listOf("embed", "rerank", "embedding").any { value.contains(it) } -> "その他"
+    else -> "LLM"
+  }
+}
 private fun OllamaModel.supportsVision(): Boolean {
   val value = name.lowercase()
   return source == ModelSource.LITERT_LM && listOf("gemma3", "gemma-3", "gemma3n").any { value.contains(it) }
@@ -78,6 +87,9 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
   var systemPresetMenu by remember { mutableStateOf(false) }
   var pendingGemmaDownload by remember { mutableStateOf<String?>(null) }
   var availabilityMenu by remember { mutableStateOf(false) }
+  var kindMenu by remember { mutableStateOf(false) }
+  var sourceFilterMenu by remember { mutableStateOf(false) }
+  var kindFilter by remember { mutableStateOf("すべて") }
   var sourceMenu by remember { mutableStateOf(false) }
   val clipboard = LocalClipboardManager.current
   val diagnosticsScope = rememberCoroutineScope()
@@ -87,6 +99,7 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
   val shownModels = state.models.filter { it.source in state.enabledSources }
     .filter { if (state.downloadedOnly) it.local else if (state.showLocal == state.showCloud) true else if (state.showCloud) it.isCloudOnly() else !it.isCloudOnly() }
     .filter { it.remote || it.sizeBytes <= 0L || it.sizeBytes <= maxBytes }
+    .filter { kindFilter == "すべて" || it.modelKind() == kindFilter }
     .filter { state.search.isBlank() || it.name.contains(state.search, true) }
   Column(modifier.fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) { IconButton(onClick = onOpenDrawer) { Text("☰") }; Text("Ollama Tasker Bridge", style = MaterialTheme.typography.headlineSmall) }
@@ -117,31 +130,20 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
     }
     }
     if (section == MainSection.MODELS) {
-    Text("サービス", style = MaterialTheme.typography.labelLarge)
-    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-      ModelSource.values().forEach { source ->
-        FilterChip(selected = state.enabledSources.contains(source), onClick = { viewModel.sourceEnabled(source, !state.enabledSources.contains(source)) }, label = { Text(source.displayName()) })
-      }
-    }
-    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-      OutlinedTextField(state.search, viewModel::searchChanged, Modifier.weight(1f), label = { Text("モデルを検索") }, singleLine = true)
-      OutlinedButton(onClick = viewModel::loadModels, enabled = !state.loading) { Text("↻") }
-    }
+    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) { OutlinedTextField(state.search, viewModel::searchChanged, Modifier.weight(1f), label = { Text("モデルを検索") }, singleLine = true); OutlinedButton(onClick = viewModel::loadModels, enabled = !state.loading) { Text("↻") } }
     Text("最大容量: ${state.maxLocalModelSizeGb} GB", style = MaterialTheme.typography.bodySmall)
     Slider(value = state.maxLocalModelSizeGb.toFloatOrNull()?.coerceIn(0f, 200f) ?: 15f, onValueChange = { viewModel.maxLocalModelSizeChanged("%.0f".format(it)) }, valueRange = 0f..200f, steps = 199)
-    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-      Checkbox(checked = state.downloadedOnly, onCheckedChange = { viewModel.downloadedOnlyChanged(it) })
-      Text("DL済")
-      Spacer(Modifier.weight(1f))
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
       Box {
-        OutlinedButton(onClick = { availabilityMenu = true }) { Text(if (state.showLocal == state.showCloud) "すべて" else if (state.showCloud) "Cloud" else "ローカル") }
-        DropdownMenu(expanded = availabilityMenu, onDismissRequest = { availabilityMenu = false }) {
-          DropdownMenuItem(text = { Text("すべて") }, onClick = { viewModel.availabilityChanged("all"); availabilityMenu = false })
-          DropdownMenuItem(text = { Text("ダウンロード済") }, onClick = { viewModel.availabilityChanged("downloaded"); availabilityMenu = false })
-          DropdownMenuItem(text = { Text("ローカル候補") }, onClick = { viewModel.availabilityChanged("local"); availabilityMenu = false })
-          DropdownMenuItem(text = { Text("Cloud") }, onClick = { viewModel.availabilityChanged("cloud"); availabilityMenu = false })
-        }
+        OutlinedButton(onClick = { sourceFilterMenu = true }) { Text(if (state.enabledSources.size == ModelSource.values().size) "サービス: すべて" else "サービス: ${state.enabledSources.firstOrNull()?.displayName() ?: "なし"}") }
+        DropdownMenu(expanded = sourceFilterMenu, onDismissRequest = { sourceFilterMenu = false }) { DropdownMenuItem(text = { Text("すべて") }, onClick = { viewModel.sourceFilterChanged(null); sourceFilterMenu = false }); ModelSource.values().forEach { source -> DropdownMenuItem(text = { Text(source.displayName()) }, onClick = { viewModel.sourceFilterChanged(source); sourceFilterMenu = false }) } }
       }
+      Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) { Checkbox(checked = state.downloadedOnly, onCheckedChange = viewModel::downloadedOnlyChanged); Text("DL済") }
+      Box {
+        OutlinedButton(onClick = { kindMenu = true }) { Text("種類: $kindFilter") }
+        DropdownMenu(expanded = kindMenu, onDismissRequest = { kindMenu = false }) { listOf("すべて", "LLM", "VLM", "音声", "その他").forEach { kind -> DropdownMenuItem(text = { Text(kind) }, onClick = { kindFilter = kind; kindMenu = false }) } }
+      }
+      Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) { Spacer(Modifier.weight(1f)) }
     }
     
     Text("${shownModels.size}件（上限以下。未知サイズは取得時に確認）", style = MaterialTheme.typography.bodySmall)

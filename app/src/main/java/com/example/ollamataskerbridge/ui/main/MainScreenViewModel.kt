@@ -79,6 +79,11 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   fun temperatureChanged(value: String) { _uiState.value = _uiState.value.copy(temperature = value) }
   fun selectModel(name: String) { _uiState.value = _uiState.value.copy(selectedModel = name, downloadModel = name, message = null) }
   fun sourceChanged(source: ModelSource) { settings.modelSource = source.name; _uiState.value = _uiState.value.copy(source = source, search = "", showLocal = true, showCloud = true, message = null) }
+  fun sourceFilterChanged(source: ModelSource?) {
+    val next = source?.let { setOf(it) } ?: ModelSource.values().toSet()
+    settings.enabledModelSources = next
+    _uiState.value = _uiState.value.copy(enabledSources = next, message = null)
+  }
   fun sourceEnabled(source: ModelSource, enabled: Boolean) {
     val next = (_uiState.value.enabledSources + source).toMutableSet().apply { if (!enabled) remove(source) }
     if (next.isEmpty()) return
