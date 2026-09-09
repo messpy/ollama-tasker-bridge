@@ -166,6 +166,7 @@ class OllamaRegistryClient(
       FileOutputStream(temp, resumeBytes > 0L).use { output -> connection.inputStream.use { input ->
         val buffer = ByteArray(1024 * 1024)
         while (true) {
+          preparePartialDownload(temp, model)
           val count = input.read(buffer)
           if (count < 0) break
           output.write(buffer, 0, count)
@@ -232,6 +233,7 @@ class OllamaRegistryClient(
         connection.inputStream.use { input ->
           val buffer = ByteArray(1024 * 1024)
           while (true) {
+            preparePartialDownload(temp, temp.name)
             val count = input.read(buffer)
             if (count < 0) break
             output.write(buffer, 0, count)
