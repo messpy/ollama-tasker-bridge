@@ -181,9 +181,10 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     _uiState.value = _uiState.value.copy(loading = true, message = null, downloadedBytes = 0L, downloadTotalBytes = 0L)
     viewModelScope.launch {
       runCatching { withContext(Dispatchers.IO) { action() } }
-        .onSuccess { message -> _uiState.value = _uiState.value.copy(loading = false, message = message, downloadedBytes = 0L, downloadTotalBytes = 0L) }
+        .onSuccess { message -> _uiState.value = _uiState.value.copy(loading = false, message = message, helpUrl = null, downloadedBytes = 0L, downloadTotalBytes = 0L) }
         .onFailure { error ->
           val raw = error.message.orEmpty()
+          val accessUrl = Regex("""Visit (https://huggingface.co/\S+)""").find(raw)?.groupValues?.getOrNull(1)?.removeSuffix(".")
           DiagnosticsLog.error(raw)
           val isModelDownload = failureMessage.startsWith("モデルの取得")
           val detail = when {
@@ -198,7 +199,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
             raw.contains("timeout", true) || raw.contains("timed out", true) -> "接続がタイムアウトしました。ネットワークを確認してください。"
             else -> failureMessage + (raw.takeIf { it.isNotBlank() }?.let { " ($it)" } ?: "")
           }
-          _uiState.value = _uiState.value.copy(loading = false, message = "エラー: $detail", downloadedBytes = 0L, downloadTotalBytes = 0L)
+          _uiState.value = _uiState.value.copy(loading = false, message = "エラー: $detail", helpUrl = accessUrl, downloadedBytes = 0L, downloadTotalBytes = 0L)
         }
     }
   }
@@ -228,6 +229,7 @@ data class MainScreenUiState(
   val downloadedBytes: Long = 0L,
   val downloadTotalBytes: Long = 0L,
   val message: String? = null,
+  val helpUrl: String? = null,
 )
 
 const val CUSTOM_SYSTEM_PROMPT_ID = "__custom__"
