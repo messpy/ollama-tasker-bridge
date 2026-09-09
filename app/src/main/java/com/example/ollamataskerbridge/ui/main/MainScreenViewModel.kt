@@ -90,10 +90,12 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
       "上限超過です（%.2fGB）。ローカル上限を上げてください".format(model.sizeBytes / 1_000_000_000.0)
     }
     if (model.source == ModelSource.HUGGING_FACE || model.source == ModelSource.LITERT_LM) {
-      registry.downloadFromUrl(model.downloadUrl, model.name, if (model.source == ModelSource.LITERT_LM) ".litertlm" else ".gguf", settings.huggingFaceToken) { downloaded, total ->
+      try { registry.downloadFromUrl(model.downloadUrl, model.name, if (model.source == ModelSource.LITERT_LM) ".litertlm" else ".gguf", settings.huggingFaceToken) { downloaded, total ->
         _uiState.value = _uiState.value.copy(downloadedBytes = downloaded, downloadTotalBytes = total)
       }
-    } else {
+    } catch (error: Exception) {
+      throw java.io.IOException("モデル[" + model.name + "]の取得に失敗しました: " + (error.message ?: "原因不明"), error)
+    } } else {
       val metadata = registry.metadata(model.name)
       require(metadata.sizeBytes <= 0L || metadata.sizeBytes <= maxBytes) {
         "上限超過です（%.2fGB）。ローカル上限を上げてください".format(metadata.sizeBytes / 1_000_000_000.0)

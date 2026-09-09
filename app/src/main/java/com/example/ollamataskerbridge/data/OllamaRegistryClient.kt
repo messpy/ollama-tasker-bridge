@@ -63,6 +63,7 @@ class OllamaRegistryClient(
     ModelMetadata(downloadable, size)
   }
   fun download(model: String): File {
+    com.example.ollamataskerbridge.diagnostics.DiagnosticsLog.note("モデル取得開始: model=" + model + " format=ollama-registry")
     hfUrlFor(model)?.let { return downloadHf(it, model) }
     val parsed = parseModel(model)
     val manifestUrl = registryBase + "/v2/library/" + parsed.first + "/manifests/" + parsed.second
@@ -95,6 +96,7 @@ class OllamaRegistryClient(
     require(url.startsWith("https://huggingface.co/")) { "Hugging Face URLが不正です" }
     val resolvedUrl = if (url.contains("?")) url + "&download=true" else url + "?download=true"
     Log.d(logTag, "HF download URL=" + resolvedUrl)
+    com.example.ollamataskerbridge.diagnostics.DiagnosticsLog.note("モデル取得開始: model=" + model + " format=" + fileExtension + " url=" + url)
     return downloadHf(resolvedUrl, model, onProgress, fileExtension, accessToken)
   }
 
@@ -118,6 +120,7 @@ class OllamaRegistryClient(
     }
     if (resumeBytes > 0L) connection.setRequestProperty("Range", "bytes=" + resumeBytes + "-")
     Log.d(logTag, "HF resume bytes=" + resumeBytes)
+    com.example.ollamataskerbridge.diagnostics.DiagnosticsLog.note("モデル取得再開: model=" + model + " resumeBytes=" + resumeBytes)
     try {
       if (resumeBytes > 0L && connection.responseCode == HttpURLConnection.HTTP_OK) { temp.delete(); resumeBytes = 0L }
       val responseCode = connection.responseCode

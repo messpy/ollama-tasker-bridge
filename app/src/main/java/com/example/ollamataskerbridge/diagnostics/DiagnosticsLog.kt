@@ -10,6 +10,13 @@ object DiagnosticsLog {
   private val entries = ArrayDeque<String>()
 
   @Synchronized
+  fun note(message: String) {
+    record("I", message)
+    Log.i(tag, message)
+  }
+
+
+  @Synchronized
   fun warn(message: String) {
     record("W", message)
     Log.w(tag, message)
