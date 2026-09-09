@@ -59,6 +59,11 @@ import com.example.ollamataskerbridge.theme.MyApplicationTheme
 
 private fun OllamaModel.isCloudOnly(): Boolean = source == ModelSource.OLLAMA && !local && (remote || !downloadable)
 
+private fun OllamaModel.supportsVision(): Boolean {
+  val value = name.lowercase()
+  return listOf("gemma3", "gemma-3", "gemma3n", "llava", "qwen2-vl", "qwen2.5-vl", "qwen3-vl", "minicpm-v", "moondream", "granite3.2-vision").any { value.contains(it) }
+}
+
 @Composable
 fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier = Modifier, onOpenChat: () -> Unit = {}) {
   val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -185,7 +190,8 @@ private fun ModelRow(model: OllamaModel, loading: Boolean, selected: Boolean, on
       Column(Modifier.weight(1f)) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
           Text(model.name)
-          if (model.isCloudOnly()) Text("Cloud", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+          if (model.supportsVision()) Text("👁️", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+          if (model.isCloudOnly()) Text("☁", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
           else if (model.source == ModelSource.LITERT_LM) Text("LiteRT-LM", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
           else Text("ローカル候補", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
         }
