@@ -148,7 +148,6 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
     }
     Text(if (state.selectedModel.isBlank()) "モデル未選択" else "選択中: ${state.selectedModel}（${if (state.models.firstOrNull { it.name == state.selectedModel }?.local == true) "ローカル実行" else "Cloud実行"}）")
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-      OutlinedButton(onClick = viewModel::testConnection, enabled = !state.loading) { Text("接続テスト") }
       Button(onClick = { requestDownload(state.selectedModel) }, enabled = !state.loading && state.selectedModel.isNotBlank() && state.models.firstOrNull { it.name == state.selectedModel }?.let { !it.local && it.downloadable } == true) { Text("選択モデルを取得") }
     }
     if (state.downloadTotalBytes > 0L) {
@@ -161,7 +160,6 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
     if (state.loading) CircularProgressIndicator()
 
     }
-    OutlinedButton(onClick = onOpenChat, modifier = Modifier.fillMaxWidth()) { Text("テストチャットを開く") }
 
     if (section == MainSection.PROMPTS) {
     HorizontalDivider()

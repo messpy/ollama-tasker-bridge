@@ -82,12 +82,6 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   fun savePreset(name: String, body: String, id: String = java.util.UUID.randomUUID().toString()) { settings.savePreset(SystemPromptPreset(id, name, body)); _uiState.value = _uiState.value.copy(presets = settings.presets()) }
   fun deletePreset(id: String) { settings.deletePreset(id); _uiState.value = _uiState.value.copy(presets = settings.presets()) }
 
-  fun testConnection() { runRequest("接続テストに失敗しました。モデル・APIキー・ネットワークを確認してください。") {
-    val model = _uiState.value.selectedModel.trim()
-    require(model.isNotBlank()) { "先にモデルを選択してください" }
-    DefaultInferenceRepository.generateText(getApplication(), GenerateRequest(if (localModels.fileFor(model).isFile || localModels.liteRtFileFor(model).isFile) Backend.LOCAL else Backend.OLLAMA, model, "接続テスト", _uiState.value.systemPrompt, _uiState.value.maxTokens.toIntOrNull() ?: 256, _uiState.value.temperature.toFloatOrNull() ?: 0.7f))
-    "接続成功（選択モデルで応答を確認しました）"
-  } }
   fun downloadModel(name: String) { runRequest("モデルの取得に失敗しました。HTTP応答・保存先・空き容量を確認してください。") {
     val maxBytes = settings.maxLocalModelSizeGb.toDouble().times(1_000_000_000.0).toLong()
     val model = _uiState.value.models.firstOrNull { it.name == name } ?: error("モデルが一覧にありません")
