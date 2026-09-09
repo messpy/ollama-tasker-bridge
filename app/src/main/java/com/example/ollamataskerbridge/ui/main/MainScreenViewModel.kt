@@ -1,6 +1,7 @@
 package com.example.ollamataskerbridge.ui.main
 
 import android.app.Application
+import android.content.Intent
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.ollamataskerbridge.data.OllamaClient
@@ -14,6 +15,7 @@ import com.example.ollamataskerbridge.diagnostics.DiagnosticsLog
 import com.example.ollamataskerbridge.bridge.Backend
 import com.example.ollamataskerbridge.bridge.DefaultInferenceRepository
 import com.example.ollamataskerbridge.bridge.GenerateRequest
+import com.example.ollamataskerbridge.bridge.ModelDownloadService
 import java.net.URI
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,6 +23,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import androidx.core.content.ContextCompat
 
 private fun isOllamaCloudModel(name: String): Boolean = name.contains(":cloud", ignoreCase = true) || name.startsWith("gpt-oss", ignoreCase = true)
 
@@ -94,27 +97,21 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   fun savePreset(name: String, body: String, id: String = java.util.UUID.randomUUID().toString()) { settings.savePreset(SystemPromptPreset(id, name, body)); _uiState.value = _uiState.value.copy(presets = settings.presets()) }
   fun deletePreset(id: String) { settings.deletePreset(id); _uiState.value = _uiState.value.copy(presets = settings.presets()) }
 
-  fun downloadModel(name: String) { runRequest("モデルの取得に失敗しました。HTTP応答・保存先・空き容量を確認してください。") {
-    val maxBytes = settings.maxLocalModelSizeGb.toDouble().times(1_000_000_000.0).toLong()
+  fun downloadModel(name: String) { runRequest("モデルの取得を開始できません。HTTP応答・保存先・空き容量を確認してください。") {
+    val maxBytes = settings.maxLocalModelSizeGb.toDouble().times(1000000000.0).toLong()
     val model = _uiState.value.models.firstOrNull { it.name == name } ?: error("モデルが一覧にありません")
     require(model.downloadable && !model.local) { "このモデルはCloud専用のため、Androidへダウンロードできません" }
-    require(model.sizeBytes <= 0L || model.sizeBytes <= maxBytes) {
-      "上限超過です（%.2fGB）。ローカル上限を上げてください".format(model.sizeBytes / 1_000_000_000.0)
-    }
-    if (model.source == ModelSource.HUGGING_FACE || model.source == ModelSource.LITERT_LM) {
-      try { registry.downloadFromUrl(model.downloadUrl, model.name, if (model.source == ModelSource.LITERT_LM) ".litertlm" else ".gguf", settings.huggingFaceToken) { downloaded, total ->
-        _uiState.value = _uiState.value.copy(downloadedBytes = downloaded, downloadTotalBytes = total)
+    require(model.sizeBytes <= 0L || model.sizeBytes <= maxBytes) { "上限超過です（%.2fGB）。ローカル上限を上げてください".format(model.sizeBytes / 1000000000.0) }
+    val intent = Intent(getApplication(), ModelDownloadService::class.java).apply {
+      putExtra(com.example.ollamataskerbridge.bridge.BridgeContract.EXTRA_MODEL, model.name)
+      if (model.source == ModelSource.HUGGING_FACE || model.source == ModelSource.LITERT_LM) {
+        putExtra(com.example.ollamataskerbridge.bridge.BridgeContract.EXTRA_DOWNLOAD_URL, model.downloadUrl)
+        putExtra(com.example.ollamataskerbridge.bridge.BridgeContract.EXTRA_DOWNLOAD_EXTENSION, if (model.source == ModelSource.LITERT_LM) ".litertlm" else ".gguf")
+        putExtra(com.example.ollamataskerbridge.bridge.BridgeContract.EXTRA_ACCESS_TOKEN, settings.huggingFaceToken)
       }
-    } catch (error: Exception) {
-      throw java.io.IOException("モデル[" + model.name + "]の取得に失敗しました: " + (error.message ?: "原因不明"), error)
-    } } else {
-      val metadata = registry.metadata(model.name)
-      require(metadata.sizeBytes <= 0L || metadata.sizeBytes <= maxBytes) {
-        "上限超過です（%.2fGB）。ローカル上限を上げてください".format(metadata.sizeBytes / 1_000_000_000.0)
-      }
-      registry.download(model.name)
     }
-    loadModelsInternal(); "Androidへモデルを保存しました"
+    ContextCompat.startForegroundService(getApplication(), intent)
+    "バックグラウンドでモデル取得を開始しました。通知バーで進捗を確認できます"
   } }
   fun loadModels() { runRequest("モデル一覧の取得に失敗しました。APIキーとネットワークを確認してください。") { loadModelsInternal(); "モデル一覧を更新しました" } }
   fun deleteModel(name: String) { runRequest("モデルの削除に失敗しました。") { ((localModels.fileFor(name).takeIf { it.isFile } ?: localModels.liteRtFileFor(name))).delete(); loadModelsInternal(); "削除しました: $name" } }

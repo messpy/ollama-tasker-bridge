@@ -25,6 +25,7 @@ class LocalModelStore(context: Context) {
 }
 
 class OllamaRegistryClient(
+
   private val store: LocalModelStore,
   private val registryBase: String = "https://registry.ollama.ai",
 ) {
@@ -106,9 +107,39 @@ class OllamaRegistryClient(
     else -> null
   }
 
+  private val maxPartialDownloadAgeMs = 24L * 60L * 60L * 1000L
+
+  private fun preparePartialDownload(temp: File, model: String) {
+    if (!temp.isFile) return
+    val marker = File(temp.path + ".started")
+    val now = System.currentTimeMillis()
+    val started = marker.takeIf { it.isFile }?.let { runCatching { it.readText().trim().toLong() }.getOrNull() }
+    if (started == null) {
+      marker.writeText(now.toString())
+      return
+    }
+    if (now - started >= maxPartialDownloadAgeMs) {
+      temp.delete()
+      marker.delete()
+      com.example.ollamataskerbridge.diagnostics.DiagnosticsLog.warn("モデル取得を24時間超過でキャンセル: model=" + model)
+      throw java.io.IOException("モデルの未完了ダウンロードを24時間超過のためキャンセルしました。最初から再取得します: " + model)
+    }
+  }
+
+  private fun markPartialDownload(temp: File) {
+    val marker = File(temp.path + ".started")
+    if (!marker.isFile) marker.writeText(System.currentTimeMillis().toString())
+  }
+
+  private fun clearPartialDownload(temp: File) {
+    File(temp.path + ".started").delete()
+  }
+
   private fun downloadHf(url: String, model: String, onProgress: (Long, Long) -> Unit = { _, _ -> }, fileExtension: String = ".gguf", accessToken: String = ""): File {
     val target = if (fileExtension == ".litertlm") store.liteRtFileFor(model) else store.fileFor(model)
     val temp = File(target.path + ".download")
+    preparePartialDownload(temp, model)
+    markPartialDownload(temp)
     val available = store.directory.usableSpace
     require(available >= 128L * 1024L * 1024L) { "アプリ保存領域が不足しています（空き%.0fMB）".format(available / 1_000_000.0) }
     var resumeBytes = temp.takeIf { it.isFile }?.length() ?: 0L
@@ -147,6 +178,7 @@ class OllamaRegistryClient(
         try { temp.copyTo(target, overwrite = true); check(temp.delete()) { "一時ファイルを削除できません" } }
         catch (error: Exception) { throw java.io.IOException("モデル保存に失敗しました: " + (error.message ?: target.absolutePath), error) }
       }
+      clearPartialDownload(temp)
       Log.i(logTag, "Hugging Face download complete: " + target.name + " bytes=" + target.length())
       return target
     } finally { connection.disconnect() }
@@ -173,6 +205,8 @@ class OllamaRegistryClient(
 
   private fun downloadBlob(url: String, digest: String, expectedSize: Long, temp: File) {
     Log.d(logTag, "download start url=" + url + " expectedSize=" + expectedSize + " temp=" + temp.name)
+    preparePartialDownload(temp, temp.name)
+    markPartialDownload(temp)
     var resumeBytes = temp.takeIf { it.isFile }?.length() ?: 0L
     val connection = open(url, readTimeoutMs = 15 * 60 * 1000)
     if (resumeBytes > 0L) connection.setRequestProperty("Range", "bytes=" + resumeBytes + "-")
@@ -210,6 +244,7 @@ class OllamaRegistryClient(
       check(expectedSize < 0 || total == expectedSize) { "モデルサイズが一致しません" }
       val actual = "sha256:" + digestor.digest().joinToString("") { "%02x".format(it) }
       check(actual == digest) { "モデル検証に失敗しました" }
+      clearPartialDownload(temp)
       Log.d(logTag, "download complete bytes=" + total)
     } finally { connection.disconnect() }
   }
