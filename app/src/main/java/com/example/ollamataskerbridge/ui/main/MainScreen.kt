@@ -62,7 +62,7 @@ private fun OllamaModel.isCloudOnly(): Boolean = source == ModelSource.OLLAMA &&
 
 private fun OllamaModel.supportsVision(): Boolean {
   val value = name.lowercase()
-  return listOf("gemma3", "gemma-3", "gemma3n", "llava", "qwen2-vl", "qwen2.5-vl", "qwen3-vl", "minicpm-v", "moondream", "granite3.2-vision").any { value.contains(it) }
+  return source == ModelSource.LITERT_LM && listOf("gemma3", "gemma-3", "gemma3n").any { value.contains(it) }
 }
 
 @Composable

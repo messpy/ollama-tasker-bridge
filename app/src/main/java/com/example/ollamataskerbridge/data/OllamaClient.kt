@@ -13,7 +13,7 @@ enum class ModelSource { OLLAMA, HUGGING_FACE, LITERT_LM }
 
 fun OllamaModel.supportsVision(): Boolean {
   val value = name.lowercase()
-  return listOf("gemma3", "gemma-3", "gemma3n", "llava", "qwen2-vl", "qwen2.5-vl", "qwen3-vl", "minicpm-v", "moondream", "granite3.2-vision").any { value.contains(it) }
+  return source == ModelSource.LITERT_LM && listOf("gemma3", "gemma-3", "gemma3n").any { value.contains(it) }
 }
 
 data class OllamaModel(
