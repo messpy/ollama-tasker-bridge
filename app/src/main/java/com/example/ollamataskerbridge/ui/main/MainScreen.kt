@@ -5,7 +5,9 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -28,6 +30,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Slider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -74,6 +77,7 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
   var showPresetDialog by remember { mutableStateOf(false) }
   var systemPresetMenu by remember { mutableStateOf(false) }
   var pendingGemmaDownload by remember { mutableStateOf<String?>(null) }
+  var availabilityMenu by remember { mutableStateOf(false) }
   var sourceMenu by remember { mutableStateOf(false) }
   val clipboard = LocalClipboardManager.current
   val diagnosticsScope = rememberCoroutineScope()
@@ -81,7 +85,7 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
   val requestDownload: (String) -> Unit = { name -> if (name.contains("gemma", ignoreCase = true) && !viewModel.gemmaTermsAccepted()) pendingGemmaDownload = name else viewModel.downloadModel(name) }
   val maxBytes = state.maxLocalModelSizeGb.toDoubleOrNull()?.takeIf { it >= 0 }?.times(1_000_000_000.0)?.toLong() ?: Long.MAX_VALUE
   val shownModels = state.models.filter { it.source in state.enabledSources }
-    .filter { if (it.isCloudOnly()) state.showCloud else state.showLocal }
+    .filter { if (state.downloadedOnly) it.local else if (state.showLocal == state.showCloud) true else if (state.showCloud) it.isCloudOnly() else !it.isCloudOnly() }
     .filter { it.remote || it.sizeBytes <= 0L || it.sizeBytes <= maxBytes }
     .filter { state.search.isBlank() || it.name.contains(state.search, true) }
   Column(modifier.fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -121,21 +125,23 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
     }
     Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
       OutlinedTextField(state.search, viewModel::searchChanged, Modifier.weight(1f), label = { Text("モデルを検索") }, singleLine = true)
-      OutlinedTextField(
-        value = state.maxLocalModelSizeGb,
-        onValueChange = viewModel::maxLocalModelSizeChanged,
-        modifier = Modifier.width(132.dp),
-        label = { Text("上限GB", fontSize = 11.sp) },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-      )
       OutlinedButton(onClick = viewModel::loadModels, enabled = !state.loading) { Text("↻") }
     }
-    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-      Checkbox(checked = state.showLocal, onCheckedChange = { viewModel.showLocalChanged(it) })
-      Text("ローカル")
-      Checkbox(checked = state.showCloud, onCheckedChange = { viewModel.showCloudChanged(it) })
-      Text("Cloud")
+    Text("最大容量: ${state.maxLocalModelSizeGb} GB", style = MaterialTheme.typography.bodySmall)
+    Slider(value = state.maxLocalModelSizeGb.toFloatOrNull()?.coerceIn(0f, 200f) ?: 15f, onValueChange = { viewModel.maxLocalModelSizeChanged("%.0f".format(it)) }, valueRange = 0f..200f, steps = 199)
+    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+      Checkbox(checked = state.downloadedOnly, onCheckedChange = { viewModel.downloadedOnlyChanged(it) })
+      Text("DL済")
+      Spacer(Modifier.weight(1f))
+      Box {
+        OutlinedButton(onClick = { availabilityMenu = true }) { Text(if (state.showLocal == state.showCloud) "すべて" else if (state.showCloud) "Cloud" else "ローカル") }
+        DropdownMenu(expanded = availabilityMenu, onDismissRequest = { availabilityMenu = false }) {
+          DropdownMenuItem(text = { Text("すべて") }, onClick = { viewModel.availabilityChanged("all"); availabilityMenu = false })
+          DropdownMenuItem(text = { Text("ダウンロード済") }, onClick = { viewModel.availabilityChanged("downloaded"); availabilityMenu = false })
+          DropdownMenuItem(text = { Text("ローカル候補") }, onClick = { viewModel.availabilityChanged("local"); availabilityMenu = false })
+          DropdownMenuItem(text = { Text("Cloud") }, onClick = { viewModel.availabilityChanged("cloud"); availabilityMenu = false })
+        }
+      }
     }
     
     Text("${shownModels.size}件（上限以下。未知サイズは取得時に確認）", style = MaterialTheme.typography.bodySmall)

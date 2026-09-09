@@ -67,6 +67,13 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   fun searchChanged(value: String) { _uiState.value = _uiState.value.copy(search = value) }
   fun showLocalChanged(value: Boolean) { _uiState.value = _uiState.value.copy(showLocal = value) }
   fun showCloudChanged(value: Boolean) { _uiState.value = _uiState.value.copy(showCloud = value) }
+  fun downloadedOnlyChanged(value: Boolean) { _uiState.value = _uiState.value.copy(downloadedOnly = value, showLocal = true, showCloud = !value) }
+  fun availabilityChanged(value: String) { _uiState.value = when (value) {
+    "downloaded" -> _uiState.value.copy(downloadedOnly = true, showLocal = true, showCloud = false)
+    "cloud" -> _uiState.value.copy(downloadedOnly = false, showLocal = false, showCloud = true)
+    "local" -> _uiState.value.copy(downloadedOnly = false, showLocal = true, showCloud = false)
+    else -> _uiState.value.copy(downloadedOnly = false, showLocal = true, showCloud = true)
+  } }
   fun maxLocalModelSizeChanged(value: String) { _uiState.value = _uiState.value.copy(maxLocalModelSizeGb = value); value.toFloatOrNull()?.takeIf { it >= 0f }?.let { settings.maxLocalModelSizeGb = it } }
   fun maxTokensChanged(value: String) { _uiState.value = _uiState.value.copy(maxTokens = value) }
   fun temperatureChanged(value: String) { _uiState.value = _uiState.value.copy(temperature = value) }
@@ -208,6 +215,7 @@ data class MainScreenUiState(
   val search: String = "",
   val showLocal: Boolean = true,
   val showCloud: Boolean = true,
+  val downloadedOnly: Boolean = false,
   val maxLocalModelSizeGb: String = "15.0",
   val systemPrompt: String = "",
   val systemPromptPresetId: String = "",
