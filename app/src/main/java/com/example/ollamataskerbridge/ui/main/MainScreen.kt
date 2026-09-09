@@ -64,10 +64,10 @@ import com.example.ollamataskerbridge.theme.MyApplicationTheme
 private fun OllamaModel.isCloudOnly(): Boolean = source == ModelSource.OLLAMA && !local && (remote || !downloadable)
 
 private fun OllamaModel.modelKind(): String {
-  val value = name.lowercase()
+  val value = name.lowercase().replace("_", "-").replace(":", "-")
   return when {
-    listOf("vlm", "vision", "gemma3", "gemma-3", "llava", "minicpm-v", "moondream").any { value.contains(it) } -> "VLM"
-    listOf("whisper", "speech", "audio", "tts", "voice").any { value.contains(it) } -> "音声"
+    value.contains("gemma3n") || value.contains("gemma-3n") || ((value.contains("gemma3") || value.contains("gemma-3")) && listOf("-4b", "-12b", "-27b").any { value.contains(it) }) || listOf("vlm", "vision", "llava", "minicpm-v", "moondream").any { value.contains(it) } -> "VLM"
+    listOf("whisper", "speech", "audio", "audio-language", "audiolanguage", "ultravox", "voxtral", "qwen2-audio", "voice", "tts").any { value.contains(it) } -> "Audio-Language Model"
     listOf("embed", "rerank", "embedding").any { value.contains(it) } -> "その他"
     else -> "LLM"
   }
@@ -141,7 +141,7 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
       Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) { Checkbox(checked = state.downloadedOnly, onCheckedChange = viewModel::downloadedOnlyChanged); Text("DL済") }
       Box {
         OutlinedButton(onClick = { kindMenu = true }) { Text("種類: $kindFilter") }
-        DropdownMenu(expanded = kindMenu, onDismissRequest = { kindMenu = false }) { listOf("すべて", "LLM", "VLM", "音声", "その他").forEach { kind -> DropdownMenuItem(text = { Text(kind) }, onClick = { kindFilter = kind; kindMenu = false }) } }
+        DropdownMenu(expanded = kindMenu, onDismissRequest = { kindMenu = false }) { listOf("すべて", "LLM", "VLM", "Audio-Language Model", "その他").forEach { kind -> DropdownMenuItem(text = { Text(kind) }, onClick = { kindFilter = kind; kindMenu = false }) } }
       }
       Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) { Spacer(Modifier.weight(1f)) }
     }
