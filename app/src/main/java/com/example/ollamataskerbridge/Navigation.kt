@@ -51,7 +51,7 @@ fun MainNavigation() {
         entry<Main> { MainScreen(section = MainSection.SETTINGS, onOpenDrawer = { scope.launch { drawerState.open() } }, modifier = Modifier.safeDrawingPadding(), onOpenChat = { selectedSection = MainSection.SETTINGS; backStack.add(Chat) }) }
         entry<Models> { MainScreen(section = MainSection.MODELS, onOpenDrawer = { scope.launch { drawerState.open() } }, modifier = Modifier.safeDrawingPadding()) }
         entry<Prompts> { MainScreen(section = MainSection.PROMPTS, onOpenDrawer = { scope.launch { drawerState.open() } }, modifier = Modifier.safeDrawingPadding()) }
-        entry<Chat> { ChatScreen(modifier = Modifier.safeDrawingPadding()) }
+        entry<Chat> { ChatScreen(modifier = Modifier.safeDrawingPadding(), onOpenDrawer = { scope.launch { drawerState.open() } }) }
       },
   )
   }

@@ -78,12 +78,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 }
 
 @Composable
-fun ChatScreen(viewModel: ChatViewModel = viewModel(), modifier: Modifier = Modifier) {
+fun ChatScreen(viewModel: ChatViewModel = viewModel(), modifier: Modifier = Modifier, onOpenDrawer: () -> Unit = {}) {
   val state by viewModel.state.collectAsStateWithLifecycle(); val imageLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri -> uri?.let(viewModel::selectImage) }; val list = rememberLazyListState()
   var menu by remember { mutableStateOf(false) }; var models by remember { mutableStateOf(false) }; var tokens by remember { mutableStateOf(false) }; var temp by remember { mutableStateOf(false) }; var prompts by remember { mutableStateOf(false) }
   LaunchedEffect(state.messages.size, state.messages.lastOrNull()?.text) { if (state.messages.isNotEmpty()) list.animateScrollToItem(state.messages.lastIndex) }
   Column(modifier.fillMaxSize().padding(horizontal = 12.dp)) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) { Text("テストチャット", style = MaterialTheme.typography.titleLarge); Spacer(Modifier.weight(1f)); Text(state.selectedModel.ifBlank { "モデル未選択" }, style = MaterialTheme.typography.labelSmall) }
+    Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) { IconButton(onClick = onOpenDrawer) { Text("☰") }; Text("テストチャット", style = MaterialTheme.typography.titleLarge); Spacer(Modifier.weight(1f)); Text(state.selectedModel.ifBlank { "モデル未選択" }, style = MaterialTheme.typography.labelSmall) }
     state.notice?.let { Text(it, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(bottom = 4.dp)) }
     state.imageName.takeIf { it.isNotBlank() }?.let { name -> Text("画像: " + name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary) }
     LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = list, verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 8.dp)) { items(state.messages) { MessageBubble(it, { viewModel.retry(it.retryPrompt) }) } }
