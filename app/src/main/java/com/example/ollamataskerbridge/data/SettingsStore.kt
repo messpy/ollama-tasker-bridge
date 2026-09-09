@@ -29,6 +29,10 @@ class SettingsStore(context: Context) {
     get() = prefs.getString("model_source", "").orEmpty()
     set(value) { prefs.edit().putString("model_source", value).apply() }
 
+  var gemmaTermsAccepted: Boolean
+    get() = prefs.getBoolean("gemma_terms_accepted", false)
+    set(value) { prefs.edit().putBoolean("gemma_terms_accepted", value).apply() }
+
   var maxLocalModelSizeGb: Float
     get() = prefs.getFloat("max_local_model_size_gb", 15f)
     set(value) { prefs.edit().putFloat("max_local_model_size_gb", value.coerceAtLeast(0f)).apply() }

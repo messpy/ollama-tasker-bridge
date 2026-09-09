@@ -60,6 +60,8 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
       _uiState.value = _uiState.value.copy(systemPromptPresetId = id, systemPrompt = preset.body, presets = settings.presets(), message = null)
     }
   }
+  fun gemmaTermsAccepted(): Boolean = settings.gemmaTermsAccepted
+  fun acceptGemmaTerms() { settings.gemmaTermsAccepted = true }
   fun searchChanged(value: String) { _uiState.value = _uiState.value.copy(search = value) }
   fun showLocalChanged(value: Boolean) { _uiState.value = _uiState.value.copy(showLocal = value) }
   fun showCloudChanged(value: Boolean) { _uiState.value = _uiState.value.copy(showCloud = value) }
