@@ -120,7 +120,11 @@ class OllamaRegistryClient(
     Log.d(logTag, "HF resume bytes=" + resumeBytes)
     try {
       if (resumeBytes > 0L && connection.responseCode == HttpURLConnection.HTTP_OK) { temp.delete(); resumeBytes = 0L }
-      check(connection.responseCode in 200..299) { "Hugging Face HTTP " + connection.responseCode }
+      val responseCode = connection.responseCode
+      if (responseCode !in 200..299) {
+        val detail = connection.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty().replace(Regex("\\s+"), " ").take(240)
+        throw java.io.IOException("Hugging Face HTTP " + responseCode + if (detail.isNotBlank()) ": " + detail else "")
+      }
       val contentLength = connection.contentLengthLong
       val totalBytes = if (contentLength > 0L) contentLength + resumeBytes else -1L
       var downloadedBytes = resumeBytes
