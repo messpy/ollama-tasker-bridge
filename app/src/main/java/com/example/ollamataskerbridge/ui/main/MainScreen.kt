@@ -57,6 +57,8 @@ import com.example.ollamataskerbridge.data.ModelSource
 import com.example.ollamataskerbridge.data.SystemPromptPreset
 import com.example.ollamataskerbridge.theme.MyApplicationTheme
 
+private fun OllamaModel.isCloudOnly(): Boolean = source == ModelSource.OLLAMA && !local && (remote || !downloadable)
+
 @Composable
 fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier = Modifier, onOpenChat: () -> Unit = {}) {
   val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -72,7 +74,7 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
   val requestDownload: (String) -> Unit = { name -> if (name.contains("gemma", ignoreCase = true) && !viewModel.gemmaTermsAccepted()) pendingGemmaDownload = name else viewModel.downloadModel(name) }
   val maxBytes = state.maxLocalModelSizeGb.toDoubleOrNull()?.takeIf { it >= 0 }?.times(1_000_000_000.0)?.toLong() ?: Long.MAX_VALUE
   val shownModels = state.models.filter { it.source in state.enabledSources }
-    .filter { (state.showLocal && !it.remote) || (state.showCloud && it.remote) }
+    .filter { if (it.isCloudOnly()) state.showCloud else state.showLocal }
     .filter { it.remote || it.sizeBytes <= 0L || it.sizeBytes <= maxBytes }
     .filter { state.search.isBlank() || it.name.contains(state.search, true) }
   Column(modifier.fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -183,7 +185,7 @@ private fun ModelRow(model: OllamaModel, loading: Boolean, selected: Boolean, on
       Column(Modifier.weight(1f)) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
           Text(model.name)
-          if (model.source == ModelSource.OLLAMA && model.remote) Text("Cloud", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+          if (model.isCloudOnly()) Text("Cloud", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
           else if (model.source == ModelSource.LITERT_LM) Text("LiteRT-LM", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
           else Text("ローカル候補", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
         }
