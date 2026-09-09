@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -64,12 +65,13 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
   var showPresetDialog by remember { mutableStateOf(false) }
   var systemPresetMenu by remember { mutableStateOf(false) }
   var pendingGemmaDownload by remember { mutableStateOf<String?>(null) }
+  var sourceMenu by remember { mutableStateOf(false) }
   val clipboard = LocalClipboardManager.current
   val diagnosticsScope = rememberCoroutineScope()
   val context = LocalContext.current
   val requestDownload: (String) -> Unit = { name -> if (name.contains("gemma", ignoreCase = true) && !viewModel.gemmaTermsAccepted()) pendingGemmaDownload = name else viewModel.downloadModel(name) }
   val maxBytes = state.maxLocalModelSizeGb.toDoubleOrNull()?.takeIf { it >= 0 }?.times(1_000_000_000.0)?.toLong() ?: Long.MAX_VALUE
-  val shownModels = state.models.filter { it.source == state.source }
+  val shownModels = state.models.filter { it.source in state.enabledSources }
     .filter { (state.showLocal && !it.remote) || (state.showCloud && it.remote) }
     .filter { it.remote || it.sizeBytes <= 0L || it.sizeBytes <= maxBytes }
     .filter { state.search.isBlank() || it.name.contains(state.search, true) }
@@ -99,13 +101,15 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
       TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://huggingface.co/settings/tokens"))) }) { Text("Hugging Faceトークンを取得", fontSize = 11.sp) }
     }
-    Text("モデル管理", style = MaterialTheme.typography.titleMedium)
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-      if (state.source == ModelSource.OLLAMA) Button(onClick = { viewModel.sourceChanged(ModelSource.OLLAMA) }) { Text("Ollama") } else OutlinedButton(onClick = { viewModel.sourceChanged(ModelSource.OLLAMA) }) { Text("Ollama") }
-      if (state.source == ModelSource.HUGGING_FACE) Button(onClick = { viewModel.sourceChanged(ModelSource.HUGGING_FACE) }) { Text("Hugging Face") } else OutlinedButton(onClick = { viewModel.sourceChanged(ModelSource.HUGGING_FACE) }) { Text("Hugging Face") }
-      if (state.source == ModelSource.LITERT_LM) Button(onClick = { viewModel.sourceChanged(ModelSource.LITERT_LM) }) { Text("LiteRT-LM") } else OutlinedButton(onClick = { viewModel.sourceChanged(ModelSource.LITERT_LM) }) { Text("LiteRT-LM") }
+    Box {
+      OutlinedButton(onClick = { sourceMenu = true }) { Text("サービス: ${state.enabledSources.joinToString("・") { it.displayName() }} ▼") }
+      DropdownMenu(expanded = sourceMenu, onDismissRequest = { sourceMenu = false }) {
+        ModelSource.values().forEach { source ->
+          DropdownMenuItem(text = { Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) { Checkbox(state.enabledSources.contains(source), { viewModel.sourceEnabled(source, it) }); Text(source.displayName()) } }, onClick = { viewModel.sourceEnabled(source, !state.enabledSources.contains(source)) })
+        }
+      }
     }
-    Text(if (state.source == ModelSource.OLLAMA) "Ollama公式・接続先のモデル" else if (state.source == ModelSource.HUGGING_FACE) "Hugging FaceのAndroid向けGGUFモデル" else "Google AI Edge Gallery互換のLiteRT-LMモデル", style = MaterialTheme.typography.bodySmall)
+    Text("選択したサービスのモデルを一覧に表示します。複数選択できます。", style = MaterialTheme.typography.bodySmall)
     Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
       OutlinedTextField(state.search, viewModel::searchChanged, Modifier.weight(1f), label = { Text("モデルを検索") }, singleLine = true)
       OutlinedTextField(
@@ -195,6 +199,12 @@ private fun PresetDialog(initial: SystemPromptPreset?, onDismiss: () -> Unit, on
   var name by remember(initial) { mutableStateOf(initial?.name.orEmpty()) }
   var body by remember(initial) { mutableStateOf(initial?.body.orEmpty()) }
   AlertDialog(onDismissRequest = onDismiss, title = { Text(if (initial == null) "新しいプリセット" else "プリセットを編集") }, text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedTextField(name, { name = it }, label = { Text("名前") }); OutlinedTextField(body, { body = it }, label = { Text("本文") }, minLines = 5) } }, confirmButton = { TextButton(onClick = { onSave(name.trim(), body) }, enabled = name.isNotBlank() && body.isNotBlank()) { Text("保存") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("キャンセル") } })
+}
+
+private fun ModelSource.displayName(): String = when (this) {
+  ModelSource.OLLAMA -> "Ollama"
+  ModelSource.HUGGING_FACE -> "Hugging Face"
+  ModelSource.LITERT_LM -> "LiteRT-LM"
 }
 
 @Composable

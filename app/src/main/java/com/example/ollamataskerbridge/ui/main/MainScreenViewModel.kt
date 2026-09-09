@@ -44,7 +44,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   private val initialSource = ModelSource.OLLAMA
   private val initialPresets = settings.presets()
   private val initialPreset = initialPresets.firstOrNull { it.id == settings.lastPresetId } ?: initialPresets.firstOrNull()
-  private val _uiState = MutableStateFlow(MainScreenUiState(endpoint = settings.endpoint, apiKey = settings.apiKey, huggingFaceToken = settings.huggingFaceToken, maxLocalModelSizeGb = settings.maxLocalModelSizeGb.toString(), systemPromptPresetId = initialPreset?.id.orEmpty(), systemPrompt = initialPreset?.body.orEmpty(), presets = initialPresets, models = initialModels, source = initialSource))
+  private val _uiState = MutableStateFlow(MainScreenUiState(endpoint = settings.endpoint, apiKey = settings.apiKey, huggingFaceToken = settings.huggingFaceToken, maxLocalModelSizeGb = settings.maxLocalModelSizeGb.toString(), systemPromptPresetId = initialPreset?.id.orEmpty(), systemPrompt = initialPreset?.body.orEmpty(), presets = initialPresets, models = initialModels, source = initialSource, enabledSources = settings.enabledModelSources))
   val uiState: StateFlow<MainScreenUiState> = _uiState.asStateFlow()
 
   fun endpointChanged(value: String) { _uiState.value = _uiState.value.copy(endpoint = value, message = null) }
@@ -72,6 +72,12 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   fun temperatureChanged(value: String) { _uiState.value = _uiState.value.copy(temperature = value) }
   fun selectModel(name: String) { _uiState.value = _uiState.value.copy(selectedModel = name, downloadModel = name, message = null) }
   fun sourceChanged(source: ModelSource) { settings.modelSource = source.name; _uiState.value = _uiState.value.copy(source = source, search = "", showLocal = true, showCloud = true, message = null) }
+  fun sourceEnabled(source: ModelSource, enabled: Boolean) {
+    val next = (_uiState.value.enabledSources + source).toMutableSet().apply { if (!enabled) remove(source) }
+    if (next.isEmpty()) return
+    settings.enabledModelSources = next
+    _uiState.value = _uiState.value.copy(enabledSources = next, message = null)
+  }
   fun apiKeyVisibleChanged(value: Boolean) { _uiState.value = _uiState.value.copy(apiKeyVisible = value) }
   fun savePreset(name: String, body: String, id: String = java.util.UUID.randomUUID().toString()) { settings.savePreset(SystemPromptPreset(id, name, body)); _uiState.value = _uiState.value.copy(presets = settings.presets()) }
   fun deletePreset(id: String) { settings.deletePreset(id); _uiState.value = _uiState.value.copy(presets = settings.presets()) }
@@ -215,6 +221,7 @@ data class MainScreenUiState(
   val temperature: String = "0.7",
   val testPrompt: String = "Tasker連携テストです。成功したら『テスト成功』とだけ返してください。",
   val source: ModelSource = ModelSource.OLLAMA,
+  val enabledSources: Set<ModelSource> = ModelSource.values().toSet(),
   val models: List<com.example.ollamataskerbridge.data.OllamaModel> = emptyList(),
   val presets: List<SystemPromptPreset> = emptyList(),
   val loading: Boolean = false,

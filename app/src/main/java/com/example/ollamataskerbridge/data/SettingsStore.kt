@@ -32,6 +32,14 @@ class SettingsStore(context: Context) {
     get() = prefs.getString("model_source", "").orEmpty()
     set(value) { prefs.edit().putString("model_source", value).apply() }
 
+  var enabledModelSources: Set<ModelSource>
+    get() = prefs.getStringSet("enabled_model_sources", null)
+      ?.mapNotNull { runCatching { ModelSource.valueOf(it) }.getOrNull() }
+      ?.toSet()
+      ?.ifEmpty { ModelSource.values().toSet() }
+      ?: ModelSource.values().toSet()
+    set(value) { prefs.edit().putStringSet("enabled_model_sources", value.map { it.name }.toSet()).apply() }
+
   var gemmaTermsAccepted: Boolean
     get() = prefs.getBoolean("gemma_terms_accepted", false)
     set(value) { prefs.edit().putBoolean("gemma_terms_accepted", value).apply() }
