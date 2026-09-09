@@ -64,9 +64,10 @@ private fun OllamaModel.supportsVision(): Boolean {
   val value = name.lowercase()
   return source == ModelSource.LITERT_LM && listOf("gemma3", "gemma-3", "gemma3n").any { value.contains(it) }
 }
+enum class MainSection { SETTINGS, MODELS, PROMPTS }
 
 @Composable
-fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier = Modifier, onOpenChat: () -> Unit = {}) {
+fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier = Modifier, section: MainSection = MainSection.SETTINGS, onOpenDrawer: () -> Unit = {}, onOpenChat: () -> Unit = {}) {
   val state by viewModel.uiState.collectAsStateWithLifecycle()
   var pendingDelete by remember { mutableStateOf<String?>(null) }
   var editingPreset by remember { mutableStateOf<SystemPromptPreset?>(null) }
@@ -84,8 +85,9 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
     .filter { it.remote || it.sizeBytes <= 0L || it.sizeBytes <= maxBytes }
     .filter { state.search.isBlank() || it.name.contains(state.search, true) }
   Column(modifier.fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-    Text("Ollama Tasker Bridge", style = MaterialTheme.typography.headlineSmall)
+    Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) { IconButton(onClick = onOpenDrawer) { Text("☰") }; Text("Ollama Tasker Bridge", style = MaterialTheme.typography.headlineSmall) }
     Text("本体アプリ", style = MaterialTheme.typography.titleLarge)
+    if (section == MainSection.SETTINGS) {
     OutlinedTextField(state.endpoint, viewModel::endpointChanged, Modifier.fillMaxWidth(), label = { Text("Ollama URL") }, supportingText = { Text("Cloudは https://ollama.com") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri))
     OutlinedTextField(
       value = state.apiKey,
@@ -109,6 +111,8 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
       TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://huggingface.co/settings/tokens"))) }) { Text("Hugging Faceトークンを取得", fontSize = 11.sp) }
     }
+    }
+    if (section == MainSection.MODELS) {
     Text("サービス", style = MaterialTheme.typography.labelLarge)
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
       ModelSource.values().forEach { source ->
@@ -155,8 +159,10 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
     state.message?.let { Text(it, color = if (it.startsWith("エラー")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary) }
     if (state.loading) CircularProgressIndicator()
 
+    }
     OutlinedButton(onClick = onOpenChat, modifier = Modifier.fillMaxWidth()) { Text("テストチャットを開く") }
 
+    if (section == MainSection.PROMPTS) {
     HorizontalDivider()
     Text("システムプロンプト管理", style = MaterialTheme.typography.titleMedium)
     state.presets.forEach { preset ->
@@ -171,6 +177,7 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
     OutlinedButton(onClick = { showPresetDialog = true }) { Text("新しいプリセットを追加") }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
       TextButton(onClick = { diagnosticsScope.launch { clipboard.setText(AnnotatedString(DiagnosticsLog.copyableSnapshot())) } }) { Text("ログをコピー", fontSize = 11.sp) }
+    }
     }
   }
   pendingGemmaDownload?.let { name -> AlertDialog(onDismissRequest = { pendingGemmaDownload = null }, title = { Text("Gemma利用条件") }, text = { Text("GemmaモデルはGoogleの利用規約に従って使用してください。 https://ai.google.dev/gemma/terms") }, confirmButton = { TextButton(onClick = { viewModel.acceptGemmaTerms(); pendingGemmaDownload = null; viewModel.downloadModel(name) }) { Text("同意してダウンロード") } }, dismissButton = { TextButton(onClick = { pendingGemmaDownload = null }) { Text("キャンセル") } }) }

@@ -4,4 +4,6 @@ import androidx.navigation3.runtime.NavKey
 import kotlinx.serialization.Serializable
 
 @Serializable data object Main : NavKey
+@Serializable data object Models : NavKey
+@Serializable data object Prompts : NavKey
 @Serializable data object Chat : NavKey
