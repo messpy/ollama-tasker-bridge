@@ -46,8 +46,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
       .onSuccess { bytes -> if (bytes.size > 20 * 1024 * 1024) _state.value = _state.value.copy(notice = "画像が大きすぎます（20MB以下にしてください）") else _state.value = _state.value.copy(imageBytes = bytes, imageName = uri.lastPathSegment ?: "image", notice = null) }
       .onFailure { _state.value = _state.value.copy(notice = "画像を読み込めませんでした: " + it.message) }
   }
-  private fun localModels() = store.directory.listFiles().orEmpty().filter { it.extension == "gguf" || it.extension == "litertlm" }.map { it.nameWithoutExtension }
-  private val _state = MutableStateFlow(ChatUiState(selectedModel = localModels().firstOrNull().orEmpty(), presets = settings.presets(), systemPromptId = settings.lastPresetId, systemPrompt = settings.presets().firstOrNull { it.id == settings.lastPresetId }?.body.orEmpty()))
+  private fun localModels() = store.directory.listFiles().orEmpty().filter { it.extension == "gguf" || it.extension == "litertlm" }.map { file -> OllamaModel(file.nameWithoutExtension, false, true, file.length(), true, if (file.extension == "litertlm") ModelSource.LITERT_LM else ModelSource.HUGGING_FACE) }
+  private val _state = MutableStateFlow(ChatUiState(selectedModel = localModels().firstOrNull()?.name.orEmpty(), presets = settings.presets(), systemPromptId = settings.lastPresetId, systemPrompt = settings.presets().firstOrNull { it.id == settings.lastPresetId }?.body.orEmpty()))
   val state = _state.asStateFlow()
   fun models() = localModels()
   fun input(value: String) { _state.value = _state.value.copy(input = value) }
@@ -102,7 +102,7 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), modifier: Modifier = Modi
       }
     }
   }
-  if (models) AlertDialog(onDismissRequest = { models = false }, title = { Text("ダウンロード済みモデル") }, text = { Column { viewModel.models().forEach { item -> OutlinedButton({ viewModel.selectModel(item); models = false }, Modifier.fillMaxWidth().padding(2.dp)) { Text(item) } } } }, confirmButton = { Button({ models = false }) { Text("閉じる") } })
+  if (models) AlertDialog(onDismissRequest = { models = false }, title = { Text("ダウンロード済みモデル") }, text = { Column { viewModel.models().forEach { item -> OutlinedButton({  viewModel.selectModel(item.name); models = false }, Modifier.fillMaxWidth().padding(2.dp)) { Text(item.name + if (item.supportsVision()) " 👁️" else "") } } } }, confirmButton = { Button({ models = false }) { Text("閉じる") } })
   if (tokens) NumberDialog("最大トークン数", state.maxTokens, { viewModel.maxTokens(it); tokens = false }, { tokens = false })
   if (temp) NumberDialog("Temperature", state.temperature, { viewModel.temperature(it); temp = false }, { temp = false })
   if (prompts) AlertDialog(onDismissRequest = { prompts = false }, title = { Text("システムプロンプト") }, text = { Column { OutlinedButton({ viewModel.selectPreset(null); prompts = false }, Modifier.fillMaxWidth()) { Text("なし") }; state.presets.forEach { item -> OutlinedButton({ viewModel.selectPreset(item); prompts = false }, Modifier.fillMaxWidth()) { Text(item.name) } } } }, confirmButton = { Button({ prompts = false }) { Text("閉じる") } })
