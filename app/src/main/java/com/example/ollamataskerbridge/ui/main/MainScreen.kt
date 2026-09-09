@@ -74,7 +74,7 @@ private fun OllamaModel.modelKind(): String {
 }
 private fun OllamaModel.supportsVision(): Boolean {
   val value = name.lowercase()
-  return source == ModelSource.LITERT_LM && listOf("gemma3", "gemma-3", "gemma3n").any { value.contains(it) }
+  return source == ModelSource.LITERT_LM && listOf("gemma3n", "gemma-3n").any { value.contains(it) }
 }
 enum class MainSection { SETTINGS, MODELS, PROMPTS }
 

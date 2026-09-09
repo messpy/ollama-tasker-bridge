@@ -2,6 +2,7 @@ package com.example.ollamataskerbridge.ui.chat
 
 import android.app.Application
 import android.net.Uri
+import android.graphics.BitmapFactory
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -43,13 +44,20 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
   fun selectImage(uri: Uri) {
     val resolver = getApplication<Application>().contentResolver
     runCatching { resolver.openInputStream(uri)?.use { it.readBytes() } ?: error("画像を読み込めません") }
-      .onSuccess { bytes -> if (bytes.size > 20 * 1024 * 1024) _state.value = _state.value.copy(notice = "画像が大きすぎます（20MB以下にしてください）") else _state.value = _state.value.copy(imageBytes = bytes, imageName = uri.lastPathSegment ?: "image", notice = null) }
+      .onSuccess { bytes ->
+        when {
+          bytes.size > 20 * 1024 * 1024 -> _state.value = _state.value.copy(notice = "画像が大きすぎます（20MB以下にしてください）")
+          BitmapFactory.decodeByteArray(bytes, 0, bytes.size) == null -> _state.value = _state.value.copy(notice = "対応していない画像形式です。PNGまたはJPEGを選択してください。")
+          else -> _state.value = _state.value.copy(imageBytes = bytes, imageName = uri.lastPathSegment ?: "image", notice = null)
+        }
+      }
       .onFailure { _state.value = _state.value.copy(notice = "画像を読み込めませんでした: " + it.message) }
   }
   private fun localModels() = store.directory.listFiles().orEmpty().filter { it.extension == "gguf" || it.extension == "litertlm" }.map { file -> OllamaModel(file.nameWithoutExtension, false, true, file.length(), true, if (file.extension == "litertlm") ModelSource.LITERT_LM else ModelSource.HUGGING_FACE) }
   private val _state = MutableStateFlow(ChatUiState(selectedModel = localModels().firstOrNull()?.name.orEmpty(), presets = settings.presets(), systemPromptId = settings.lastPresetId, systemPrompt = settings.presets().firstOrNull { it.id == settings.lastPresetId }?.body.orEmpty()))
   val state = _state.asStateFlow()
   fun models() = localModels()
+  private fun Boolean?.orFalse() = this == true
   fun input(value: String) { _state.value = _state.value.copy(input = value) }
   fun selectModel(value: String) { _state.value = _state.value.copy(selectedModel = value) }
   fun maxTokens(value: String) { _state.value = _state.value.copy(maxTokens = value) }
@@ -64,6 +72,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
   fun send(value: String = _state.value.input) {
     val prompt = value.trim(); val old = _state.value
     if (prompt.isBlank() || old.generating || old.selectedModel.isBlank()) return
+    if (old.imageBytes != null && !localModels().firstOrNull { it.name == old.selectedModel }?.supportsVision().orFalse()) {
+      _state.value = old.copy(notice = "このモデルは画像認識に対応していません。👁️付きモデルを選択してください。")
+      return
+    }
     val index = old.messages.size + 1
     _state.value = old.copy(input = "", imageBytes = null, imageName = "", generating = true, messages = old.messages + ChatMessage(true, prompt) + ChatMessage(false, "", old.selectedModel, true, retryPrompt = prompt))
     val request = GenerateRequest(Backend.LOCAL, old.selectedModel, prompt, old.systemPrompt.takeIf { it.isNotBlank() }, old.maxTokens.toIntOrNull()?.coerceAtLeast(1) ?: 256, old.temperature.toFloatOrNull()?.coerceIn(0f, 2f) ?: 0.7f, old.imageBytes)
