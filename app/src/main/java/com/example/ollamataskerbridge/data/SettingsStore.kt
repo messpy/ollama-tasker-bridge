@@ -16,6 +16,9 @@ class SettingsStore(context: Context) {
   var apiKey: String
     get() = prefs.getString("api_key", "").orEmpty()
     set(value) { prefs.edit().putString("api_key", value.trim()).apply() }
+  var huggingFaceToken: String
+    get() = prefs.getString("huggingface_token", "").orEmpty()
+    set(value) { prefs.edit().putString("huggingface_token", value.trim()).apply() }
 
   var lastPresetId: String
     get() = prefs.getString("last_preset_id", "").orEmpty()

@@ -44,11 +44,12 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   private val initialSource = ModelSource.OLLAMA
   private val initialPresets = settings.presets()
   private val initialPreset = initialPresets.firstOrNull { it.id == settings.lastPresetId } ?: initialPresets.firstOrNull()
-  private val _uiState = MutableStateFlow(MainScreenUiState(endpoint = settings.endpoint, apiKey = settings.apiKey, maxLocalModelSizeGb = settings.maxLocalModelSizeGb.toString(), systemPromptPresetId = initialPreset?.id.orEmpty(), systemPrompt = initialPreset?.body.orEmpty(), presets = initialPresets, models = initialModels, source = initialSource))
+  private val _uiState = MutableStateFlow(MainScreenUiState(endpoint = settings.endpoint, apiKey = settings.apiKey, huggingFaceToken = settings.huggingFaceToken, maxLocalModelSizeGb = settings.maxLocalModelSizeGb.toString(), systemPromptPresetId = initialPreset?.id.orEmpty(), systemPrompt = initialPreset?.body.orEmpty(), presets = initialPresets, models = initialModels, source = initialSource))
   val uiState: StateFlow<MainScreenUiState> = _uiState.asStateFlow()
 
   fun endpointChanged(value: String) { _uiState.value = _uiState.value.copy(endpoint = value, message = null) }
   fun apiKeyChanged(value: String) { _uiState.value = _uiState.value.copy(apiKey = value, message = null) }
+  fun huggingFaceTokenChanged(value: String) { settings.huggingFaceToken = value; _uiState.value = _uiState.value.copy(huggingFaceToken = value, message = null) }
   fun downloadModelChanged(value: String) { _uiState.value = _uiState.value.copy(downloadModel = value, message = null) }
   fun testPromptChanged(value: String) { _uiState.value = _uiState.value.copy(testPrompt = value, message = null) }
   fun systemPromptChanged(value: String) { _uiState.value = _uiState.value.copy(systemPrompt = value, message = null) }
@@ -89,7 +90,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
       "上限超過です（%.2fGB）。ローカル上限を上げてください".format(model.sizeBytes / 1_000_000_000.0)
     }
     if (model.source == ModelSource.HUGGING_FACE || model.source == ModelSource.LITERT_LM) {
-      registry.downloadFromUrl(model.downloadUrl, model.name, if (model.source == ModelSource.LITERT_LM) ".litertlm" else ".gguf") { downloaded, total ->
+      registry.downloadFromUrl(model.downloadUrl, model.name, if (model.source == ModelSource.LITERT_LM) ".litertlm" else ".gguf", settings.huggingFaceToken) { downloaded, total ->
         _uiState.value = _uiState.value.copy(downloadedBytes = downloaded, downloadTotalBytes = total)
       }
     } else {
@@ -198,6 +199,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
 data class MainScreenUiState(
   val endpoint: String,
   val apiKey: String = "",
+  val huggingFaceToken: String = "",
   val downloadModel: String = "",
   val selectedModel: String = "",
   val search: String = "",

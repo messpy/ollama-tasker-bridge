@@ -91,11 +91,11 @@ class OllamaRegistryClient(
     return target
   }
 
-  fun downloadFromUrl(url: String, model: String, fileExtension: String = ".gguf", onProgress: (Long, Long) -> Unit = { _, _ -> }): File {
+  fun downloadFromUrl(url: String, model: String, fileExtension: String = ".gguf", accessToken: String = "", onProgress: (Long, Long) -> Unit = { _, _ -> }): File {
     require(url.startsWith("https://huggingface.co/")) { "Hugging Face URLが不正です" }
     val resolvedUrl = if (url.contains("?")) url + "&download=true" else url + "?download=true"
     Log.d(logTag, "HF download URL=" + resolvedUrl)
-    return downloadHf(resolvedUrl, model, onProgress, fileExtension)
+    return downloadHf(resolvedUrl, model, onProgress, fileExtension, accessToken)
   }
 
   private fun hfUrlFor(model: String): String? = when (model.lowercase()) {
@@ -104,7 +104,7 @@ class OllamaRegistryClient(
     else -> null
   }
 
-  private fun downloadHf(url: String, model: String, onProgress: (Long, Long) -> Unit = { _, _ -> }, fileExtension: String = ".gguf"): File {
+  private fun downloadHf(url: String, model: String, onProgress: (Long, Long) -> Unit = { _, _ -> }, fileExtension: String = ".gguf", accessToken: String = ""): File {
     val target = if (fileExtension == ".litertlm") store.liteRtFileFor(model) else store.fileFor(model)
     val temp = File(target.path + ".download")
     val available = store.directory.usableSpace
@@ -114,6 +114,7 @@ class OllamaRegistryClient(
       instanceFollowRedirects = true
       setRequestProperty("Accept", "application/octet-stream")
       setRequestProperty("Accept-Encoding", "identity")
+      if (accessToken.isNotBlank()) setRequestProperty("Authorization", "Bearer " + accessToken.removePrefix("Bearer ").trim())
     }
     if (resumeBytes > 0L) connection.setRequestProperty("Range", "bytes=" + resumeBytes + "-")
     Log.d(logTag, "HF resume bytes=" + resumeBytes)
