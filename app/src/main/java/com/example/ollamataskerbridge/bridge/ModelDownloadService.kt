@@ -20,8 +20,8 @@ class ModelDownloadService : Service() {
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     createChannel()
-    startForeground(1001, notification())
     val model = intent?.getStringExtra(BridgeContract.EXTRA_MODEL).orEmpty()
+    startForeground(1001, notification(model))
     val downloadUrl = intent?.getStringExtra(BridgeContract.EXTRA_DOWNLOAD_URL).orEmpty()
     val downloadExtension = intent?.getStringExtra(BridgeContract.EXTRA_DOWNLOAD_EXTENSION).orEmpty().ifBlank { ".gguf" }
     val accessToken = intent?.getStringExtra(BridgeContract.EXTRA_ACCESS_TOKEN).orEmpty()
@@ -68,9 +68,9 @@ class ModelDownloadService : Service() {
     )
   }
 
-  private fun notification(): Notification = Notification.Builder(this, "model_download")
+  private fun notification(model: String): Notification = Notification.Builder(this, "model_download")
     .setContentTitle("Ollamaモデルを取得中")
-    .setContentText("Androidへモデルを保存しています")
+    .setContentText(if (model.isBlank()) "モデルを保存しています" else model + " を保存しています")
     .setSmallIcon(android.R.drawable.stat_sys_download)
     .setOngoing(true)
     .build()

@@ -32,6 +32,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 
 data class ChatMessage(val user: Boolean, val text: String, val model: String = "", val generating: Boolean = false, val error: Boolean = false, val retryPrompt: String = "")
@@ -93,7 +94,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 fun ChatScreen(viewModel: ChatViewModel = viewModel(), modifier: Modifier = Modifier, onOpenDrawer: () -> Unit = {}) {
   val state by viewModel.state.collectAsStateWithLifecycle(); val imageLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri -> uri?.let(viewModel::selectImage) }; val list = rememberLazyListState()
   var menu by remember { mutableStateOf(false) }; var models by remember { mutableStateOf(false) }; var tokens by remember { mutableStateOf(false) }; var temp by remember { mutableStateOf(false) }; var prompts by remember { mutableStateOf(false) }
-  LaunchedEffect(state.messages.size, state.messages.lastOrNull()?.text) { if (state.messages.isNotEmpty()) list.animateScrollToItem(state.messages.lastIndex) }
+  LaunchedEffect(state.messages.size, state.messages.lastOrNull()?.text, state.imageName) { if (state.messages.isNotEmpty()) { delay(80); list.scrollToItem(list.layoutInfo.totalItemsCount.coerceAtLeast(1) - 1) } }
   Column(modifier.fillMaxSize().padding(horizontal = 12.dp)) {
     Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) { IconButton(onClick = onOpenDrawer) { Text("☰") }; Text("テストチャット", style = MaterialTheme.typography.titleLarge); Spacer(Modifier.weight(1f)); Text(state.selectedModel.ifBlank { "モデル未選択" }, style = MaterialTheme.typography.labelSmall) }
     state.notice?.let { Text(it, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(bottom = 4.dp)) }

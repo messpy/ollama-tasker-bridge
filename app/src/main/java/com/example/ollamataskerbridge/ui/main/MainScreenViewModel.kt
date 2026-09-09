@@ -98,6 +98,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   fun deletePreset(id: String) { settings.deletePreset(id); _uiState.value = _uiState.value.copy(presets = settings.presets()) }
 
   fun downloadModel(name: String) { runRequest("モデルの取得を開始できません。HTTP応答・保存先・空き容量を確認してください。") {
+    _uiState.value = _uiState.value.copy(activeDownloadModel = name, message = name + " のダウンロードを開始しています")
     val maxBytes = settings.maxLocalModelSizeGb.toDouble().times(1000000000.0).toLong()
     val model = _uiState.value.models.firstOrNull { it.name == name } ?: error("モデルが一覧にありません")
     require(model.downloadable && !model.local) { "このモデルはCloud専用のため、Androidへダウンロードできません" }
@@ -232,6 +233,7 @@ data class MainScreenUiState(
   val loading: Boolean = false,
   val downloadedBytes: Long = 0L,
   val downloadTotalBytes: Long = 0L,
+  val activeDownloadModel: String? = null,
   val message: String? = null,
   val helpUrl: String? = null,
 )
