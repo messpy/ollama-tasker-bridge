@@ -3,6 +3,7 @@ package com.example.ollamataskerbridge.ui.chat
 import android.app.Application
 import android.net.Uri
 import android.graphics.BitmapFactory
+import android.os.SystemClock
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -35,7 +36,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 
-data class ChatMessage(val user: Boolean, val text: String, val model: String = "", val generating: Boolean = false, val error: Boolean = false, val retryPrompt: String = "")
+data class ChatMessage(val user: Boolean, val text: String, val model: String = "", val generating: Boolean = false, val error: Boolean = false, val retryPrompt: String = "", val elapsedMs: Long = 0L, val outputTokens: Int = 0)
 data class ChatUiState(val messages: List<ChatMessage> = emptyList(), val selectedModel: String = "", val maxTokens: String = "256", val temperature: String = "0.7", val systemPromptId: String = "", val systemPrompt: String = "", val presets: List<SystemPromptPreset> = emptyList(), val generating: Boolean = false, val input: String = "", val notice: String? = null, val imageBytes: ByteArray? = null, val imageName: String = "")
 
 class ChatViewModel(application: Application) : AndroidViewModel(application) {
@@ -80,14 +81,16 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val index = old.messages.size + 1
     _state.value = old.copy(input = "", imageBytes = null, imageName = "", generating = true, messages = old.messages + ChatMessage(true, prompt) + ChatMessage(false, "", old.selectedModel, true, retryPrompt = prompt))
     val request = GenerateRequest(Backend.LOCAL, old.selectedModel, prompt, old.systemPrompt.takeIf { it.isNotBlank() }, old.maxTokens.toIntOrNull()?.coerceAtLeast(1) ?: 256, old.temperature.toFloatOrNull()?.coerceIn(0f, 2f) ?: 0.7f, old.imageBytes)
+    val startedAt = SystemClock.elapsedRealtime()
     DiagnosticsLog.note("テストチャット生成開始: backend=" + request.backend + " model=" + request.model + " maxTokens=" + request.maxTokens + " temperature=" + request.temperature + " image=" + (request.imageBytes != null) + " promptChars=" + request.prompt.length)
     running = viewModelScope.launch {
-      try { DefaultInferenceRepository.generate(getApplication(), request).collect { event -> when (event) { is GenerateEvent.Token -> update(index, ChatMessage(false, _state.value.messages.getOrNull(index)?.text.orEmpty() + event.text, request.model, true, retryPrompt = prompt)); is GenerateEvent.Done -> update(index, ChatMessage(false, event.fullText, request.model, false, retryPrompt = prompt)); is GenerateEvent.Error -> { DiagnosticsLog.error(event.message); update(index, ChatMessage(false, event.message, request.model, false, true, prompt)) } } } }
+      try { DefaultInferenceRepository.generate(getApplication(), request).collect { event -> when (event) { is GenerateEvent.Token -> update(index, ChatMessage(false, _state.value.messages.getOrNull(index)?.text.orEmpty() + event.text, request.model, true, retryPrompt = prompt)); is GenerateEvent.Done -> { val elapsed = SystemClock.elapsedRealtime() - startedAt; update(index, ChatMessage(false, event.fullText, request.model, false, retryPrompt = prompt, elapsedMs = elapsed, outputTokens = estimateTokens(event.fullText))) }; is GenerateEvent.Error -> { DiagnosticsLog.error(event.message); update(index, ChatMessage(false, event.message, request.model, false, true, prompt)) } } } }
       catch (e: CancellationException) { DiagnosticsLog.warn("生成を中断しました"); update(index, ChatMessage(false, "生成を中断しました", request.model, error = true, retryPrompt = prompt)) }
       catch (e: Exception) { DiagnosticsLog.error(e.message ?: "生成に失敗しました"); update(index, ChatMessage(false, "生成に失敗しました: ${e.message ?: "モデルを確認してください"}", request.model, error = true, retryPrompt = prompt)) }
       finally { DiagnosticsLog.note("テストチャット生成終了: model=" + request.model); _state.value = _state.value.copy(generating = false) }
     }
   }
+  private fun estimateTokens(text: String): Int = (text.codePointCount(0, text.length) / 2).coerceAtLeast(1)
   private fun update(index: Int, message: ChatMessage) { _state.value = _state.value.copy(messages = _state.value.messages.toMutableList().also { if (index in it.indices) it[index] = message }) }
 }
 
@@ -125,5 +128,6 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), modifier: Modifier = Modi
 @Composable private fun NumberDialog(title: String, value: String, save: (String) -> Unit, dismiss: () -> Unit) { var input by remember(value) { mutableStateOf(value) }; AlertDialog(onDismissRequest = dismiss, title = { Text(title) }, text = { OutlinedTextField(input, { input = it }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)) }, confirmButton = { Button({ save(input) }) { Text("保存") } }, dismissButton = { OutlinedButton(dismiss) { Text("キャンセル") } }) }
 @Composable private fun MessageBubble(message: ChatMessage, retry: () -> Unit) {
   if (message.user) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Text(message.text, color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.background(MaterialTheme.colorScheme.primary, RoundedCornerShape(16.dp, 16.dp, 4.dp, 16.dp)).padding(12.dp)) }
-  else Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) { Surface(Modifier.size(34.dp), shape = CircleShape, color = MaterialTheme.colorScheme.secondaryContainer) { Box(contentAlignment = Alignment.Center) { Text("AI") } }; Column(Modifier.padding(start = 8.dp).weight(1f)) { Text(message.model, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary); Card(shape = RoundedCornerShape(4.dp, 16.dp, 16.dp, 16.dp), border = if (message.error) BorderStroke(1.dp, MaterialTheme.colorScheme.error) else null) { Text(if (message.generating) "•••" else message.text, color = if (message.error) MaterialTheme.colorScheme.error else Color.Unspecified, modifier = Modifier.padding(12.dp)) }; if (message.error) OutlinedButton(retry) { Text("再試行") } } }
+  else Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) { Surface(Modifier.size(34.dp), shape = CircleShape, color = MaterialTheme.colorScheme.secondaryContainer) { Box(contentAlignment = Alignment.Center) { Text("AI") } }; Column(Modifier.padding(start = 8.dp).weight(1f)) { Text(message.model, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary); Card(shape = RoundedCornerShape(4.dp, 16.dp, 16.dp, 16.dp), border = if (message.error) BorderStroke(1.dp, MaterialTheme.colorScheme.error) else null) { Text(if (message.generating) "•••" else message.text, color = if (message.error) MaterialTheme.colorScheme.error else Color.Unspecified, modifier = Modifier.padding(12.dp)) }; if (!message.generating && !message.error && message.elapsedMs > 0L) Text("推定 ${message.outputTokens} tokens・${message.elapsedMs / 1000f}秒", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+      if (message.error) OutlinedButton(retry) { Text("再試行") } } }
 }
