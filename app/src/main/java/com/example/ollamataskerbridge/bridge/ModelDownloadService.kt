@@ -18,11 +18,15 @@ import kotlinx.coroutines.launch
 
 class ModelDownloadService : Service() {
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+  private var activeModel: String = ""
+  private var activeJob: kotlinx.coroutines.Job? = null
   @Volatile private var lastProgressNotificationAt = 0L
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    if (intent?.action == BridgeContract.ACTION_CANCEL_DOWNLOAD) { cancelDownload(); return START_NOT_STICKY }
     createChannel()
     val model = intent?.getStringExtra(BridgeContract.EXTRA_MODEL).orEmpty()
+    activeModel = model
     startForeground(1001, notification(model))
     val downloadUrl = intent?.getStringExtra(BridgeContract.EXTRA_DOWNLOAD_URL).orEmpty()
     val downloadExtension = intent?.getStringExtra(BridgeContract.EXTRA_DOWNLOAD_EXTENSION).orEmpty().ifBlank { ".gguf" }
@@ -30,7 +34,7 @@ class ModelDownloadService : Service() {
     val replyAction = intent?.getStringExtra(BridgeContract.EXTRA_REPLY_ACTION)
       ?.takeIf(String::isNotBlank) ?: BridgeContract.ACTION_RESULT
     val replyPackage = intent?.getStringExtra(BridgeContract.EXTRA_REPLY_PACKAGE)
-    scope.launch {
+    activeJob = scope.launch {
       try {
         val client = OllamaRegistryClient(LocalModelStore(applicationContext))
         val file = if (downloadUrl.isNotBlank()) client.downloadFromUrl(downloadUrl, model, downloadExtension, accessToken) { downloaded, total -> updateProgress(model, downloaded, total) } else client.download(model)
@@ -43,6 +47,20 @@ class ModelDownloadService : Service() {
     }
     return START_NOT_STICKY
   }
+
+  private fun cancelDownload() {
+    activeJob?.cancel()
+    val store = LocalModelStore(applicationContext)
+    listOf(store.fileFor(activeModel), store.liteRtFileFor(activeModel)).forEach { target ->
+      val temp = java.io.File(target.path + ".download")
+      temp.delete()
+      java.io.File(temp.path + ".started").delete()
+    }
+    getSystemService(NotificationManager::class.java).cancel(1001)
+    stopForeground(STOP_FOREGROUND_REMOVE)
+    stopSelf()
+  }
+
 
   private fun sendReply(action: String, packageName: String?, ok: Boolean, result: String?, error: String?) {
     val reply = Intent(action).apply {

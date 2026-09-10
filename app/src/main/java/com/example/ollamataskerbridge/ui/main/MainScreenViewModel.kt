@@ -114,6 +114,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     ContextCompat.startForegroundService(getApplication(), intent)
     "バックグラウンドでモデル取得を開始しました。通知バーで進捗を確認できます"
   } }
+  fun cancelDownload() { getApplication<Application>().startService(Intent(getApplication(), ModelDownloadService::class.java).setAction(com.example.ollamataskerbridge.bridge.BridgeContract.ACTION_CANCEL_DOWNLOAD)); _uiState.value = _uiState.value.copy(activeDownloadModel = null, message = "ダウンロードをキャンセルしました") }
   fun loadModels() { runRequest("モデル一覧の取得に失敗しました。APIキーとネットワークを確認してください。") { loadModelsInternal(); "モデル一覧を更新しました" } }
   fun deleteModel(name: String) { runRequest("モデルの削除に失敗しました。") { ((localModels.fileFor(name).takeIf { it.isFile } ?: localModels.liteRtFileFor(name))).delete(); loadModelsInternal(); "削除しました: $name" } }
   fun runTest() {
