@@ -80,11 +80,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val index = old.messages.size + 1
     _state.value = old.copy(input = "", imageBytes = null, imageName = "", generating = true, messages = old.messages + ChatMessage(true, prompt) + ChatMessage(false, "", old.selectedModel, true, retryPrompt = prompt))
     val request = GenerateRequest(Backend.LOCAL, old.selectedModel, prompt, old.systemPrompt.takeIf { it.isNotBlank() }, old.maxTokens.toIntOrNull()?.coerceAtLeast(1) ?: 256, old.temperature.toFloatOrNull()?.coerceIn(0f, 2f) ?: 0.7f, old.imageBytes)
+    DiagnosticsLog.note("テストチャット生成開始: backend=" + request.backend + " model=" + request.model + " maxTokens=" + request.maxTokens + " temperature=" + request.temperature + " image=" + (request.imageBytes != null) + " promptChars=" + request.prompt.length)
     running = viewModelScope.launch {
       try { DefaultInferenceRepository.generate(getApplication(), request).collect { event -> when (event) { is GenerateEvent.Token -> update(index, ChatMessage(false, _state.value.messages.getOrNull(index)?.text.orEmpty() + event.text, request.model, true, retryPrompt = prompt)); is GenerateEvent.Done -> update(index, ChatMessage(false, event.fullText, request.model, false, retryPrompt = prompt)); is GenerateEvent.Error -> { DiagnosticsLog.error(event.message); update(index, ChatMessage(false, event.message, request.model, false, true, prompt)) } } } }
       catch (e: CancellationException) { DiagnosticsLog.warn("生成を中断しました"); update(index, ChatMessage(false, "生成を中断しました", request.model, error = true, retryPrompt = prompt)) }
       catch (e: Exception) { DiagnosticsLog.error(e.message ?: "生成に失敗しました"); update(index, ChatMessage(false, "生成に失敗しました: ${e.message ?: "モデルを確認してください"}", request.model, error = true, retryPrompt = prompt)) }
-      finally { _state.value = _state.value.copy(generating = false) }
+      finally { DiagnosticsLog.note("テストチャット生成終了: model=" + request.model); _state.value = _state.value.copy(generating = false) }
     }
   }
   private fun update(index: Int, message: ChatMessage) { _state.value = _state.value.copy(messages = _state.value.messages.toMutableList().also { if (index in it.indices) it[index] = message }) }
