@@ -23,6 +23,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -60,6 +61,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
       }
       .onFailure { _state.value = _state.value.copy(notice = "画像を読み込めませんでした: " + it.message) }
   }
+  fun clearImage() { _state.value = _state.value.copy(imageBytes = null, imageName = "", notice = null) }
   private fun localModels(): List<OllamaModel> = store.directory.listFiles().orEmpty().filter { it.extension == "gguf" || it.extension == "litertlm" }.map { file -> OllamaModel(file.nameWithoutExtension, false, true, file.length(), true, if (file.extension == "litertlm") ModelSource.LITERT_LM else ModelSource.HUGGING_FACE) }
   private fun availableModels(): List<OllamaModel> {
     val local = localModels()
@@ -115,7 +117,18 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), modifier: Modifier = Modi
   Column(modifier.fillMaxSize().padding(horizontal = 12.dp)) {
     Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) { IconButton(onClick = onOpenDrawer) { Text("☰") }; Text("テストチャット", style = MaterialTheme.typography.titleLarge); Spacer(Modifier.weight(1f)); Text(state.selectedModel.ifBlank { "モデル未選択" }, style = MaterialTheme.typography.labelSmall) }
     state.notice?.let { Text(it, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(bottom = 4.dp)) }
-    state.imageName.takeIf { it.isNotBlank() }?.let { name -> Text("画像: " + name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary) }
+    state.imageBytes?.let { bytes ->
+      val preview = remember(bytes) { BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap() }
+      preview?.let { bitmap ->
+        Box(Modifier.padding(bottom = 6.dp)) {
+          androidx.compose.foundation.Image(bitmap, contentDescription = "選択した画像", modifier = Modifier.size(84.dp).clip(RoundedCornerShape(10.dp)))
+          IconButton(
+            onClick = viewModel::clearImage,
+            modifier = Modifier.size(24.dp).align(Alignment.TopEnd).background(MaterialTheme.colorScheme.surface, CircleShape)
+          ) { Text("×", style = MaterialTheme.typography.labelSmall) }
+        }
+      }
+    }
     LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = list, verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 8.dp)) { items(state.messages) { MessageBubble(it, { viewModel.retry(it.retryPrompt) }) } }
     Box(Modifier.fillMaxWidth()) {
       DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
