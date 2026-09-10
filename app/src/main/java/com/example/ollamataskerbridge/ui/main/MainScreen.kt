@@ -1,6 +1,9 @@
 package com.example.ollamataskerbridge.ui.main
 
 import android.content.ClipData
+import android.app.ActivityManager
+import android.os.Build
+import android.os.StatFs
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
@@ -98,6 +101,10 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
   val clipboard = LocalClipboardManager.current
   val diagnosticsScope = rememberCoroutineScope()
   val context = LocalContext.current
+  val memoryInfo = ActivityManager.MemoryInfo().also { context.getSystemService(ActivityManager::class.java).getMemoryInfo(it) }
+  val totalRamGb = memoryInfo.totalMem / 1_000_000_000.0
+  val freeStorageGb = StatFs(context.filesDir.path).availableBytes / 1_000_000_000.0
+  val recommendedModelGb = minOf(totalRamGb * 0.5, (freeStorageGb - 1.0).coerceAtLeast(0.5)).coerceIn(0.5, 8.0)
   val requestDownload: (String) -> Unit = { name -> if (name.contains("gemma", ignoreCase = true) && !viewModel.gemmaTermsAccepted()) pendingGemmaDownload = name else viewModel.downloadModel(name) }
   val maxBytes = state.maxLocalModelSizeGb.toDoubleOrNull()?.takeIf { it >= 0 }?.times(1_000_000_000.0)?.toLong() ?: Long.MAX_VALUE
   val shownModels = state.models.filter { it.source in state.enabledSources }
@@ -134,6 +141,8 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
     }
     }
     if (section == MainSection.MODELS) {
+    Text("端末情報: RAM %.1fGB / 空き容量 %.1fGB / CPU %s".format(totalRamGb, freeStorageGb, Build.SUPPORTED_ABIS.firstOrNull() ?: "不明"), style = MaterialTheme.typography.bodySmall)
+    Text("推奨モデルサイズ: %.1fGB以下（目安）".format(recommendedModelGb), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
     Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) { OutlinedTextField(state.search, viewModel::searchChanged, Modifier.weight(1f), label = { Text("モデルを検索") }, singleLine = true); OutlinedButton(onClick = viewModel::loadModels, enabled = !state.loading) { Text("↻") } }
     Text("最大容量: ${state.maxLocalModelSizeGb} GB", style = MaterialTheme.typography.bodySmall)
     Slider(value = state.maxLocalModelSizeGb.toFloatOrNull()?.coerceIn(0f, 200f) ?: 15f, onValueChange = { viewModel.maxLocalModelSizeChanged("%.0f".format(it)) }, valueRange = 0f..200f, steps = 199)
