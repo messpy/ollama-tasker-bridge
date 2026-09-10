@@ -47,8 +47,15 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   private val _uiState = MutableStateFlow(MainScreenUiState(endpoint = settings.endpoint, apiKey = settings.apiKey, huggingFaceToken = settings.huggingFaceToken, minLocalModelSizeGb = settings.minLocalModelSizeGb.toString(), maxLocalModelSizeGb = settings.maxLocalModelSizeGb.toString(), systemPromptPresetId = initialPreset?.id.orEmpty(), systemPrompt = initialPreset?.body.orEmpty(), presets = initialPresets, models = initialModels, source = initialSource, enabledSources = settings.enabledModelSources))
   val uiState: StateFlow<MainScreenUiState> = _uiState.asStateFlow()
 
-  fun endpointChanged(value: String) { _uiState.value = _uiState.value.copy(endpoint = value, message = null) }
-  fun apiKeyChanged(value: String) { _uiState.value = _uiState.value.copy(apiKey = value, message = null) }
+  fun endpointChanged(value: String) {
+    settings.endpoint = value
+    _uiState.value = _uiState.value.copy(endpoint = value, message = null)
+  }
+  fun apiKeyChanged(value: String) {
+    // Persist immediately so re-entering the settings screen cannot restore an empty value.
+    settings.apiKey = value
+    _uiState.value = _uiState.value.copy(apiKey = value, message = null)
+  }
   fun huggingFaceTokenChanged(value: String) { settings.huggingFaceToken = value; _uiState.value = _uiState.value.copy(huggingFaceToken = value, message = null) }
   fun downloadModelChanged(value: String) { _uiState.value = _uiState.value.copy(downloadModel = value, message = null) }
   fun testPromptChanged(value: String) { _uiState.value = _uiState.value.copy(testPrompt = value, message = null) }
