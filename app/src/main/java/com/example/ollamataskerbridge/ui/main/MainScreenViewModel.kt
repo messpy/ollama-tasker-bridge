@@ -47,7 +47,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   private val initialSource = ModelSource.OLLAMA
   private val initialPresets = settings.presets()
   private val initialPreset = initialPresets.firstOrNull { it.id == settings.lastPresetId } ?: initialPresets.firstOrNull()
-  private val _uiState = MutableStateFlow(MainScreenUiState(endpoint = settings.endpoint, apiKey = settings.apiKey, huggingFaceToken = settings.huggingFaceToken, maxLocalModelSizeGb = settings.maxLocalModelSizeGb.toString(), systemPromptPresetId = initialPreset?.id.orEmpty(), systemPrompt = initialPreset?.body.orEmpty(), presets = initialPresets, models = initialModels, source = initialSource, enabledSources = settings.enabledModelSources))
+  private val _uiState = MutableStateFlow(MainScreenUiState(endpoint = settings.endpoint, apiKey = settings.apiKey, huggingFaceToken = settings.huggingFaceToken, minLocalModelSizeGb = settings.minLocalModelSizeGb.toString(), maxLocalModelSizeGb = settings.maxLocalModelSizeGb.toString(), systemPromptPresetId = initialPreset?.id.orEmpty(), systemPrompt = initialPreset?.body.orEmpty(), presets = initialPresets, models = initialModels, source = initialSource, enabledSources = settings.enabledModelSources))
   val uiState: StateFlow<MainScreenUiState> = _uiState.asStateFlow()
 
   fun endpointChanged(value: String) { _uiState.value = _uiState.value.copy(endpoint = value, message = null) }
@@ -77,7 +77,20 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     "local" -> _uiState.value.copy(downloadedOnly = false, showLocal = true, showCloud = false)
     else -> _uiState.value.copy(downloadedOnly = false, showLocal = true, showCloud = true)
   } }
-  fun maxLocalModelSizeChanged(value: String) { _uiState.value = _uiState.value.copy(maxLocalModelSizeGb = value); value.toFloatOrNull()?.takeIf { it >= 0f }?.let { settings.maxLocalModelSizeGb = it } }
+  fun minLocalModelSizeChanged(value: String) {
+    val min = value.toFloatOrNull()?.coerceAtLeast(0f) ?: return
+    val max = _uiState.value.maxLocalModelSizeGb.toFloatOrNull() ?: 15f
+    val adjusted = min.coerceAtMost(max)
+    settings.minLocalModelSizeGb = adjusted
+    _uiState.value = _uiState.value.copy(minLocalModelSizeGb = adjusted.toString())
+  }
+  fun maxLocalModelSizeChanged(value: String) {
+    val max = value.toFloatOrNull()?.coerceAtLeast(0f) ?: return
+    val min = _uiState.value.minLocalModelSizeGb.toFloatOrNull() ?: 0f
+    val adjusted = max.coerceAtLeast(min)
+    settings.maxLocalModelSizeGb = adjusted
+    _uiState.value = _uiState.value.copy(maxLocalModelSizeGb = adjusted.toString())
+  }
   fun maxTokensChanged(value: String) { _uiState.value = _uiState.value.copy(maxTokens = value) }
   fun temperatureChanged(value: String) { _uiState.value = _uiState.value.copy(temperature = value) }
   fun selectModel(name: String) { _uiState.value = _uiState.value.copy(selectedModel = name, downloadModel = name, message = null) }
@@ -220,6 +233,7 @@ data class MainScreenUiState(
   val showLocal: Boolean = true,
   val showCloud: Boolean = true,
   val downloadedOnly: Boolean = false,
+  val minLocalModelSizeGb: String = "0.0",
   val maxLocalModelSizeGb: String = "15.0",
   val systemPrompt: String = "",
   val systemPromptPresetId: String = "",

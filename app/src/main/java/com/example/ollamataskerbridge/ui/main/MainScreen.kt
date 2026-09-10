@@ -106,10 +106,11 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
   val freeStorageGb = StatFs(context.filesDir.path).availableBytes / 1_000_000_000.0
   val recommendedModelGb = minOf(totalRamGb * 0.5, (freeStorageGb - 1.0).coerceAtLeast(0.5)).coerceIn(0.5, 8.0)
   val requestDownload: (String) -> Unit = { name -> if (name.contains("gemma", ignoreCase = true) && !viewModel.gemmaTermsAccepted()) pendingGemmaDownload = name else viewModel.downloadModel(name) }
+  val minBytes = state.minLocalModelSizeGb.toDoubleOrNull()?.coerceAtLeast(0.0)?.times(1_000_000_000.0)?.toLong() ?: 0L
   val maxBytes = state.maxLocalModelSizeGb.toDoubleOrNull()?.takeIf { it >= 0 }?.times(1_000_000_000.0)?.toLong() ?: Long.MAX_VALUE
   val shownModels = state.models.filter { it.source in state.enabledSources }
     .filter { if (state.downloadedOnly) it.local else if (state.showLocal == state.showCloud) true else if (state.showCloud) it.isCloudOnly() else !it.isCloudOnly() }
-    .filter { it.remote || it.sizeBytes <= 0L || it.sizeBytes <= maxBytes }
+    .filter { it.remote || it.sizeBytes <= 0L || (it.sizeBytes >= minBytes && it.sizeBytes <= maxBytes) }
     .filter { kindFilter == "すべて" || it.modelKind() == kindFilter }
     .filter { state.search.isBlank() || it.name.contains(state.search, true) }
   Column(modifier.fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -144,6 +145,9 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
     Text("端末情報: RAM %.1fGB / 空き容量 %.1fGB / CPU %s".format(totalRamGb, freeStorageGb, Build.SUPPORTED_ABIS.firstOrNull() ?: "不明"), style = MaterialTheme.typography.bodySmall)
     Text("推奨モデルサイズ: %.1fGB以下（目安）".format(recommendedModelGb), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
     Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) { OutlinedTextField(state.search, viewModel::searchChanged, Modifier.weight(1f), label = { Text("モデルを検索") }, singleLine = true); OutlinedButton(onClick = viewModel::loadModels, enabled = !state.loading) { Text("↻") } }
+    Text("容量範囲: ${state.minLocalModelSizeGb}〜${state.maxLocalModelSizeGb} GB", style = MaterialTheme.typography.bodySmall)
+    Text("最小容量: ${state.minLocalModelSizeGb} GB", style = MaterialTheme.typography.bodySmall)
+    Slider(value = state.minLocalModelSizeGb.toFloatOrNull()?.coerceIn(0f, 200f) ?: 0f, onValueChange = { viewModel.minLocalModelSizeChanged("%.0f".format(it)) }, valueRange = 0f..200f, steps = 199)
     Text("最大容量: ${state.maxLocalModelSizeGb} GB", style = MaterialTheme.typography.bodySmall)
     Slider(value = state.maxLocalModelSizeGb.toFloatOrNull()?.coerceIn(0f, 200f) ?: 15f, onValueChange = { viewModel.maxLocalModelSizeChanged("%.0f".format(it)) }, valueRange = 0f..200f, steps = 199)
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
