@@ -41,6 +41,10 @@ class SettingsStore(context: Context) {
     get() = prefs.getString("model_source", "").orEmpty()
     set(value) { prefs.edit().putString("model_source", value).apply() }
 
+  var liteRtContextTokens: Int
+    get() = prefs.getInt("litert_context_tokens", 2048).coerceIn(512, 8192)
+    set(value) { prefs.edit().putInt("litert_context_tokens", value.coerceIn(512, 8192)).apply() }
+
   var enabledModelSources: Set<ModelSource>
     get() = prefs.getStringSet("enabled_model_sources", null)
       ?.mapNotNull { runCatching { ModelSource.valueOf(it) }.getOrNull() }

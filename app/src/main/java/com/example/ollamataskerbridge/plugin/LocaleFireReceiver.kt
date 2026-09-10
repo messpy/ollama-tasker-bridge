@@ -52,6 +52,8 @@ class LocaleFireReceiver : BroadcastReceiver() {
       values?.getString(LocalePluginContract.KEY_CUSTOM_SYSTEM)?.let { putString(InferenceJobService.KEY_CUSTOM_SYSTEM, it) }
       values?.getString(LocalePluginContract.KEY_PRESET_ID)?.let { putString(InferenceJobService.KEY_PRESET_ID, it) }
       values?.getString(LocalePluginContract.KEY_PLATFORM)?.let { putString(InferenceJobService.KEY_PLATFORM, it) }
+      values?.getInt(LocalePluginContract.KEY_MAX_TOKENS)?.let { putString(InferenceJobService.KEY_MAX_TOKENS, it.toString()) }
+      values?.getFloat(LocalePluginContract.KEY_TEMPERATURE)?.let { putString(InferenceJobService.KEY_TEMPERATURE, it.toString()) }
       original.getStringExtra(COMPLETION_INTENT)?.let { putString(InferenceJobService.KEY_COMPLETION, it) }
     }
     val result = context.getSystemService(JobScheduler::class.java).schedule(

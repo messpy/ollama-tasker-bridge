@@ -69,6 +69,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ollamataskerbridge.data.OllamaModel
 import com.example.ollamataskerbridge.diagnostics.DiagnosticsLog
 import com.example.ollamataskerbridge.data.ModelSource
+import com.example.ollamataskerbridge.data.SettingsStore
 import com.example.ollamataskerbridge.data.SystemPromptPreset
 import com.example.ollamataskerbridge.theme.MyApplicationTheme
 
@@ -107,6 +108,7 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
   val clipboard = LocalClipboardManager.current
   val diagnosticsScope = rememberCoroutineScope()
   val context = LocalContext.current
+  var contextTokens by remember { mutableStateOf(SettingsStore(context).liteRtContextTokens.toString()) }
   val memoryInfo = ActivityManager.MemoryInfo().also { context.getSystemService(ActivityManager::class.java).getMemoryInfo(it) }
   val totalRamGb = memoryInfo.totalMem / 1_000_000_000.0
   val freeStorageGb = StatFs(context.filesDir.path).availableBytes / 1_000_000_000.0
@@ -124,6 +126,7 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
     Text("本体アプリ", style = MaterialTheme.typography.titleLarge)
     if (section == MainSection.SETTINGS) {
     OutlinedTextField(state.endpoint, viewModel::endpointChanged, Modifier.fillMaxWidth(), label = { Text("Ollama URL") }, supportingText = { Text("Cloudは https://ollama.com") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri))
+    OutlinedTextField(contextTokens, { value -> contextTokens = value.filter(Char::isDigit); value.toIntOrNull()?.let { SettingsStore(context).liteRtContextTokens = it } }, Modifier.fillMaxWidth(), label = { Text("LiteRT-LMコンテキスト上限") }, supportingText = { Text("入力＋会話履歴の上限（512〜8192）。最大トークン数とは別設定です") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
     OutlinedTextField(
       value = state.apiKey,
       onValueChange = viewModel::apiKeyChanged,

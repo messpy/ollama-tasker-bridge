@@ -37,6 +37,8 @@ class InferenceJobService : JobService() {
       putString(LocalePluginContract.KEY_PRESET_ID, data.getString(KEY_PRESET_ID))
       putString(LocalePluginContract.KEY_BACKEND, data.getString(KEY_BACKEND))
       putString(LocalePluginContract.KEY_PLATFORM, data.getString(KEY_PLATFORM))
+      putString(LocalePluginContract.KEY_MAX_TOKENS, data.getString(KEY_MAX_TOKENS))
+      putString(LocalePluginContract.KEY_TEMPERATURE, data.getString(KEY_TEMPERATURE))
     })
     data.getString(KEY_COMPLETION)?.let { original.putExtra(COMPLETION_INTENT, it) }
     DiagnosticsLog.note("推論Job開始: model=" + model + " backend=" + data.getString(KEY_BACKEND).orEmpty())
@@ -49,10 +51,11 @@ class InferenceJobService : JobService() {
         }
         val settings = SettingsStore(applicationContext)
         val presetId = data.getString(KEY_PRESET_ID).orEmpty()
-        val system = if (presetId.isNotBlank() && presetId != "custom") settings.presets().firstOrNull { it.id == presetId }?.body
-          else data.getString(KEY_CUSTOM_SYSTEM).orEmpty().ifBlank { data.getString(KEY_SYSTEM) }
+        val system = if (presetId.isNotBlank() && presetId != "custom") settings.presets().firstOrNull { it.id == presetId }?.body else data.getString(KEY_CUSTOM_SYSTEM).orEmpty().ifBlank { data.getString(KEY_SYSTEM) }
+        val maxTokens = data.getString(KEY_MAX_TOKENS)?.toIntOrNull()?.coerceIn(1, 4096) ?: 256
+        val temperature = data.getString(KEY_TEMPERATURE)?.toFloatOrNull()?.coerceIn(0f, 2f) ?: 0.7f
         val result = DefaultInferenceRepository.generateText(applicationContext, GenerateRequest(
-          backend, data.getString(KEY_MODEL).orEmpty(), data.getString(KEY_PROMPT).orEmpty(), system
+          backend, data.getString(KEY_MODEL).orEmpty(), data.getString(KEY_PROMPT).orEmpty(), system, maxTokens, temperature
         ))
         val signaled = TaskerPlugin.Setting.signalFinish(applicationContext, original, TaskerPlugin.Setting.RESULT_CODE_OK,
           Bundle().apply { putString("%answer", result); putString("%ok", "true") })
@@ -86,6 +89,8 @@ class InferenceJobService : JobService() {
     const val KEY_CUSTOM_SYSTEM = "inference.job.custom_system"
     const val KEY_PRESET_ID = "inference.job.preset_id"
     const val KEY_PLATFORM = "inference.job.platform"
+    const val KEY_MAX_TOKENS = "inference.job.max_tokens"
+    const val KEY_TEMPERATURE = "inference.job.temperature"
     const val KEY_COMPLETION = "inference.job.completion"
     private const val COMPLETION_INTENT = "net.dinglisch.android.tasker.extras.COMPLETION_INTENT"
   }

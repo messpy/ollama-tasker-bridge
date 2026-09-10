@@ -60,11 +60,13 @@ class PluginSettingsActivity : ComponentActivity() {
           initialPlatform = resolvedPlatform,
           initialResultVariable = "%answer",
           initialBackend = initial?.getString(LocalePluginContract.KEY_BACKEND).orEmpty().ifBlank { if (local.any { it.name == initial?.getString(LocalePluginContract.KEY_MODEL).orEmpty() }) "local" else "ollama" },
+          initialMaxTokens = initial?.getInt(LocalePluginContract.KEY_MAX_TOKENS, 256) ?: 256,
+          initialTemperature = initial?.getFloat(LocalePluginContract.KEY_TEMPERATURE, 0.7f) ?: 0.7f,
           models = models,
           presets = settings.presets(),
           onOpenApp = { startActivity(Intent(this@PluginSettingsActivity, MainActivity::class.java)) },
           onCancel = { setResult(Activity.RESULT_CANCELED); finish() },
-          onSave = { model, prompt, presetId, customSystem, platform, resultVariable, backend ->
+          onSave = { model, prompt, presetId, customSystem, platform, resultVariable, backend, maxTokens, temperature ->
             settings.pluginPlatform = platform
             if (presetId.isNotBlank() && presetId != "custom") settings.lastPresetId = presetId
             val normalizedResult = "answer"
@@ -76,6 +78,8 @@ class PluginSettingsActivity : ComponentActivity() {
               putString(LocalePluginContract.KEY_SYSTEM, customSystem)
               putString(LocalePluginContract.KEY_PLATFORM, platform)
               putString(LocalePluginContract.KEY_BACKEND, backend)
+              putInt(LocalePluginContract.KEY_MAX_TOKENS, maxTokens)
+              putFloat(LocalePluginContract.KEY_TEMPERATURE, temperature)
               putString(LocalePluginContract.KEY_RESULT_VARIABLE, normalizedResult)
             }
             val resultIntent = Intent().putExtra(LocalePluginContract.EXTRA_BUNDLE, values)
@@ -117,11 +121,13 @@ private fun PluginSettingsContent(
   initialPlatform: String,
   initialResultVariable: String,
   initialBackend: String,
+  initialMaxTokens: Int,
+  initialTemperature: Float,
   models: List<OllamaModel>,
   presets: List<SystemPromptPreset>,
   onOpenApp: () -> Unit,
   onCancel: () -> Unit,
-  onSave: (String, String, String, String, String, String, String) -> Unit,
+  onSave: (String, String, String, String, String, String, String, Int, Float) -> Unit,
 ) {
   var platform by remember { mutableStateOf(initialPlatform.ifBlank { "tasker" }) }
   var model by remember { mutableStateOf(initialModel) }
@@ -132,6 +138,8 @@ private fun PluginSettingsContent(
   var presetId by remember { mutableStateOf(initialPresetId) }
   var customSystem by remember { mutableStateOf(initialCustomSystem) }
   var resultVariable by remember { mutableStateOf(initialResultVariable) }
+  var maxTokens by remember { mutableStateOf(initialMaxTokens.toString()) }
+  var temperature by remember { mutableStateOf(initialTemperature.toString()) }
   var presetMenu by remember { mutableStateOf(false) }
   var showVariables by remember { mutableStateOf(false) }
   val selectedPreset = presets.firstOrNull { it.id == presetId }
@@ -164,6 +172,10 @@ private fun PluginSettingsContent(
     }
     Text(if (backend == "local") "実行先: ローカル" else "実行先: Ollama Cloud")
     OutlinedTextField(prompt, { prompt = it }, Modifier.fillMaxWidth(), label = { Text("プロンプト") }, minLines = 2)
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+      OutlinedTextField(maxTokens, { maxTokens = it.filter(Char::isDigit) }, Modifier.weight(1f), label = { Text("最大トークン数") }, singleLine = true)
+      OutlinedTextField(temperature, { temperature = it }, Modifier.weight(1f), label = { Text("Temperature") }, singleLine = true)
+    }
     Text("入力例: %prompt こんにちは")
     if (platform == "macrodroid") OutlinedButton(onClick = { showVariables = true }, modifier = Modifier.fillMaxWidth()) { Text("MacroDroid用変数を表示") }
     Row {
@@ -189,6 +201,6 @@ private fun PluginSettingsContent(
       } },
       confirmButton = { Button(onClick = { showVariables = false }) { Text("閉じる") } },
     )
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { OutlinedButton(onClick = onCancel) { Text("キャンセル") }; Button(onClick = { onSave(model.trim(), prompt, presetId, customSystem, platform, resultVariable, backend) }, enabled = model.isNotBlank() && prompt.isNotBlank()) { Text("保存") } }
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { OutlinedButton(onClick = onCancel) { Text("キャンセル") }; Button(onClick = { onSave(model.trim(), prompt, presetId, customSystem, platform, resultVariable, backend, maxTokens.toIntOrNull()?.coerceIn(1, 4096) ?: 256, temperature.toFloatOrNull()?.coerceIn(0f, 2f) ?: 0.7f) }, enabled = model.isNotBlank() && prompt.isNotBlank()) { Text("保存") } }
   }
 }
