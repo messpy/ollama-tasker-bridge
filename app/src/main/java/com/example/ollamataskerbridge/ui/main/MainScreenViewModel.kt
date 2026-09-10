@@ -105,6 +105,13 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   fun maxTokensChanged(value: String) { _uiState.value = _uiState.value.copy(maxTokens = value) }
   fun temperatureChanged(value: String) { _uiState.value = _uiState.value.copy(temperature = value) }
   fun selectModel(name: String) { _uiState.value = _uiState.value.copy(selectedModel = name, downloadModel = name, message = null) }
+  fun refreshInstalledModels() {
+    val installed = installedModels()
+    val installedByName = installed.associateBy { it.name }
+    val merged = (_uiState.value.models.map { item -> item.copy(local = installedByName[item.name] != null, sizeBytes = installedByName[item.name]?.sizeBytes ?: item.sizeBytes) } + installed.filter { it.name !in _uiState.value.models.map { model -> model.name } }).distinctBy { it.name }
+    settings.saveCachedModels(merged)
+    _uiState.value = _uiState.value.copy(models = merged)
+  }
   fun sourceChanged(source: ModelSource) { settings.modelSource = source.name; _uiState.value = _uiState.value.copy(source = source, search = "", showLocal = true, showCloud = true, message = null) }
   fun sourceFilterChanged(source: ModelSource?) {
     val next = source?.let { setOf(it) } ?: ModelSource.values().toSet()

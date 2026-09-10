@@ -46,6 +46,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -101,6 +103,7 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
   var sourceFilterMenu by remember { mutableStateOf(false) }
   var kindFilter by remember { mutableStateOf("すべて") }
   var sourceMenu by remember { mutableStateOf(false) }
+  var modelTab by remember { mutableStateOf(0) }
   val clipboard = LocalClipboardManager.current
   val diagnosticsScope = rememberCoroutineScope()
   val context = LocalContext.current
@@ -111,7 +114,7 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
   val requestDownload: (String) -> Unit = { name -> if (name.contains("gemma", ignoreCase = true) && !viewModel.gemmaTermsAccepted()) pendingGemmaDownload = name else viewModel.downloadModel(name) }
   val minBytes = state.minLocalModelSizeGb.toDoubleOrNull()?.coerceAtLeast(0.0)?.times(1_000_000_000.0)?.toLong() ?: 0L
   val maxBytes = state.maxLocalModelSizeGb.toDoubleOrNull()?.takeIf { it >= 0 }?.times(1_000_000_000.0)?.toLong() ?: Long.MAX_VALUE
-  val shownModels = state.models.filter { it.source in state.enabledSources }
+  val shownModels = state.models.filter { it.source in state.enabledSources }.filter { if (modelTab == 0) !it.local else it.local }
     .filter { if (state.downloadedOnly) it.local else if (state.showLocal == state.showCloud) true else if (state.showCloud) it.isCloudOnly() else !it.isCloudOnly() }
     .filter { it.remote || it.sizeBytes <= 0L || (it.sizeBytes >= minBytes && it.sizeBytes <= maxBytes) }
     .filter { kindFilter == "すべて" || it.modelKind() == kindFilter }
@@ -145,6 +148,7 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
     }
     }
     if (section == MainSection.MODELS) {
+    TabRow(selectedTabIndex = modelTab, modifier = Modifier.fillMaxWidth()) { Tab(selected = modelTab == 0, onClick = { modelTab = 0; viewModel.refreshInstalledModels() }, text = { Text("オンラインモデル") }); Tab(selected = modelTab == 1, onClick = { modelTab = 1; viewModel.refreshInstalledModels() }, text = { Text("ダウンロード済み") }) }
     Text("端末情報: RAM %.1fGB / 空き容量 %.1fGB / CPU %s".format(totalRamGb, freeStorageGb, Build.SUPPORTED_ABIS.firstOrNull() ?: "不明"), style = MaterialTheme.typography.bodySmall)
     Text("推奨モデルサイズ: %.1fGB以下（目安）".format(recommendedModelGb), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
     Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) { OutlinedTextField(state.search, viewModel::searchChanged, Modifier.weight(1f), label = { Text("モデルを検索") }, singleLine = true); OutlinedButton(onClick = viewModel::loadModels, enabled = !state.loading) { Text("↻") } }
@@ -155,7 +159,6 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
         OutlinedButton(onClick = { sourceFilterMenu = true }) { Text(if (state.enabledSources.size == ModelSource.values().size) "サービス: すべて" else "サービス: ${state.enabledSources.firstOrNull()?.displayName() ?: "なし"}") }
         DropdownMenu(expanded = sourceFilterMenu, onDismissRequest = { sourceFilterMenu = false }) { DropdownMenuItem(text = { Text("すべて") }, onClick = { viewModel.sourceFilterChanged(null); sourceFilterMenu = false }); ModelSource.values().forEach { source -> DropdownMenuItem(text = { Text(source.displayName()) }, onClick = { viewModel.sourceFilterChanged(source); sourceFilterMenu = false }) } }
       }
-      Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) { Checkbox(checked = state.downloadedOnly, onCheckedChange = viewModel::downloadedOnlyChanged); Text("DL済") }
       Box {
         OutlinedButton(onClick = { kindMenu = true }) { Text("種類: $kindFilter") }
         DropdownMenu(expanded = kindMenu, onDismissRequest = { kindMenu = false }) { listOf("すべて", "LLM", "VLM", "Audio-Language Model", "その他").forEach { kind -> DropdownMenuItem(text = { Text(kind) }, onClick = { kindFilter = kind; kindMenu = false }) } }
