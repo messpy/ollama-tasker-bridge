@@ -22,6 +22,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -187,7 +188,7 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
     }
     OutlinedButton(onClick = { showPresetDialog = true }) { Text("新しいプリセットを追加") }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-      TextButton(onClick = {}, modifier = Modifier.pointerInput(Unit) { detectTapGestures(onTap = { diagnosticsScope.launch { clipboard.setText(AnnotatedString(DiagnosticsLog.copyableSnapshot())) } }, onLongPress = { DiagnosticsLog.clear(); Toast.makeText(context, "診断ログをクリアしました", Toast.LENGTH_SHORT).show() }) }) { Text("ログをコピー（長押しでクリア）", fontSize = 11.sp) }
+      Box(Modifier.combinedClickable(onClick = { diagnosticsScope.launch { clipboard.setText(AnnotatedString(DiagnosticsLog.copyableSnapshot())) } }, onLongClick = { DiagnosticsLog.clear(); Toast.makeText(context, "診断ログをクリアしました", Toast.LENGTH_SHORT).show() }).padding(8.dp)) { Text("ログをコピー（長押しでクリア）", fontSize = 11.sp) }
     }
     }
   }
