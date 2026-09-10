@@ -4,10 +4,12 @@ import android.app.Application
 import android.net.Uri
 import android.graphics.BitmapFactory
 import android.os.SystemClock
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.CircleShape
@@ -16,6 +18,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.text.KeyboardOptions
@@ -128,7 +133,8 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), modifier: Modifier = Modi
 
 @Composable private fun NumberDialog(title: String, value: String, save: (String) -> Unit, dismiss: () -> Unit) { var input by remember(value) { mutableStateOf(value) }; AlertDialog(onDismissRequest = dismiss, title = { Text(title) }, text = { OutlinedTextField(input, { input = it }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)) }, confirmButton = { Button({ save(input) }) { Text("保存") } }, dismissButton = { OutlinedButton(dismiss) { Text("キャンセル") } }) }
 @Composable private fun MessageBubble(message: ChatMessage, retry: () -> Unit) {
-  if (message.user) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Text(message.text, color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.background(MaterialTheme.colorScheme.primary, RoundedCornerShape(16.dp, 16.dp, 4.dp, 16.dp)).padding(12.dp)) }
-  else Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) { Surface(Modifier.size(34.dp), shape = CircleShape, color = MaterialTheme.colorScheme.secondaryContainer) { Box(contentAlignment = Alignment.Center) { Text("AI") } }; Column(Modifier.padding(start = 8.dp).weight(1f)) { Text(message.model, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary); Card(shape = RoundedCornerShape(4.dp, 16.dp, 16.dp, 16.dp), border = if (message.error) BorderStroke(1.dp, MaterialTheme.colorScheme.error) else null) { Text(if (message.generating) "•••" else message.text, color = if (message.error) MaterialTheme.colorScheme.error else Color.Unspecified, modifier = Modifier.padding(12.dp)) }; if (!message.generating && !message.error && message.elapsedMs > 0L) Text("${if (message.tokenCountEstimated) "推定 " else ""}入力 ${message.inputTokens}・出力 ${message.outputTokens}・合計 ${message.inputTokens + message.outputTokens} tokens・${message.elapsedMs.div(1000f)}秒", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+  val clipboard = LocalClipboardManager.current; val context = LocalContext.current; val copyText = { if (message.text.isNotBlank() && !message.generating) { clipboard.setText(AnnotatedString(message.text)); Toast.makeText(context, "コピーしました", Toast.LENGTH_SHORT).show() } }
+  if (message.user) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Text(message.text, color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.background(MaterialTheme.colorScheme.primary, RoundedCornerShape(16.dp, 16.dp, 4.dp, 16.dp)).combinedClickable(onClick = {}, onLongClick = copyText).padding(12.dp)) }
+  else Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) { Surface(Modifier.size(34.dp), shape = CircleShape, color = MaterialTheme.colorScheme.secondaryContainer) { Box(contentAlignment = Alignment.Center) { Text("AI") } }; Column(Modifier.padding(start = 8.dp).weight(1f)) { Text(message.model, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary); Card(shape = RoundedCornerShape(4.dp, 16.dp, 16.dp, 16.dp), border = if (message.error) BorderStroke(1.dp, MaterialTheme.colorScheme.error) else null) { Text(if (message.generating) "•••" else message.text, color = if (message.error) MaterialTheme.colorScheme.error else Color.Unspecified, modifier = Modifier.combinedClickable(onClick = {}, onLongClick = copyText).padding(12.dp)) }; if (!message.generating && !message.error && message.elapsedMs > 0L) Text("${if (message.tokenCountEstimated) "推定 " else ""}入力 ${message.inputTokens}・出力 ${message.outputTokens}・合計 ${message.inputTokens + message.outputTokens} tokens・${message.elapsedMs.div(1000f)}秒", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
       if (message.error) OutlinedButton(retry) { Text("再試行") } } }
 }
