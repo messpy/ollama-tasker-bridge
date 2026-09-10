@@ -1,6 +1,7 @@
 package com.example.ollamataskerbridge.diagnostics
 
 import android.util.Log
+import android.os.Process
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -41,7 +42,7 @@ object DiagnosticsLog {
   suspend fun copyableSnapshot(): String = withContext(Dispatchers.IO) {
     val appEntries = synchronized(this@DiagnosticsLog) { entries.toList() }
     val logcat = runCatching<String> {
-      val process = ProcessBuilder("logcat", "-d", "-v", "threadtime", "*:W", "-t", "400").redirectErrorStream(true).start()
+      val process = ProcessBuilder("logcat", "-d", "--pid=" + Process.myPid(), "-v", "threadtime", "-t", "400").redirectErrorStream(true).start()
       val output = process.inputStream.bufferedReader().use { it.readText() }
       process.waitFor()
       output.lineSequence()
