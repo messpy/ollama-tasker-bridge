@@ -13,6 +13,8 @@ import com.google.ai.edge.litertlm.SamplerConfig
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -64,7 +66,7 @@ object LiteRtLmInferenceBridge {
     } finally {
       InferenceNotification.finish(context)
     }
-  }
+  }.flowOn(Dispatchers.Default)
 
   private fun closeLocked() {
     runCatching { conversation?.close() }
