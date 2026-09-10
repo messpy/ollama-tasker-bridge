@@ -68,7 +68,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val localNames = local.map { it.name }.toSet()
     return (settings.cachedModels() + local).distinctBy { it.name }.map { it.copy(local = it.local || it.name in localNames) }
   }
-  private val _state = MutableStateFlow(ChatUiState(selectedModel = availableModels().firstOrNull()?.name.orEmpty(), presets = settings.presets(), systemPromptId = settings.lastPresetId, systemPrompt = settings.presets().firstOrNull { it.id == settings.lastPresetId }?.body.orEmpty()))
+  private val _state = MutableStateFlow(ChatUiState(selectedModel = (availableModels().firstOrNull { it.local } ?: availableModels().firstOrNull())?.name.orEmpty(), presets = settings.presets(), systemPromptId = settings.lastPresetId, systemPrompt = settings.presets().firstOrNull { it.id == settings.lastPresetId }?.body.orEmpty()))
   val state = _state.asStateFlow()
   fun models() = availableModels()
   private fun Boolean?.orFalse() = this == true
@@ -145,10 +145,16 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), modifier: Modifier = Modi
       }
     }
   }
-  if (models) AlertDialog(onDismissRequest = { models = false }, title = { Text("ダウンロード済みモデル") }, text = { Column { viewModel.models().forEach { item -> OutlinedButton({  viewModel.selectModel(item.name); models = false }, Modifier.fillMaxWidth().padding(2.dp)) { Text(item.name + if (item.supportsVision()) " 👁️" else "") } } } }, confirmButton = { Button({ models = false }) { Text("閉じる") } })
+  if (models) ModelPickerDialog(viewModel, { models = false })
   if (tokens) NumberDialog("最大トークン数", state.maxTokens, { viewModel.maxTokens(it); tokens = false }, { tokens = false })
   if (temp) NumberDialog("Temperature", state.temperature, { viewModel.temperature(it); temp = false }, { temp = false })
   if (prompts) AlertDialog(onDismissRequest = { prompts = false }, title = { Text("システムプロンプト") }, text = { Column { OutlinedButton({ viewModel.selectPreset(null); prompts = false }, Modifier.fillMaxWidth()) { Text("なし") }; state.presets.forEach { item -> OutlinedButton({ viewModel.selectPreset(item); prompts = false }, Modifier.fillMaxWidth()) { Text(item.name) } } } }, confirmButton = { Button({ prompts = false }) { Text("閉じる") } })
+}
+
+@Composable private fun ModelPickerDialog(viewModel: ChatViewModel, dismiss: () -> Unit) {
+  var showCloud by remember { mutableStateOf(false) }
+  val candidates = viewModel.models().filter { it.local || (showCloud && it.source == ModelSource.OLLAMA && !it.local) }
+  AlertDialog(onDismissRequest = dismiss, title = { Text("モデルを選択") }, text = { Column { Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(showCloud, { showCloud = it }); Text("Cloudモデルを表示") }; if (candidates.isEmpty()) Text(if (showCloud) "選択できるモデルがありません" else "ダウンロード済みモデルがありません") else candidates.forEach { item -> OutlinedButton({ viewModel.selectModel(item.name); dismiss() }, Modifier.fillMaxWidth().padding(2.dp)) { Text(buildString { append(item.name); if (item.remote && !item.local) append(" ☁"); if (item.supportsVision()) append(" 👁️") }) } } } }, confirmButton = { Button(dismiss) { Text("閉じる") } })
 }
 
 @Composable private fun NumberDialog(title: String, value: String, save: (String) -> Unit, dismiss: () -> Unit) { var input by remember(value) { mutableStateOf(value) }; AlertDialog(onDismissRequest = dismiss, title = { Text(title) }, text = { OutlinedTextField(input, { input = it }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)) }, confirmButton = { Button({ save(input) }) { Text("保存") } }, dismissButton = { OutlinedButton(dismiss) { Text("キャンセル") } }) }
