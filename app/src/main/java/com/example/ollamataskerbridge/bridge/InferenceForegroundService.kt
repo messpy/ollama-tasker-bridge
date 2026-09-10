@@ -9,6 +9,7 @@ import android.os.Bundle;
 import android.os.IBinder;
 import android.util.Log;
 import com.example.ollamataskerbridge.data.SettingsStore;
+import com.example.ollamataskerbridge.diagnostics.DiagnosticsLog;
 import com.example.ollamataskerbridge.plugin.LocalePluginContract;
 import net.dinglisch.android.tasker.TaskerPlugin
 import kotlinx.coroutines.CoroutineScope;
@@ -24,17 +25,21 @@ class InferenceForegroundService : Service() {
     createChannel();
     startForeground(NOTIFICATION_ID, notification(intent?.getStringExtra(BridgeContract.EXTRA_MODEL).orEmpty()));
     Log.i(TAG, "推論Service開始: origin=" + intent?.getStringExtra(EXTRA_ORIGIN) + " model=" + intent?.getStringExtra(BridgeContract.EXTRA_MODEL))
+    DiagnosticsLog.note("推論Service開始: origin=" + intent?.getStringExtra(EXTRA_ORIGIN) + " model=" + intent?.getStringExtra(BridgeContract.EXTRA_MODEL))
     scope.launch {
       try {
         if (intent?.getStringExtra(EXTRA_ORIGIN) == ORIGIN_LOCALE) runLocale(intent) else runBridge(intent ?: Intent());
       } catch (error: Exception) {
         val message = error.message ?: "推論に失敗しました";
+        Log.e(TAG, "推論Service失敗: " + message, error)
+        DiagnosticsLog.error("推論Service失敗: " + message)
         val action = intent?.getStringExtra(BridgeContract.EXTRA_REPLY_ACTION)?.takeIf(String::isNotBlank) ?: BridgeContract.ACTION_RESULT;
         sendReply(action, intent?.getStringExtra(BridgeContract.EXTRA_REPLY_PACKAGE), false, null, message);
         if (intent?.getStringExtra(EXTRA_ORIGIN) == ORIGIN_LOCALE) {
           val variables = Bundle().apply { putString("%error", message); putString("%ok", "false") };
           val signaled = TaskerPlugin.Setting.signalFinish(applicationContext, intent, TaskerPlugin.Setting.RESULT_CODE_FAILED, variables);
           Log.i(TAG, "signalFinish失敗通知: signaled=" + signaled + " errorChars=" + message.length)
+          DiagnosticsLog.note("signalFinish失敗通知: signaled=" + signaled + " errorChars=" + message.length)
         }
       } finally {
         stopSelf(startId);
@@ -57,6 +62,7 @@ class InferenceForegroundService : Service() {
     );
     val result = DefaultInferenceRepository.generateText(applicationContext, request);
     Log.i(TAG, "LLM生成成功: backend=" + backend + " resultChars=" + result.length)
+    DiagnosticsLog.note("LLM生成成功: backend=" + backend + " resultChars=" + result.length)
     sendReply(intent.getStringExtra(BridgeContract.EXTRA_REPLY_ACTION)?.takeIf(String::isNotBlank) ?: BridgeContract.ACTION_RESULT,
       intent.getStringExtra(BridgeContract.EXTRA_REPLY_PACKAGE), true, result, null);
   }
@@ -77,6 +83,7 @@ class InferenceForegroundService : Service() {
     val request = GenerateRequest(backend, model, values?.getString(LocalePluginContract.KEY_PROMPT).orEmpty(), system);
     val result = DefaultInferenceRepository.generateText(applicationContext, request);
     Log.i(TAG, "LLM生成成功: backend=" + backend + " resultChars=" + result.length)
+    DiagnosticsLog.note("LLM生成成功: backend=" + backend + " resultChars=" + result.length)
     val extras = Bundle().apply {
       putBoolean(BridgeContract.EXTRA_OK, true);
       putString(BridgeContract.EXTRA_REQUEST_ID, intent.getStringExtra(BridgeContract.EXTRA_REQUEST_ID));
@@ -90,6 +97,7 @@ class InferenceForegroundService : Service() {
     val variables = Bundle().apply { putString("%answer", result); putString("%ok", "true") };
     val signaled = TaskerPlugin.Setting.signalFinish(applicationContext, intent, TaskerPlugin.Setting.RESULT_CODE_OK, variables);
     Log.i(TAG, "signalFinish完了通知: signaled=" + signaled + " %answer文字数=" + result.length)
+    DiagnosticsLog.note("signalFinish完了通知: signaled=" + signaled + " %answer文字数=" + result.length)
     if (values?.getString(LocalePluginContract.KEY_PLATFORM) == "macrodroid") {
       sendBroadcast(Intent(BridgeContract.ACTION_MACRODROID_RESULT).putExtras(extras).putExtra(BridgeContract.EXTRA_MODEL, model));
     }
