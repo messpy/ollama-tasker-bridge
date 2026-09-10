@@ -207,10 +207,11 @@ private fun ModelRow(model: OllamaModel, loading: Boolean, selected: Boolean, on
       Column(Modifier.weight(1f)) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
           Text(model.name)
+          Text(model.source.serviceEmoji(), style = MaterialTheme.typography.labelSmall)
           if (model.supportsVision()) Text("👁️", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
           if (model.isCloudOnly()) Text("☁", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-          else if (model.source == ModelSource.LITERT_LM) Text("LiteRT-LM", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
-          else Text("ローカル候補", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+
+
         }
         Text(if (model.sizeBytes > 0) "%.2f GB".format(model.sizeBytes / 1_000_000_000.0) else "サイズ不明", style = MaterialTheme.typography.bodySmall)
       }
@@ -226,10 +227,12 @@ private fun PresetDialog(initial: SystemPromptPreset?, onDismiss: () -> Unit, on
   AlertDialog(onDismissRequest = onDismiss, title = { Text(if (initial == null) "新しいプリセット" else "プリセットを編集") }, text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedTextField(name, { name = it }, label = { Text("名前") }); OutlinedTextField(body, { body = it }, label = { Text("本文") }, minLines = 5) } }, confirmButton = { TextButton(onClick = { onSave(name.trim(), body) }, enabled = name.isNotBlank() && body.isNotBlank()) { Text("保存") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("キャンセル") } })
 }
 
+private fun ModelSource.serviceEmoji(): String = when (this) { ModelSource.OLLAMA -> "🦙"; ModelSource.HUGGING_FACE -> "🤗"; ModelSource.LITERT_LM -> "🌞" }
+
 private fun ModelSource.displayName(): String = when (this) {
-  ModelSource.OLLAMA -> "Ollama"
-  ModelSource.HUGGING_FACE -> "Hugging Face"
-  ModelSource.LITERT_LM -> "LiteRT-LM"
+  ModelSource.OLLAMA -> "🦙 Ollama"
+  ModelSource.HUGGING_FACE -> "🤗 Hugging Face"
+  ModelSource.LITERT_LM -> "🌞 LiteRT-LM"
 }
 
 @Composable
