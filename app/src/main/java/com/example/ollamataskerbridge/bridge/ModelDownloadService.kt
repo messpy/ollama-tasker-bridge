@@ -7,6 +7,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.os.IBinder
+import android.os.SystemClock
 import com.example.ollamataskerbridge.data.LocalModelStore
 import com.example.ollamataskerbridge.data.OllamaRegistryClient
 import kotlinx.coroutines.CoroutineScope
@@ -17,6 +18,7 @@ import kotlinx.coroutines.launch
 
 class ModelDownloadService : Service() {
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+  @Volatile private var lastProgressNotificationAt = 0L
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     createChannel()
@@ -53,6 +55,9 @@ class ModelDownloadService : Service() {
   }
 
   private fun updateProgress(model: String, downloaded: Long, total: Long) {
+    val now = SystemClock.elapsedRealtime()
+    if (now - lastProgressNotificationAt < 1000L) return
+    lastProgressNotificationAt = now
     val builder = Notification.Builder(this, "model_download")
       .setContentTitle("Ollamaモデルを取得中")
       .setSmallIcon(android.R.drawable.stat_sys_download)
