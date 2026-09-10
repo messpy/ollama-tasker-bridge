@@ -88,6 +88,13 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     settings.maxLocalModelSizeGb = adjusted
     _uiState.value = _uiState.value.copy(maxLocalModelSizeGb = adjusted.toString())
   }
+  fun modelSizeRangeChanged(minValue: Float, maxValue: Float) {
+    val min = minValue.coerceIn(0f, 200f)
+    val max = maxValue.coerceIn(min, 200f)
+    settings.minLocalModelSizeGb = min
+    settings.maxLocalModelSizeGb = max
+    _uiState.value = _uiState.value.copy(minLocalModelSizeGb = min.toString(), maxLocalModelSizeGb = max.toString())
+  }
   fun maxTokensChanged(value: String) { _uiState.value = _uiState.value.copy(maxTokens = value) }
   fun temperatureChanged(value: String) { _uiState.value = _uiState.value.copy(temperature = value) }
   fun selectModel(name: String) { _uiState.value = _uiState.value.copy(selectedModel = name, downloadModel = name, message = null) }

@@ -38,6 +38,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Slider
+import androidx.compose.material3.RangeSlider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -146,10 +147,7 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
     Text("推奨モデルサイズ: %.1fGB以下（目安）".format(recommendedModelGb), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
     Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) { OutlinedTextField(state.search, viewModel::searchChanged, Modifier.weight(1f), label = { Text("モデルを検索") }, singleLine = true); OutlinedButton(onClick = viewModel::loadModels, enabled = !state.loading) { Text("↻") } }
     Text("容量範囲: ${state.minLocalModelSizeGb}〜${state.maxLocalModelSizeGb} GB", style = MaterialTheme.typography.bodySmall)
-    Text("最小容量: ${state.minLocalModelSizeGb} GB", style = MaterialTheme.typography.bodySmall)
-    Slider(value = state.minLocalModelSizeGb.toFloatOrNull()?.coerceIn(0f, 200f) ?: 0f, onValueChange = { viewModel.minLocalModelSizeChanged("%.0f".format(it)) }, valueRange = 0f..200f, steps = 199)
-    Text("最大容量: ${state.maxLocalModelSizeGb} GB", style = MaterialTheme.typography.bodySmall)
-    Slider(value = state.maxLocalModelSizeGb.toFloatOrNull()?.coerceIn(0f, 200f) ?: 15f, onValueChange = { viewModel.maxLocalModelSizeChanged("%.0f".format(it)) }, valueRange = 0f..200f, steps = 199)
+    RangeSlider(value = (state.minLocalModelSizeGb.toFloatOrNull()?.coerceIn(0f, 200f) ?: 0f)..(state.maxLocalModelSizeGb.toFloatOrNull()?.coerceIn(0f, 200f) ?: 15f), onValueChange = { viewModel.modelSizeRangeChanged(it.start, it.endInclusive) }, valueRange = 0f..200f, steps = 199)
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
       Box {
         OutlinedButton(onClick = { sourceFilterMenu = true }) { Text(if (state.enabledSources.size == ModelSource.values().size) "サービス: すべて" else "サービス: ${state.enabledSources.firstOrNull()?.displayName() ?: "なし"}") }
