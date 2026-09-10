@@ -8,7 +8,7 @@ android {
     namespace = "com.example.ollamataskerbridge"
     compileSdk = 36
     defaultConfig {
-        applicationId = "com.example.ollamataskerbridge"
+        applicationId = "com.messpy.aimodelbridge"
         minSdk = 28
         targetSdk = 36
         versionCode = 1
