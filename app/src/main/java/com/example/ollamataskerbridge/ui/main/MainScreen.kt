@@ -213,11 +213,12 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
 
 @Composable
 private fun ModelRow(model: OllamaModel, loading: Boolean, selected: Boolean, onSelect: (String) -> Unit, onDownload: (String) -> Unit, onDelete: (String) -> Unit) {
+  val clipboard = LocalClipboardManager.current; val context = LocalContext.current
   Card(onClick = { onSelect(model.name) }, modifier = Modifier.fillMaxWidth(), colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface)) {
     Row(Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
       Column(Modifier.weight(1f)) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-          Text(model.name)
+          Text(model.name, modifier = Modifier.combinedClickable(onClick = { onSelect(model.name) }, onLongClick = { clipboard.setText(AnnotatedString(model.name)); Toast.makeText(context, "モデル名をコピーしました", Toast.LENGTH_SHORT).show() }))
           Text(model.source.serviceEmoji(), style = MaterialTheme.typography.labelSmall)
           if (model.supportsVision()) Text("👁️", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
           if (model.isCloudOnly()) Text("☁", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
