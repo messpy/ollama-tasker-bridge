@@ -7,6 +7,10 @@ import kotlinx.coroutines.flow.StateFlow
 /**
  * Interface defining the core LLM inference operations.
  */
+data class TokenCounts(val inputTokens: Int, val outputTokens: Int) {
+    val totalTokens: Int get() = inputTokens + outputTokens
+}
+
 interface InferenceEngine {
     /**
      * Current state of the inference engine
@@ -29,6 +33,9 @@ interface InferenceEngine {
      * Sends a user prompt to the loaded model and returns a Flow of generated tokens.
      */
     fun sendUserPrompt(message: String, predictLength: Int = DEFAULT_PREDICT_LENGTH, temperature: Float = DEFAULT_TEMPERATURE): Flow<String>
+
+    /** Token counts from the most recent local generation, including tokenizer special tokens. */
+    fun lastTokenCounts(): TokenCounts
 
     /**
      * Runs a benchmark with the specified parameters.

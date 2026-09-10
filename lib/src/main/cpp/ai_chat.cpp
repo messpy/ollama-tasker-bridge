@@ -281,11 +281,16 @@ constexpr const char *ROLE_ASSISTANT    = "assistant";
 static std::vector<common_chat_msg> chat_msgs;
 static llama_pos system_prompt_position;
 static llama_pos current_position;
+static int system_prompt_token_count = 0;
+static int user_prompt_token_count = 0;
+static int generated_token_count = 0;
 
 static void reset_long_term_states(const bool clear_kv_cache = true) {
     chat_msgs.clear();
     system_prompt_position = 0;
     current_position = 0;
+    system_prompt_token_count = 0;
+    user_prompt_token_count = 0;
 
     if (clear_kv_cache)
         llama_memory_clear(llama_get_memory(g_context), false);
@@ -331,6 +336,7 @@ static std::ostringstream assistant_ss;
 
 static void reset_short_term_states() {
     stop_generation_position = 0;
+    generated_token_count = 0;
     cached_token_chars.clear();
     assistant_ss.str("");
 }
@@ -419,6 +425,8 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_processSystemPrompt(
 
     // Update position
     system_prompt_position = current_position = (int) system_tokens.size();
+    system_prompt_token_count = (int) system_tokens.size();
+    LOGi("System prompt token count=%d", system_prompt_token_count);
     return 0;
 }
 
@@ -466,6 +474,9 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_processUserPrompt(
         LOGe("%s: llama_decode() failed!", __func__);
         return 2;
     }
+
+    user_prompt_token_count = (int) user_tokens.size();
+    LOGi("User prompt token count=%d (system=%d)", user_prompt_token_count, system_prompt_token_count);
 
     // Update position
     current_position += user_prompt_size;
@@ -528,6 +539,7 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_generateNextToken(
 
     // Sample next token
     const auto new_token_id = common_sampler_sample(g_sampler, g_context, -1);
+    generated_token_count++;
     common_sampler_accept(g_sampler, new_token_id, true);
 
     // Populate the batch with new token, then decode
@@ -567,6 +579,25 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_generateNextToken(
     return result;
 }
 
+
+extern "C"
+JNIEXPORT jintArray JNICALL
+Java_com_arm_aichat_internal_InferenceEngineImpl_nativeLastTokenCounts(
+        JNIEnv *env,
+        jobject /*unused*/
+) {
+    const jint counts[] = {
+        system_prompt_token_count + user_prompt_token_count,
+        generated_token_count,
+        system_prompt_token_count + user_prompt_token_count + generated_token_count,
+    };
+    jintArray result = env->NewIntArray(3);
+    if (result != nullptr) {
+        env->SetIntArrayRegion(result, 0, 3, counts);
+    }
+    LOGi("Token counts: input=%d output=%d total=%d", counts[0], counts[1], counts[2]);
+    return result;
+}
 
 extern "C"
 JNIEXPORT void JNICALL

@@ -101,11 +101,14 @@ internal class InferenceEngineImpl private constructor(
     @FastNative
     private external fun processUserPrompt(userPrompt: String, predictLength: Int): Int
 
-    
+
     private external fun setTemperature(temperature: Float)
 
     @FastNative
     private external fun generateNextToken(): String?
+
+
+    private external fun nativeLastTokenCounts(): IntArray
 
     @FastNative
     private external fun unload()
@@ -266,6 +269,14 @@ internal class InferenceEngineImpl private constructor(
             throw e
         }
     }.flowOn(llamaDispatcher)
+
+    override fun lastTokenCounts(): com.arm.aichat.TokenCounts {
+        val counts = nativeLastTokenCounts()
+        return com.arm.aichat.TokenCounts(
+            inputTokens = counts.getOrNull(0) ?: 0,
+            outputTokens = counts.getOrNull(1) ?: 0,
+        )
+    }
 
     /**
      * Benchmark the model

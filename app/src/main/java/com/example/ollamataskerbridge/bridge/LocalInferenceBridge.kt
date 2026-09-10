@@ -25,7 +25,7 @@ enum class Backend { LOCAL, OLLAMA }
 
 sealed interface GenerateEvent {
   data class Token(val text: String) : GenerateEvent
-  data class Done(val fullText: String) : GenerateEvent
+  data class Done(val fullText: String, val inputTokens: Int = 0, val outputTokens: Int = 0) : GenerateEvent
   data class Error(val message: String) : GenerateEvent
 }
 
@@ -99,7 +99,8 @@ object LocalInferenceBridge {
           fullText.append(token)
           emit(GenerateEvent.Token(token))
         }
-        emit(GenerateEvent.Done(fullText.toString()))
+        val counts = engine.lastTokenCounts()
+        emit(GenerateEvent.Done(fullText.toString(), counts.inputTokens, counts.outputTokens))
       }
     } catch (error: CancellationException) {
       throw error
