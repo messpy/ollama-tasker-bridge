@@ -60,10 +60,15 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
       }
       .onFailure { _state.value = _state.value.copy(notice = "画像を読み込めませんでした: " + it.message) }
   }
-  private fun localModels() = store.directory.listFiles().orEmpty().filter { it.extension == "gguf" || it.extension == "litertlm" }.map { file -> OllamaModel(file.nameWithoutExtension, false, true, file.length(), true, if (file.extension == "litertlm") ModelSource.LITERT_LM else ModelSource.HUGGING_FACE) }
-  private val _state = MutableStateFlow(ChatUiState(selectedModel = localModels().firstOrNull()?.name.orEmpty(), presets = settings.presets(), systemPromptId = settings.lastPresetId, systemPrompt = settings.presets().firstOrNull { it.id == settings.lastPresetId }?.body.orEmpty()))
+  private fun localModels(): List<OllamaModel> = store.directory.listFiles().orEmpty().filter { it.extension == "gguf" || it.extension == "litertlm" }.map { file -> OllamaModel(file.nameWithoutExtension, false, true, file.length(), true, if (file.extension == "litertlm") ModelSource.LITERT_LM else ModelSource.HUGGING_FACE) }
+  private fun availableModels(): List<OllamaModel> {
+    val local = localModels()
+    val localNames = local.map { it.name }.toSet()
+    return (settings.cachedModels() + local).distinctBy { it.name }.map { it.copy(local = it.local || it.name in localNames) }
+  }
+  private val _state = MutableStateFlow(ChatUiState(selectedModel = availableModels().firstOrNull()?.name.orEmpty(), presets = settings.presets(), systemPromptId = settings.lastPresetId, systemPrompt = settings.presets().firstOrNull { it.id == settings.lastPresetId }?.body.orEmpty()))
   val state = _state.asStateFlow()
-  fun models() = localModels()
+  fun models() = availableModels()
   private fun Boolean?.orFalse() = this == true
   fun input(value: String) { _state.value = _state.value.copy(input = value) }
   fun selectModel(value: String) { _state.value = _state.value.copy(selectedModel = value) }
@@ -79,13 +84,15 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
   fun send(value: String = _state.value.input) {
     val prompt = value.trim(); val old = _state.value
     if (prompt.isBlank() || old.generating || old.selectedModel.isBlank()) return
-    if (old.imageBytes != null && !localModels().firstOrNull { it.name == old.selectedModel }?.supportsVision().orFalse()) {
+    val selectedModel = availableModels().firstOrNull { it.name == old.selectedModel }
+    if (old.imageBytes != null && selectedModel?.supportsVision() != true) {
       _state.value = old.copy(notice = "このモデルは画像認識に対応していません。👁️付きモデルを選択してください。")
       return
     }
     val index = old.messages.size + 1
     _state.value = old.copy(input = "", imageBytes = null, imageName = "", generating = true, messages = old.messages + ChatMessage(true, prompt) + ChatMessage(false, "", old.selectedModel, true, retryPrompt = prompt))
-    val request = GenerateRequest(Backend.LOCAL, old.selectedModel, prompt, old.systemPrompt.takeIf { it.isNotBlank() }, old.maxTokens.toIntOrNull()?.coerceAtLeast(1) ?: 256, old.temperature.toFloatOrNull()?.coerceIn(0f, 2f) ?: 0.7f, old.imageBytes)
+    val backend = if (selectedModel?.source == ModelSource.OLLAMA) Backend.OLLAMA else Backend.LOCAL
+    val request = GenerateRequest(backend, old.selectedModel, prompt, old.systemPrompt.takeIf { it.isNotBlank() }, old.maxTokens.toIntOrNull()?.coerceAtLeast(1) ?: 256, old.temperature.toFloatOrNull()?.coerceIn(0f, 2f) ?: 0.7f, old.imageBytes)
     val startedAt = SystemClock.elapsedRealtime()
     DiagnosticsLog.note("テストチャット生成開始: backend=" + request.backend + " model=" + request.model + " maxTokens=" + request.maxTokens + " temperature=" + request.temperature + " image=" + (request.imageBytes != null) + " promptChars=" + request.prompt.length)
     DiagnosticsLog.note("テストチャットプロンプト: " + request.prompt)
