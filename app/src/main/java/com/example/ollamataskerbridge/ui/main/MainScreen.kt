@@ -3,6 +3,7 @@ package com.example.ollamataskerbridge.ui.main
 import android.content.ClipData
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
@@ -186,7 +187,7 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
     }
     OutlinedButton(onClick = { showPresetDialog = true }) { Text("新しいプリセットを追加") }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-      TextButton(onClick = {}, modifier = Modifier.pointerInput(Unit) { detectTapGestures(onTap = { diagnosticsScope.launch { clipboard.setText(AnnotatedString(DiagnosticsLog.copyableSnapshot())) } }, onLongPress = { DiagnosticsLog.clear() }) }) { Text("ログをコピー（長押しでクリア）", fontSize = 11.sp) }
+      TextButton(onClick = {}, modifier = Modifier.pointerInput(Unit) { detectTapGestures(onTap = { diagnosticsScope.launch { clipboard.setText(AnnotatedString(DiagnosticsLog.copyableSnapshot())) } }, onLongPress = { DiagnosticsLog.clear(); Toast.makeText(context, "診断ログをクリアしました", Toast.LENGTH_SHORT).show() }) }) { Text("ログをコピー（長押しでクリア）", fontSize = 11.sp) }
     }
     }
   }
