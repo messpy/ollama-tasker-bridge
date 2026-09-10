@@ -1,12 +1,21 @@
 package com.example.ollamataskerbridge.data
 
 import android.content.Context
+import android.app.ActivityManager
+import android.os.StatFs
 import org.json.JSONArray
 import org.json.JSONObject
 
 data class SystemPromptPreset(val id: String, val name: String, val body: String)
 
 class SettingsStore(context: Context) {
+  private val appContext = context.applicationContext
+
+  private fun recommendedModelSizeGb(): Float {
+    val memory = ActivityManager.MemoryInfo().also { appContext.getSystemService(ActivityManager::class.java).getMemoryInfo(it) }
+    val freeStorageGb = StatFs(appContext.filesDir.path).availableBytes / 1_000_000_000.0
+    return (minOf(memory.totalMem / 1_000_000_000.0 * 0.5, (freeStorageGb - 1.0).coerceAtLeast(0.5))).coerceIn(0.5, 8.0).toFloat()
+  }
   private val prefs = context.getSharedPreferences("connection_settings", Context.MODE_PRIVATE)
   var endpoint: String
     get() = prefs.getString("endpoint", null)
@@ -49,7 +58,7 @@ class SettingsStore(context: Context) {
     set(value) { prefs.edit().putFloat("min_local_model_size_gb", value.coerceAtLeast(0f)).apply() }
 
   var maxLocalModelSizeGb: Float
-    get() = prefs.getFloat("max_local_model_size_gb", 15f)
+    get() = prefs.getFloat("max_local_model_size_gb", recommendedModelSizeGb())
     set(value) { prefs.edit().putFloat("max_local_model_size_gb", value.coerceAtLeast(0f)).apply() }
 
   fun cachedModels(): List<OllamaModel> = runCatching {
