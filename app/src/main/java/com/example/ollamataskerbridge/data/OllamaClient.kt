@@ -3,6 +3,7 @@ package com.example.ollamataskerbridge.data
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.delay
 import org.json.JSONArray
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -64,9 +65,17 @@ class OllamaClient(private val baseUrl: String, private val apiKey: String = "")
     if (!system.isNullOrBlank()) payload.put("system", system)
     imageBytes?.let { payload.put("images", org.json.JSONArray().put(Base64.getEncoder().encodeToString(it))) }
     payload.put("options", org.json.JSONObject().put("num_predict", maxTokens.coerceAtLeast(1)).put("temperature", temperature.coerceIn(0f, 2f)))
-    val response = org.json.JSONObject(request("POST", "/api/generate", payload.toString()))
-    response.optString("response").takeIf { it.isNotBlank() }
-      ?: throw IOException("Ollamaから応答がありません")
+    for (attempt in 0..1) {
+      val response = org.json.JSONObject(request("POST", "/api/generate", payload.toString()))
+      val text = response.optString("response")
+      Log.d(logTag, "generate responseChars=" + text.length + " done=" + response.optBoolean("done", false) + " attempt=" + (attempt + 1))
+      if (text.isNotBlank()) return@withContext text
+      if (attempt == 0) {
+        Log.w(logTag, "Ollama returned an empty response; retrying once")
+        delay(500)
+      }
+    }
+    throw IOException("Ollamaから応答がありません（空の応答）")
   }
 
   private fun request(method: String, path: String, body: String? = null, readTimeoutMs: Int = 30_000, authenticated: Boolean = true): String {
