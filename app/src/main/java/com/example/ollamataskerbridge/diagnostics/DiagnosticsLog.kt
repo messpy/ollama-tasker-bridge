@@ -23,7 +23,7 @@ object DiagnosticsLog {
   }
 
   @Synchronized
-  fun clear() { entries.clear(); Log.i(tag, "診断ログをクリアしました") }
+  fun clear() { entries.clear() }
 
 
   @Synchronized
