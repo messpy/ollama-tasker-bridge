@@ -126,7 +126,7 @@ private fun PluginSettingsContent(
   var model by remember { mutableStateOf(initialModel) }
   var prompt by remember { mutableStateOf(initialPrompt) }
   var query by remember { mutableStateOf("") }
-  var localOnly by remember { mutableStateOf(true) }
+  var localOnly by remember { mutableStateOf(false) }
   var backend by remember { mutableStateOf(initialBackend.ifBlank { "ollama" }) }
   var presetId by remember { mutableStateOf(initialPresetId) }
   var customSystem by remember { mutableStateOf(initialCustomSystem) }
@@ -141,7 +141,7 @@ private fun PluginSettingsContent(
       OutlinedButton(onClick = { platform = "tasker" }) { Text("Tasker") }
       OutlinedButton(onClick = { platform = "macrodroid" }) { Text("MacroDroid") }
     }
-    Text("モデルの取得・APIキー・プリセット管理は本体アプリで行います。")
+    Text("モデルの取得・APIキー・プリセット管理は本体アプリで行います。最新のHugging Face候補は本体アプリでモデル一覧を更新すると共有されます。")
     Row { Checkbox(checked = true, onCheckedChange = null); Text("本体アプリのAPIキーを使用") }
     Button(onClick = onOpenApp, modifier = Modifier.fillMaxWidth()) { Text("本体アプリを開く") }
     OutlinedTextField(model, { }, Modifier.fillMaxWidth(), label = { Text("モデル") }, singleLine = true, readOnly = true)
