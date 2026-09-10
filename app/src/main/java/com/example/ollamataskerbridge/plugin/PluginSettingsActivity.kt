@@ -16,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
@@ -132,6 +133,7 @@ private fun PluginSettingsContent(
   var customSystem by remember { mutableStateOf(initialCustomSystem) }
   var resultVariable by remember { mutableStateOf(initialResultVariable) }
   var presetMenu by remember { mutableStateOf(false) }
+  var showVariables by remember { mutableStateOf(false) }
   val selectedPreset = presets.firstOrNull { it.id == presetId }
   val shown = models.filter { !localOnly || it.local }.filter { query.isBlank() || it.name.contains(query, true) }
   val platformName = if (platform == "macrodroid") "MacroDroid" else "Tasker"
@@ -162,7 +164,8 @@ private fun PluginSettingsContent(
     }
     Text(if (backend == "local") "実行先: ローカル" else "実行先: Ollama Cloud")
     OutlinedTextField(prompt, { prompt = it }, Modifier.fillMaxWidth(), label = { Text("プロンプト") }, minLines = 2)
-    Text(if (platform == "macrodroid") "入力例: {lv=prompt} こんにちは" else "入力例: %prompt こんにちは")
+    Text("入力例: %prompt こんにちは")
+    if (platform == "macrodroid") OutlinedButton(onClick = { showVariables = true }, modifier = Modifier.fillMaxWidth()) { Text("MacroDroid用変数を表示") }
     Row {
       OutlinedButton(onClick = { presetMenu = true }, modifier = Modifier.weight(1f)) { Text(selectedPreset?.name ?: "カスタム入力…") }
       DropdownMenu(expanded = presetMenu, onDismissRequest = { presetMenu = false }) {
@@ -174,6 +177,18 @@ private fun PluginSettingsContent(
     if (presetId == "custom") OutlinedTextField(customSystem, { customSystem = it }, Modifier.fillMaxWidth(), label = { Text("システムプロンプト（カスタム）") }, minLines = 3)
     OutlinedTextField("%answer", {}, Modifier.fillMaxWidth(), label = { Text("出力変数") }, supportingText = { Text("成功: %answer / %ok、失敗: %error") }, singleLine = true, readOnly = true)
     Text("結果: %answer（回答）・%ok（成否）・%error（エラー）")
+    if (showVariables) AlertDialog(
+      onDismissRequest = { showVariables = false },
+      title = { Text("MacroDroid用の変数") },
+      text = { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("入力（プロンプト）: %prompt")
+        Text("出力（回答）: %answer")
+        Text("成功: %ok")
+        Text("失敗: %error")
+        Text("Prompt欄には %prompt を入力してください。MacroDroidの次のアクションでは、受け取った answer を {lv=answer} で参照します。")
+      } },
+      confirmButton = { Button(onClick = { showVariables = false }) { Text("閉じる") } },
+    )
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { OutlinedButton(onClick = onCancel) { Text("キャンセル") }; Button(onClick = { onSave(model.trim(), prompt, presetId, customSystem, platform, resultVariable, backend) }, enabled = model.isNotBlank() && prompt.isNotBlank()) { Text("保存") } }
   }
 }

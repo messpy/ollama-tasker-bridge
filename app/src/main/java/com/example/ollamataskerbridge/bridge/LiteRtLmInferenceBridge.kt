@@ -21,6 +21,7 @@ import kotlinx.coroutines.sync.withLock
 
 // LiteRT-LM adapter. .litertlm is separate from llama.cpp GGUF files.
 object LiteRtLmInferenceBridge {
+  private const val MIN_CONTEXT_TOKENS = 2048
   private val mutex = Mutex()
   private var loadedPath: String? = null
   private var loadedSystem: String? = null
@@ -39,7 +40,9 @@ object LiteRtLmInferenceBridge {
         if (loadedPath != file.absolutePath || loadedSystem != normalizedSystem || loadedMaxTokens != maxTokens || loadedTemperature != temperature) {
           // System instructions belong to ConversationConfig, so changing them creates a fresh conversation.
           closeLocked()
-          val newEngine = Engine(EngineConfig(modelPath = file.absolutePath, backend = Backend.CPU(), maxNumTokens = maxTokens.coerceAtLeast(1)))
+          // maxNumTokens is context capacity, not the UI output limit. Keep normal prompts and history above 256 tokens.
+          val contextTokens = maxOf(MIN_CONTEXT_TOKENS, maxTokens.coerceAtLeast(1))
+          val newEngine = Engine(EngineConfig(modelPath = file.absolutePath, backend = Backend.CPU(), maxNumTokens = contextTokens))
           newEngine.initialize()
           engine = newEngine
           conversation = newEngine.createConversation(ConversationConfig(systemInstruction = normalizedSystem?.let { Contents.of(it) } ?: Contents.of(""), samplerConfig = SamplerConfig(topK = 20, topP = 0.95, temperature = temperature.coerceIn(0f, 2f).toDouble(), seed = 0)))
