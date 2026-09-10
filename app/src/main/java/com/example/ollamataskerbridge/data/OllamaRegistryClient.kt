@@ -43,7 +43,7 @@ class OllamaRegistryClient(
         .toList()
       // The public catalog page is rendered dynamically and may omit cloud-only
       // models from its HTML. Keep the documented OSS cloud model discoverable.
-      (discovered + OllamaModel("gpt-oss:120b", true, false, -1L, false)).distinctBy { it.name }
+      discovered.distinctBy { it.name }
     } finally { connection.disconnect() }
   }
   private val logTag = "OllamaRegistry"

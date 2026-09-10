@@ -38,10 +38,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     .orEmpty()
   private val installed = installedModels()
   private val cached = settings.cachedModels()
-  private val initialModels = (installed + cached + huggingFace.catalog() + listOf(
-    com.example.ollamataskerbridge.data.OllamaModel("gpt-oss:120b", true, false),
-    com.example.ollamataskerbridge.data.OllamaModel("gpt-oss:20b", true, false),
-  )).distinctBy { it.name }.map { it.copy(remote = if (it.source == ModelSource.OLLAMA) isOllamaCloudModel(it.name) else it.remote, downloadable = if (it.source == ModelSource.OLLAMA && isOllamaCloudModel(it.name)) false else it.downloadable) }
+  private val initialModels = (installed + cached).distinctBy { it.name }.map { item -> item.copy(remote = if (item.source == ModelSource.OLLAMA) isOllamaCloudModel(item.name) else item.remote, downloadable = if (item.source == ModelSource.OLLAMA && isOllamaCloudModel(item.name)) false else item.downloadable) }
   // Cloud/Ollama is the primary catalog. Do not switch to HF just because local GGUFs exist.
   // Ollama is the primary catalog. Older installs may have persisted the HF tab.
   private val initialSource = ModelSource.OLLAMA
@@ -149,12 +146,8 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     val localByName = local.associateBy { it.name }
     // Keep the two sources independent: a 401/403 from /api/tags must not hide the
     // public Ollama catalog (and vice versa).
-    val ollamaCloudFallback = listOf(
-      com.example.ollamataskerbridge.data.OllamaModel("gpt-oss:120b", true, false, -1L, false),
-      com.example.ollamataskerbridge.data.OllamaModel("gpt-oss:20b", true, false, -1L, false),
-    )
     val ollama = (runCatching { client().listModels() }.getOrDefault(emptyList()) +
-      runCatching { registry.catalog() }.getOrDefault(emptyList()) + ollamaCloudFallback)
+      runCatching { registry.catalog() }.getOrDefault(emptyList()))
       .distinctBy { it.name }.map { item ->
       val registryInfo = runCatching { registry.metadata(item.name) }.getOrNull()
       item.copy(
@@ -164,7 +157,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
         sizeBytes = localByName[item.name]?.sizeBytes ?: registryInfo?.sizeBytes?.takeIf { it > 0 } ?: item.sizeBytes,
       )
     }
-    val huggingFaceModels = huggingFace.catalog().map { item ->
+    val huggingFaceModels = runCatching { huggingFace.catalog(settings.huggingFaceToken) }.getOrDefault(emptyList()).map { item ->
       item.copy(local = localByName[item.name] != null, sizeBytes = localByName[item.name]?.sizeBytes ?: item.sizeBytes)
     }
     val huggingFaceNames = huggingFaceModels.map { it.name }.toSet()
