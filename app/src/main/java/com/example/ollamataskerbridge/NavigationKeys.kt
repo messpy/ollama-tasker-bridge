@@ -8,3 +8,4 @@ import kotlinx.serialization.Serializable
 @Serializable data object Models : NavKey
 @Serializable data object Prompts : NavKey
 @Serializable data object Chat : NavKey
+@Serializable data object MacroDroid : NavKey

@@ -9,6 +9,7 @@ import android.os.Bundle;
 import android.os.IBinder;
 import com.example.ollamataskerbridge.data.SettingsStore;
 import com.example.ollamataskerbridge.plugin.LocalePluginContract;
+import net.dinglisch.android.tasker.TaskerPlugin
 import kotlinx.coroutines.CoroutineScope;
 import kotlinx.coroutines.Dispatchers;
 import kotlinx.coroutines.SupervisorJob;
@@ -25,8 +26,13 @@ class InferenceForegroundService : Service() {
       try {
         if (intent?.getStringExtra(EXTRA_ORIGIN) == ORIGIN_LOCALE) runLocale(intent) else runBridge(intent ?: Intent());
       } catch (error: Exception) {
+        val message = error.message ?: "推論に失敗しました";
         val action = intent?.getStringExtra(BridgeContract.EXTRA_REPLY_ACTION)?.takeIf(String::isNotBlank) ?: BridgeContract.ACTION_RESULT;
-        sendReply(action, intent?.getStringExtra(BridgeContract.EXTRA_REPLY_PACKAGE), false, null, error.message ?: "推論に失敗しました");
+        sendReply(action, intent?.getStringExtra(BridgeContract.EXTRA_REPLY_PACKAGE), false, null, message);
+        if (intent?.getStringExtra(EXTRA_ORIGIN) == ORIGIN_LOCALE) {
+          val variables = Bundle().apply { putString("%error", message); putString("%ok", "false") };
+          TaskerPlugin.Setting.signalFinish(applicationContext, intent, TaskerPlugin.Setting.RESULT_CODE_FAILED, variables);
+        }
       } finally {
         stopSelf(startId);
       }
@@ -64,8 +70,6 @@ class InferenceForegroundService : Service() {
       "ollama" -> Backend.OLLAMA
       else -> throw IllegalArgumentException("実行先backendが未設定です。Tasker/MacroDroid設定を保存し直してください")
     };
-    val resultVariable = values?.getString(LocalePluginContract.KEY_RESULT_VARIABLE).orEmpty().trim()
-      .removePrefix("{lv=").removePrefix("%").removeSuffix("}").trim();
     val request = GenerateRequest(backend, model, values?.getString(LocalePluginContract.KEY_PROMPT).orEmpty(), system);
     val result = DefaultInferenceRepository.generateText(applicationContext, request);
     val extras = Bundle().apply {
@@ -74,17 +78,12 @@ class InferenceForegroundService : Service() {
       putString(BridgeContract.EXTRA_RESULT, result);
       putString("response", result);
       putString("answer", result);
-      if (resultVariable.isNotBlank()) {
-        putString(resultVariable, result);
-        putString("%" + resultVariable, result);
-        putString("{lv=" + resultVariable + "}", result);
-      }
-      if (values?.getString(LocalePluginContract.KEY_PLATFORM) == "tasker" && resultVariable.isNotBlank()) {
-        putBundle(LocalePluginContract.TASKER_VARIABLES, Bundle().apply { putString("%" + resultVariable, result) });
-      }
-    };
+          };
     sendReply(intent.getStringExtra(BridgeContract.EXTRA_REPLY_ACTION)?.takeIf(String::isNotBlank) ?: BridgeContract.ACTION_RESULT,
       intent.getStringExtra(BridgeContract.EXTRA_REPLY_PACKAGE), extras);
+    TaskerPlugin.addVariableBundle(extras, Bundle().apply { putString("%answer", result); putString("%ok", "true") })
+    val variables = Bundle().apply { putString("%answer", result); putString("%ok", "true") };
+    TaskerPlugin.Setting.signalFinish(applicationContext, intent, TaskerPlugin.Setting.RESULT_CODE_OK, variables);
     if (values?.getString(LocalePluginContract.KEY_PLATFORM) == "macrodroid") {
       sendBroadcast(Intent(BridgeContract.ACTION_MACRODROID_RESULT).putExtras(extras).putExtra(BridgeContract.EXTRA_MODEL, model));
     }

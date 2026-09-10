@@ -45,6 +45,7 @@ fun MainNavigation() {
       ModalDrawerSheet {
         Text("AI Model Bridge", modifier = Modifier.padding(20.dp))
         NavigationDrawerItem(label = { Text("目次") }, selected = backStack.lastOrNull() == Home, onClick = { scope.launch { drawerState.close() }; backStack.removeAll { it != Home } })
+        NavigationDrawerItem(label = { Text("MacroDroid") }, selected = backStack.lastOrNull() == MacroDroid, onClick = { scope.launch { drawerState.close() }; backStack.removeAll { it != Home }; backStack.add(MacroDroid) })
         NavigationDrawerItem(label = { Text("テストチャット") }, selected = backStack.lastOrNull() == Chat, onClick = { selectedSection = MainSection.SETTINGS; scope.launch { drawerState.close() }; backStack.removeAll { it != Main }; backStack.add(Chat) })
         NavigationDrawerItem(label = { Text("モデル管理・ダウンロード") }, selected = selectedSection == MainSection.MODELS, onClick = { selectedSection = MainSection.MODELS; scope.launch { drawerState.close() }; backStack.removeAll { it != Main }; backStack.add(Models) })
         NavigationDrawerItem(label = { Text("システムプロンプト") }, selected = selectedSection == MainSection.PROMPTS, onClick = { selectedSection = MainSection.PROMPTS; scope.launch { drawerState.close() }; backStack.removeAll { it != Main }; backStack.add(Prompts) })
@@ -61,6 +62,7 @@ fun MainNavigation() {
         entry<Main> { MainScreen(section = MainSection.SETTINGS, onOpenDrawer = { scope.launch { drawerState.open() } }, modifier = Modifier.safeDrawingPadding(), onOpenChat = { selectedSection = MainSection.SETTINGS; backStack.add(Chat) }) }
         entry<Models> { MainScreen(section = MainSection.MODELS, onOpenDrawer = { scope.launch { drawerState.open() } }, modifier = Modifier.safeDrawingPadding()) }
         entry<Prompts> { MainScreen(section = MainSection.PROMPTS, onOpenDrawer = { scope.launch { drawerState.open() } }, modifier = Modifier.safeDrawingPadding()) }
+        entry<MacroDroid> { MacroDroidGuideScreen(modifier = Modifier.safeDrawingPadding(), onOpenDrawer = { scope.launch { drawerState.open() } }) }
         entry<Chat> { ChatScreen(modifier = Modifier.safeDrawingPadding(), onOpenDrawer = { scope.launch { drawerState.open() } }) }
       },
   )
@@ -104,3 +106,6 @@ private fun HomeItem(title: String, description: String, onClick: () -> Unit) {
     }
   }
 }
+
+@Composable
+ private fun MacroDroidGuideScreen(modifier: Modifier = Modifier, onOpenDrawer: () -> Unit) { Column(modifier.padding(20.dp)) { androidx.compose.material3.TextButton(onClick = onOpenDrawer) { Text("☰ MacroDroid") }; Text("1つのマクロでLLMを実行。プロンプトは %prompt、結果は %answer です。"); Text("プラグイン設定で完了までブロックをON、タイムアウトを120秒にしてください。"); Text("次のアクションでは {lv=answer} を使えます。") } }

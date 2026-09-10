@@ -36,6 +36,7 @@ import com.example.ollamataskerbridge.data.OllamaModel
 import com.example.ollamataskerbridge.data.SettingsStore
 import com.example.ollamataskerbridge.data.SystemPromptPreset
 import com.example.ollamataskerbridge.theme.MyApplicationTheme
+import net.dinglisch.android.tasker.TaskerPlugin
 
 class PluginSettingsActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
@@ -52,11 +53,11 @@ class PluginSettingsActivity : ComponentActivity() {
       MyApplicationTheme {
         PluginSettingsContent(
           initialModel = initial?.getString(LocalePluginContract.KEY_MODEL).orEmpty(),
-          initialPrompt = normalizePromptForPlatform(initial?.getString(LocalePluginContract.KEY_PROMPT).orEmpty().ifBlank { if (resolvedPlatform == "macrodroid") "{lv=prompt}" else "%prompt" }, resolvedPlatform),
+          initialPrompt = initial?.getString(LocalePluginContract.KEY_PROMPT).orEmpty().ifBlank { "%prompt" },
           initialPresetId = initial?.getString(LocalePluginContract.KEY_PRESET_ID) ?: settings.lastPresetId,
           initialCustomSystem = initial?.getString(LocalePluginContract.KEY_CUSTOM_SYSTEM).orEmpty(),
           initialPlatform = resolvedPlatform,
-          initialResultVariable = normalizeResultForPlatform(initial?.getString(LocalePluginContract.KEY_RESULT_VARIABLE).orEmpty().ifBlank { if (resolvedPlatform == "macrodroid") "{lv=answer}" else "%answer" }, resolvedPlatform),
+          initialResultVariable = "%answer",
           initialBackend = initial?.getString(LocalePluginContract.KEY_BACKEND).orEmpty().ifBlank { if (local.any { it.name == initial?.getString(LocalePluginContract.KEY_MODEL).orEmpty() }) "local" else "ollama" },
           models = models,
           presets = settings.presets(),
@@ -65,22 +66,22 @@ class PluginSettingsActivity : ComponentActivity() {
           onSave = { model, prompt, presetId, customSystem, platform, resultVariable, backend ->
             settings.pluginPlatform = platform
             if (presetId.isNotBlank() && presetId != "custom") settings.lastPresetId = presetId
-            val normalizedResult = normalizeResultVariable(resultVariable)
+            val normalizedResult = "answer"
             val values = Bundle().apply {
               putString(LocalePluginContract.KEY_MODEL, model)
               putString(LocalePluginContract.KEY_PROMPT, prompt)
               putString(LocalePluginContract.KEY_PRESET_ID, presetId)
               putString(LocalePluginContract.KEY_CUSTOM_SYSTEM, customSystem)
+              putString(LocalePluginContract.KEY_SYSTEM, customSystem)
               putString(LocalePluginContract.KEY_PLATFORM, platform)
               putString(LocalePluginContract.KEY_BACKEND, backend)
               putString(LocalePluginContract.KEY_RESULT_VARIABLE, normalizedResult)
-              if (platform == "tasker") {
-                putString(LocalePluginContract.TASKER_VARIABLE_REPLACE_KEYS, LocalePluginContract.KEY_PROMPT + " " + LocalePluginContract.KEY_CUSTOM_SYSTEM)
-              }
             }
             val resultIntent = Intent().putExtra(LocalePluginContract.EXTRA_BUNDLE, values)
               .putExtra(LocalePluginContract.EXTRA_STRING_BLURB, "$model / $platform")
-            if (platform == "macrodroid" && normalizedResult.isNotBlank()) resultIntent.putExtra(LocalePluginContract.TASKER_RELEVANT_VARIABLES, arrayOf("%" + normalizedResult + "\n回答\nLLMの生成結果"))
+            TaskerPlugin.Setting.setVariableReplaceKeys(values, arrayOf(LocalePluginContract.KEY_PROMPT, LocalePluginContract.KEY_SYSTEM, LocalePluginContract.KEY_CUSTOM_SYSTEM))
+            TaskerPlugin.Setting.requestTimeoutMS(resultIntent, 120_000)
+            TaskerPlugin.addRelevantVariableList(resultIntent, arrayOf("%answer\n回答\nLLMの生成結果", "%error\nエラー\n失敗時のエラー内容", "%ok\n成否\n成功時true、失敗時false"))
             setResult(Activity.RESULT_OK, resultIntent)
             finish()
           },
@@ -171,8 +172,8 @@ private fun PluginSettingsContent(
     }
     if (selectedPreset != null) Text(selectedPreset.body.take(200), style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
     if (presetId == "custom") OutlinedTextField(customSystem, { customSystem = it }, Modifier.fillMaxWidth(), label = { Text("システムプロンプト（カスタム）") }, minLines = 3)
-    OutlinedTextField(resultVariable, { resultVariable = it }, Modifier.fillMaxWidth(), label = { Text("${platformName}変数名（結果）") }, singleLine = true)
-    Text(if (platform == "macrodroid") "結果例: {lv=answer}" else "結果例: %answer")
+    OutlinedTextField("%answer", {}, Modifier.fillMaxWidth(), label = { Text("出力変数") }, supportingText = { Text("成功: %answer / %ok、失敗: %error") }, singleLine = true, readOnly = true)
+    Text("結果: %answer（回答）・%ok（成否）・%error（エラー）")
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { OutlinedButton(onClick = onCancel) { Text("キャンセル") }; Button(onClick = { onSave(model.trim(), prompt, presetId, customSystem, platform, resultVariable, backend) }, enabled = model.isNotBlank() && prompt.isNotBlank()) { Text("保存") } }
   }
 }

@@ -2,18 +2,16 @@
 
 ## 結論
 
-現在の安定したIntent受信方式では、MacroDroidは次の2マクロ構成が確実です。
+Tasker Pluginの正式な非同期完了方式に対応したため、MacroDroidは1つのマクロで完結できます。
 
-1. 依頼マクロ: Intentを送信して生成を開始
-2. 結果マクロ: 生成完了Intentを受信して`answer`をMacroDroid変数へ保存
 
-MacroDroidのTasker/Localeプラグイン出力マッピングが利用できる環境では、プラグインアクション1つのマクロにまとめられる場合があります。ただし端末やMacroDroidのバージョンによって出力変数が渡らないため、Intent送受信の2マクロ方式を推奨します。Taskerではプラグインアクションの出力変数に対応していれば、1タスクで実行できます。
+プラグインアクションの「次のアクションを完了までブロック」をONにし、タイムアウトを120秒にします。完了後に出力変数を次のアクションで使用できます。Taskerではプラグインアクションの出力変数に対応していれば、1タスクで実行できます。
 
 ## 事前設定
 
 AI Model Bridge本体で、APIキー・モデル・実行先を設定します。Intentから実行する場合は`backend`を必ず明示してください。
 
-## 依頼マクロ
+## 互換: Intent送受信（1マクロ方式が使えない場合のみ）
 
 MacroDroidで「アクション」→「Intentを送信」を追加します。
 
@@ -28,13 +26,13 @@ String extra:
 ```text
 backend=ollama
 model=gpt-oss:120b
-prompt={lv=prompt}
+prompt=%prompt
 request_id=macro-001
 ```
 
 ローカルモデルの場合は`backend=local`にします。`prompt`を固定文にする場合は、例えば`prompt=こんにちは`と入力します。
 
-## 結果マクロ
+## 互換方式の結果受信
 
 別のマクロを作り、トリガーに「Intent受信」を追加します。
 
