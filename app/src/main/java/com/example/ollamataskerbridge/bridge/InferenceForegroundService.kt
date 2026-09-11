@@ -112,9 +112,13 @@ class InferenceForegroundService : Service() {
   private fun readImage(value: String?): ByteArray? {
     val path = value?.trim().orEmpty()
     if (path.isBlank()) return null
-    val bytes = if (path.startsWith("content://")) {
-      contentResolver.openInputStream(Uri.parse(path))?.use { it.readBytes() }
-    } else File(path.removePrefix("file://")).takeIf { it.isFile }?.readBytes()
+    val bytes = try {
+      if (path.startsWith("content://")) {
+        contentResolver.openInputStream(Uri.parse(path))?.use { it.readBytes() }
+      } else File(path.removePrefix("file://")).takeIf { it.isFile }?.readBytes()
+    } catch (error: SecurityException) {
+      throw SecurityException("画像へのアクセスが拒否されました。アプリを一度開いて写真へのアクセスを許可するか、MacroDroidではcontent://形式のURIを指定してください", error)
+    }
     val image = bytes ?: error("画像ファイルを読み込めません: $path")
     require(image.isNotEmpty()) { "画像ファイルを読み込めません: $path" }
     require(image.size <= 20 * 1024 * 1024) { "画像サイズが大きすぎます（20MB以下にしてください）" }

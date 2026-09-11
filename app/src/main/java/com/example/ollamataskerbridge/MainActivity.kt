@@ -15,7 +15,15 @@ import com.example.ollamataskerbridge.theme.MyApplicationTheme
 class MainActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
-    if (Build.VERSION.SDK_INT >= 33) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 701)
+    val permissions = buildList {
+      if (Build.VERSION.SDK_INT >= 33) {
+        add(Manifest.permission.POST_NOTIFICATIONS)
+        add(Manifest.permission.READ_MEDIA_IMAGES)
+      } else {
+        add(Manifest.permission.READ_EXTERNAL_STORAGE)
+      }
+    }
+    if (permissions.isNotEmpty()) requestPermissions(permissions.toTypedArray(), 701)
 
     enableEdgeToEdge()
     setContent {
