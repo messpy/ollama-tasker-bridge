@@ -29,7 +29,8 @@ import net.dinglisch.android.tasker.TaskerPlugin
 class InferenceJobService : JobService() {
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
   private val runningJobs = ConcurrentHashMap<Int, Job>()
-  private val rescheduleJobs = ConcurrentHashMap<Int, Boolean>()
+  /** Decision made by onStopJob; the coroutine must not overwrite it. */
+  private val stopDecisions = ConcurrentHashMap<Int, Boolean>()
 
   override fun onStartJob(params: JobParameters): Boolean {
     InferenceExecutionRegistry.initialize(this)
@@ -65,7 +66,7 @@ class InferenceJobService : JobService() {
     }
     if (snapshot == null) {
       val createdAt = data.getLong(KEY_CREATED_AT, 0L)
-      if (createdAt > 0L && System.currentTimeMillis() - createdAt <= MAX_EXECUTION_AGE_MS && InferenceExecutionRegistry.register(executionId)) {
+      if (createdAt > 0L && System.currentTimeMillis() - createdAt <= MAX_EXECUTION_AGE_MS && InferenceExecutionRegistry.register(executionId, createdAt)) {
         snapshot = InferenceExecutionRegistry.snapshot(executionId)
         DiagnosticsLog.note("再起動後の未登録推論Jobを復元: jobId=" + params.jobId + " executionId=" + executionId + " model=" + model)
       } else {
@@ -74,11 +75,12 @@ class InferenceJobService : JobService() {
         return false
       }
     }
-    InferenceExecutionRegistry.markRunning(executionId)
+    InferenceExecutionRegistry.markQueued(executionId)
     DiagnosticsLog.note("推論Job開始: jobId=" + params.jobId + " executionId=" + executionId + " model=" + model + " backend=" + data.getString(KEY_BACKEND).orEmpty())
     val task = scope.launch {
       try {
         InferenceQueue.withSlot {
+          InferenceExecutionRegistry.markRunning(executionId)
           DiagnosticsLog.note("推論開始: jobId=" + params.jobId + " executionId=" + executionId + " model=" + model + " backend=" + data.getString(KEY_BACKEND).orEmpty())
           val backend = when (data.getString(KEY_BACKEND).orEmpty().lowercase()) {
             "local" -> Backend.LOCAL
@@ -100,12 +102,9 @@ class InferenceJobService : JobService() {
           DiagnosticsLog.note("推論成功: jobId=" + params.jobId + " executionId=" + executionId + " model=" + model + " backend=" + data.getString(KEY_BACKEND).orEmpty() + " resultChars=" + result.length + " signalFinish=" + signaled)
         }
       } catch (error: CancellationException) {
-        // onStopJob() marks non-retryable work obsolete. Do not overwrite that
-        // decision from the cancellation callback racing with this coroutine.
-        if (InferenceExecutionRegistry.canRetry(executionId)) {
-          InferenceExecutionRegistry.markPending(executionId)
-        }
-        DiagnosticsLog.warn("推論キャンセル: jobId=" + params.jobId + " executionId=" + executionId + " model=" + model + " reason=job-stopped")
+        val decision = stopDecisions[params.jobId]
+        if (decision == null) InferenceExecutionRegistry.markCancelled(executionId)
+        DiagnosticsLog.warn("推論キャンセル: jobId=" + params.jobId + " executionId=" + executionId + " model=" + model + " reason=job-stopped retry=" + decision)
       } catch (error: Exception) {
         InferenceExecutionRegistry.markCancelled(executionId)
         val message = error.message ?: "推論に失敗しました"
@@ -116,7 +115,7 @@ class InferenceJobService : JobService() {
         DiagnosticsLog.note("推論Job失敗通知: jobId=" + params.jobId + " executionId=" + executionId + " model=" + model + " backend=" + data.getString(KEY_BACKEND).orEmpty() + " signalFinish=" + signaled + " errorChars=" + message.length)
       } finally {
         getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
-        val shouldReschedule = rescheduleJobs.remove(params.jobId) == true && InferenceExecutionRegistry.canRetry(executionId)
+        val shouldReschedule = stopDecisions.remove(params.jobId) == true && InferenceExecutionRegistry.canRetry(executionId)
         runningJobs.remove(params.jobId)
         DiagnosticsLog.note("推論Job完了: jobId=" + params.jobId + " executionId=" + executionId + " model=" + model + " reschedule=" + shouldReschedule)
         if (!shouldReschedule) jobFinished(params, false)
@@ -133,11 +132,21 @@ class InferenceJobService : JobService() {
     val completed = snapshot?.state == InferenceExecutionRegistry.State.COMPLETED || snapshot?.signalFinished == true
     val obsolete = snapshot?.state == InferenceExecutionRegistry.State.OBSOLETE
     val wasRunning = runningJobs[params.jobId] != null
-    val retry = wasRunning && !completed && !obsolete && InferenceExecutionRegistry.canRetry(executionId) && isRetryableStopReason(stopReason)
-    DiagnosticsLog.warn("推論Job停止: jobId=" + params.jobId + " executionId=" + executionId + " model=" + params.extras.getString(KEY_MODEL).orEmpty() + " backend=" + params.extras.getString(KEY_BACKEND).orEmpty() + " stopReason=" + stopReason + " stopReasonName=" + stopReasonName(stopReason) + " running=" + wasRunning + " completed=" + completed + " obsolete=" + obsolete + " retry=" + retry)
+    val state = snapshot?.state
+    val actualInferenceRunning = state == InferenceExecutionRegistry.State.RUNNING
+    val queued = state == InferenceExecutionRegistry.State.QUEUED
+    val retryableReason = isRetryableStopReason(stopReason)
+    val retry = actualInferenceRunning && !completed && !obsolete && retryableReason && InferenceExecutionRegistry.reserveRetry(
+      executionId,
+      System.currentTimeMillis(),
+      MAX_RETRIES,
+      MAX_EXECUTION_AGE_MS,
+      RETRY_MIN_INTERVAL_MS,
+    )
+    stopDecisions[params.jobId] = retry
+    DiagnosticsLog.warn("推論Job停止: jobId=" + params.jobId + " executionId=" + executionId + " model=" + params.extras.getString(KEY_MODEL).orEmpty() + " backend=" + params.extras.getString(KEY_BACKEND).orEmpty() + " stopReason=" + stopReason + " stopReasonName=" + stopReasonName(stopReason) + " running=" + actualInferenceRunning + " queued=" + queued + " completed=" + completed + " obsolete=" + obsolete + " retry=" + retry)
     if (stopReason == JobParameters.STOP_REASON_DEVICE_STATE) logDeviceState(executionId, params.jobId)
-    if (wasRunning) {
-      if (retry) rescheduleJobs[params.jobId] = true
+    if (runningJobs[params.jobId] != null) {
       runningJobs[params.jobId]?.cancel()
       DiagnosticsLog.warn("推論キャンセル: jobId=" + params.jobId + " executionId=" + executionId + " reason=job-stopped retry=" + retry)
     }
@@ -154,6 +163,8 @@ class InferenceJobService : JobService() {
     private const val CHANNEL_ID = "inference_background_v2"
     private const val NOTIFICATION_ID = 3002
     private const val MAX_EXECUTION_AGE_MS = 24L * 60L * 60L * 1000L
+    private const val MAX_RETRIES = 3
+    private const val RETRY_MIN_INTERVAL_MS = 30_000L
     const val KEY_MODEL = "inference.job.model"
     const val KEY_EXECUTION_ID = "inference.job.execution_id"
     const val KEY_BACKEND = "inference.job.backend"
