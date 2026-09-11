@@ -10,6 +10,7 @@ object LocalePluginContract {
   const val EXTRA_ACTIVITY = "com.twofortyfouram.locale.intent.extra.ACTIVITY"
   const val KEY_MODEL = "com.example.ollamataskerbridge.plugin.MODEL"
   const val KEY_PROMPT = "com.example.ollamataskerbridge.plugin.PROMPT"
+  const val KEY_IMAGE_URI = "com.example.ollamataskerbridge.plugin.IMAGE_URI"
   const val KEY_SYSTEM = "com.example.ollamataskerbridge.plugin.SYSTEM"
   const val KEY_MODE = "com.example.ollamataskerbridge.plugin.MODE"
   const val KEY_RESULT_VARIABLE = "com.example.ollamataskerbridge.plugin.RESULT_VARIABLE"

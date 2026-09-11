@@ -57,6 +57,7 @@ class LocaleFireReceiver : BroadcastReceiver() {
       putString(InferenceJobService.KEY_MODEL, values?.getString(LocalePluginContract.KEY_MODEL).orEmpty())
       putString(InferenceJobService.KEY_BACKEND, values?.getString(LocalePluginContract.KEY_BACKEND).orEmpty())
       putString(InferenceJobService.KEY_PROMPT, values?.getString(LocalePluginContract.KEY_PROMPT).orEmpty())
+      values?.getString(LocalePluginContract.KEY_IMAGE_URI)?.let { putString(InferenceJobService.KEY_IMAGE_URI, it) }
       values?.getString(LocalePluginContract.KEY_SYSTEM)?.let { putString(InferenceJobService.KEY_SYSTEM, it) }
       values?.getString(LocalePluginContract.KEY_CUSTOM_SYSTEM)?.let { putString(InferenceJobService.KEY_CUSTOM_SYSTEM, it) }
       values?.getString(LocalePluginContract.KEY_PRESET_ID)?.let { putString(InferenceJobService.KEY_PRESET_ID, it) }

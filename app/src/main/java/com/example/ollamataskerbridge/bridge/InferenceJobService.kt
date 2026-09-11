@@ -37,6 +37,7 @@ class InferenceJobService : JobService() {
     val original = Intent(LocalePluginContract.ACTION_FIRE_SETTING).putExtra("com.example.ollamataskerbridge.REQUEST_ID", data.getString(KEY_EXECUTION_ID)).putExtra(LocalePluginContract.EXTRA_BUNDLE, Bundle().apply {
       putString(LocalePluginContract.KEY_MODEL, data.getString(KEY_MODEL).orEmpty())
       putString(LocalePluginContract.KEY_PROMPT, data.getString(KEY_PROMPT).orEmpty())
+      putString(LocalePluginContract.KEY_IMAGE_URI, data.getString(KEY_IMAGE_URI))
       putString(LocalePluginContract.KEY_SYSTEM, data.getString(KEY_SYSTEM))
       putString(LocalePluginContract.KEY_CUSTOM_SYSTEM, data.getString(KEY_CUSTOM_SYSTEM))
       putString(LocalePluginContract.KEY_PRESET_ID, data.getString(KEY_PRESET_ID))
@@ -60,7 +61,8 @@ class InferenceJobService : JobService() {
         val maxTokens = data.getString(KEY_MAX_TOKENS)?.toIntOrNull()?.coerceIn(1, 4096) ?: 1024
         val temperature = data.getString(KEY_TEMPERATURE)?.toFloatOrNull()?.coerceIn(0f, 2f) ?: 0.7f
         val result = DefaultInferenceRepository.generateText(applicationContext, GenerateRequest(
-          backend, data.getString(KEY_MODEL).orEmpty(), data.getString(KEY_PROMPT).orEmpty(), system, maxTokens, temperature
+          backend, data.getString(KEY_MODEL).orEmpty(), data.getString(KEY_PROMPT).orEmpty(), system, maxTokens, temperature,
+          readImage(data.getString(KEY_IMAGE_URI))
         ))
         val signaled = TaskerPlugin.Setting.signalFinish(applicationContext, original, TaskerPlugin.Setting.RESULT_CODE_OK,
           Bundle().apply { putString("%answer", result); putString("%ok", "true") })
@@ -102,6 +104,7 @@ class InferenceJobService : JobService() {
     const val KEY_EXECUTION_ID = "inference.job.execution_id"
     const val KEY_BACKEND = "inference.job.backend"
     const val KEY_PROMPT = "inference.job.prompt"
+    const val KEY_IMAGE_URI = "inference.job.image_uri"
     const val KEY_SYSTEM = "inference.job.system"
     const val KEY_CUSTOM_SYSTEM = "inference.job.custom_system"
     const val KEY_PRESET_ID = "inference.job.preset_id"
@@ -116,5 +119,16 @@ class InferenceJobService : JobService() {
     getSystemService(NotificationManager::class.java).createNotificationChannel(
       NotificationChannel(CHANNEL_ID, "LLMバックグラウンド推論", NotificationManager.IMPORTANCE_LOW)
     )
+  }
+
+  private fun readImage(value: String?): ByteArray? {
+    val path = value?.trim().orEmpty()
+    if (path.isBlank()) return null
+    val bytes = if (path.startsWith("content://")) contentResolver.openInputStream(android.net.Uri.parse(path))?.use { it.readBytes() }
+      else java.io.File(path.removePrefix("file://")).takeIf { it.isFile }?.readBytes()
+    val image = bytes ?: error("画像ファイルを読み込めません: $path")
+    require(image.isNotEmpty()) { "画像ファイルを読み込めません: $path" }
+    require(image.size <= 20 * 1024 * 1024) { "画像サイズが大きすぎます（20MB以下にしてください）" }
+    return image
   }
 }

@@ -18,6 +18,7 @@ object BridgeContract {
   const val EXTRA_MAX_TOKENS = "max_tokens"
   const val EXTRA_TEMPERATURE = "temperature"
   const val EXTRA_PROMPT = "prompt"
+  const val EXTRA_IMAGE_URI = "image_uri"
   const val EXTRA_SYSTEM = "system_prompt"
   const val EXTRA_REQUEST_ID = "request_id"
   const val EXTRA_REPLY_ACTION = "reply_action"

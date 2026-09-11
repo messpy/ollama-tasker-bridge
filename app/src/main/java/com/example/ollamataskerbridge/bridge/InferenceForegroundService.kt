@@ -7,6 +7,8 @@ import android.app.Service;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.IBinder;
+import android.net.Uri;
+import java.io.File;
 import android.util.Log;
 import com.example.ollamataskerbridge.data.SettingsStore;
 import com.example.ollamataskerbridge.diagnostics.DiagnosticsLog;
@@ -61,7 +63,8 @@ class InferenceForegroundService : Service() {
       intent.getStringExtra(BridgeContract.EXTRA_PROMPT).orEmpty(),
       intent.getStringExtra(BridgeContract.EXTRA_SYSTEM),
       intent.getIntExtra(BridgeContract.EXTRA_MAX_TOKENS, 1024),
-      intent.getFloatExtra(BridgeContract.EXTRA_TEMPERATURE, 0.7f)
+      intent.getFloatExtra(BridgeContract.EXTRA_TEMPERATURE, 0.7f),
+      readImage(intent.getStringExtra(BridgeContract.EXTRA_IMAGE_URI))
     );
     val result = DefaultInferenceRepository.generateText(applicationContext, request);
     Log.i(TAG, "LLM生成成功: backend=" + backend + " resultChars=" + result.length)
@@ -83,7 +86,7 @@ class InferenceForegroundService : Service() {
       "ollama" -> Backend.OLLAMA
       else -> throw IllegalArgumentException("実行先backendが未設定です。Tasker/MacroDroid設定を保存し直してください")
     };
-    val request = GenerateRequest(backend, model, values?.getString(LocalePluginContract.KEY_PROMPT).orEmpty(), system, values?.getInt(LocalePluginContract.KEY_MAX_TOKENS, 1024) ?: 1024, values?.getFloat(LocalePluginContract.KEY_TEMPERATURE, 0.7f) ?: 0.7f);
+    val request = GenerateRequest(backend, model, values?.getString(LocalePluginContract.KEY_PROMPT).orEmpty(), system, values?.getInt(LocalePluginContract.KEY_MAX_TOKENS, 1024) ?: 1024, values?.getFloat(LocalePluginContract.KEY_TEMPERATURE, 0.7f) ?: 0.7f, readImage(values?.getString(LocalePluginContract.KEY_IMAGE_URI)));
     val result = DefaultInferenceRepository.generateText(applicationContext, request);
     Log.i(TAG, "LLM生成成功: backend=" + backend + " resultChars=" + result.length)
     DiagnosticsLog.note("LLM生成成功: backend=" + backend + " resultChars=" + result.length)
@@ -104,6 +107,19 @@ class InferenceForegroundService : Service() {
     if (values?.getString(LocalePluginContract.KEY_PLATFORM) == "macrodroid") {
       sendBroadcast(Intent(BridgeContract.ACTION_MACRODROID_RESULT).putExtras(extras).putExtra(BridgeContract.EXTRA_MODEL, model));
     }
+  }
+
+  private fun readImage(value: String?): ByteArray? {
+    val path = value?.trim().orEmpty()
+    if (path.isBlank()) return null
+    val bytes = if (path.startsWith("content://")) {
+      contentResolver.openInputStream(Uri.parse(path))?.use { it.readBytes() }
+    } else File(path.removePrefix("file://")).takeIf { it.isFile }?.readBytes()
+    val image = bytes ?: error("画像ファイルを読み込めません: $path")
+    require(image.isNotEmpty()) { "画像ファイルを読み込めません: $path" }
+    require(image.size <= 20 * 1024 * 1024) { "画像サイズが大きすぎます（20MB以下にしてください）" }
+    Log.i(TAG, "画像入力を読み込み: bytes=" + image.size)
+    return image
   }
 
   private fun sendReply(action: String, packageName: String?, ok: Boolean, result: String?, error: String?) {

@@ -51,10 +51,11 @@ class PluginSettingsActivity : ComponentActivity() {
       .map { OllamaModel(it.nameWithoutExtension, false, true, it.length(), true) }
     val models = (settings.cachedModels() + local).distinctBy { it.name }.filter { it.local || it.enabled }
     setContent {
-      MyApplicationTheme {
+      MyApplicationTheme(darkTheme = false) {
         PluginSettingsContent(
           initialModel = initial?.getString(LocalePluginContract.KEY_MODEL).orEmpty(),
           initialPrompt = initial?.getString(LocalePluginContract.KEY_PROMPT).orEmpty().ifBlank { "%prompt" },
+          initialImageUri = initial?.getString(LocalePluginContract.KEY_IMAGE_URI).orEmpty(),
           initialPresetId = initial?.getString(LocalePluginContract.KEY_PRESET_ID) ?: settings.lastPresetId,
           initialCustomSystem = initial?.getString(LocalePluginContract.KEY_CUSTOM_SYSTEM).orEmpty(),
           initialPlatform = resolvedPlatform,
@@ -66,13 +67,14 @@ class PluginSettingsActivity : ComponentActivity() {
           presets = settings.presets(),
           onOpenApp = { startActivity(Intent(this@PluginSettingsActivity, MainActivity::class.java)) },
           onCancel = { setResult(Activity.RESULT_CANCELED); finish() },
-          onSave = { model, prompt, presetId, customSystem, platform, resultVariable, backend, maxTokens, temperature ->
+          onSave = { model, prompt, imageUri, presetId, customSystem, platform, resultVariable, backend, maxTokens, temperature ->
             settings.pluginPlatform = platform
             if (presetId.isNotBlank() && presetId != "custom") settings.lastPresetId = presetId
             val normalizedResult = "answer"
             val values = Bundle().apply {
               putString(LocalePluginContract.KEY_MODEL, model)
               putString(LocalePluginContract.KEY_PROMPT, prompt)
+              putString(LocalePluginContract.KEY_IMAGE_URI, imageUri)
               putString(LocalePluginContract.KEY_PRESET_ID, presetId)
               putString(LocalePluginContract.KEY_CUSTOM_SYSTEM, customSystem)
               putString(LocalePluginContract.KEY_SYSTEM, customSystem)
@@ -84,7 +86,7 @@ class PluginSettingsActivity : ComponentActivity() {
             }
             val resultIntent = Intent().putExtra(LocalePluginContract.EXTRA_BUNDLE, values)
               .putExtra(LocalePluginContract.EXTRA_STRING_BLURB, "$model / $platform")
-            TaskerPlugin.Setting.setVariableReplaceKeys(values, arrayOf(LocalePluginContract.KEY_PROMPT, LocalePluginContract.KEY_SYSTEM, LocalePluginContract.KEY_CUSTOM_SYSTEM))
+            TaskerPlugin.Setting.setVariableReplaceKeys(values, arrayOf(LocalePluginContract.KEY_PROMPT, LocalePluginContract.KEY_IMAGE_URI, LocalePluginContract.KEY_SYSTEM, LocalePluginContract.KEY_CUSTOM_SYSTEM))
             TaskerPlugin.Setting.requestTimeoutMS(resultIntent, 120_000)
             TaskerPlugin.addRelevantVariableList(resultIntent, arrayOf("%answer\n回答\nLLMの生成結果", "%error\nエラー\n失敗時のエラー内容", "%ok\n成否\n成功時true、失敗時false"))
             setResult(Activity.RESULT_OK, resultIntent)
@@ -116,6 +118,7 @@ class PluginSettingsActivity : ComponentActivity() {
 private fun PluginSettingsContent(
   initialModel: String,
   initialPrompt: String,
+  initialImageUri: String,
   initialPresetId: String,
   initialCustomSystem: String,
   initialPlatform: String,
@@ -127,11 +130,12 @@ private fun PluginSettingsContent(
   presets: List<SystemPromptPreset>,
   onOpenApp: () -> Unit,
   onCancel: () -> Unit,
-  onSave: (String, String, String, String, String, String, String, Int, Float) -> Unit,
+  onSave: (String, String, String, String, String, String, String, String, Int, Float) -> Unit,
 ) {
   var platform by remember { mutableStateOf(initialPlatform.ifBlank { "tasker" }) }
   var model by remember { mutableStateOf(initialModel) }
   var prompt by remember { mutableStateOf(initialPrompt) }
+  var imageUri by remember { mutableStateOf(initialImageUri) }
   var query by remember { mutableStateOf("") }
   var localOnly by remember { mutableStateOf(false) }
   var backend by remember { mutableStateOf(initialBackend.ifBlank { "ollama" }) }
@@ -172,6 +176,7 @@ private fun PluginSettingsContent(
     }
     Text(if (backend == "local") "実行先: ローカル" else "実行先: Ollama Cloud（端末へのダウンロード不要）")
     OutlinedTextField(prompt, { prompt = it }, Modifier.fillMaxWidth(), label = { Text("プロンプト") }, minLines = 2)
+    OutlinedTextField(imageUri, { imageUri = it }, Modifier.fillMaxWidth(), label = { Text("画像URIまたはファイルパス（任意）") }, supportingText = { Text("MacroDroidの画像パス/URIを %image などで指定") }, singleLine = true)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       OutlinedTextField(maxTokens, { maxTokens = it.filter(Char::isDigit) }, Modifier.weight(1f), label = { Text("最大トークン数") }, singleLine = true)
       OutlinedTextField(temperature, { temperature = it }, Modifier.weight(1f), label = { Text("Temperature") }, singleLine = true)
@@ -201,6 +206,6 @@ private fun PluginSettingsContent(
       } },
       confirmButton = { Button(onClick = { showVariables = false }) { Text("閉じる") } },
     )
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { OutlinedButton(onClick = onCancel) { Text("キャンセル") }; Button(onClick = { onSave(model.trim(), prompt, presetId, customSystem, platform, resultVariable, backend, maxTokens.toIntOrNull()?.coerceIn(1, 4096) ?: 1024, temperature.toFloatOrNull()?.coerceIn(0f, 2f) ?: 0.7f) }, enabled = model.isNotBlank() && prompt.isNotBlank()) { Text("保存") } }
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { OutlinedButton(onClick = onCancel) { Text("キャンセル") }; Button(onClick = { onSave(model.trim(), prompt, imageUri.trim(), presetId, customSystem, platform, resultVariable, backend, maxTokens.toIntOrNull()?.coerceIn(1, 4096) ?: 1024, temperature.toFloatOrNull()?.coerceIn(0f, 2f) ?: 0.7f) }, enabled = model.isNotBlank() && prompt.isNotBlank()) { Text("保存") } }
   }
 }
