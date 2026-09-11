@@ -75,7 +75,7 @@ import com.example.ollamataskerbridge.data.SettingsStore
 import com.example.ollamataskerbridge.data.SystemPromptPreset
 import com.example.ollamataskerbridge.theme.MyApplicationTheme
 
-private fun OllamaModel.isCloudOnly(): Boolean = source == ModelSource.OLLAMA && !local && (remote || !downloadable)
+private fun OllamaModel.isCloudOnly(): Boolean = source == ModelSource.OLLAMA && !local && (remote || name.contains(":cloud", ignoreCase = true) || !downloadable)
 
 private fun OllamaModel.modelKind(): String {
   val value = name.lowercase().replace("_", "-").replace(":", "-")

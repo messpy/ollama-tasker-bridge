@@ -13,6 +13,7 @@ import com.example.ollamataskerbridge.data.HuggingFaceClient
 import com.example.ollamataskerbridge.data.ModelSource
 import com.example.ollamataskerbridge.data.SettingsStore
 import com.example.ollamataskerbridge.data.SystemPromptPreset
+import com.example.ollamataskerbridge.data.supportsVision
 import com.example.ollamataskerbridge.diagnostics.DiagnosticsLog
 import com.example.ollamataskerbridge.bridge.Backend
 import com.example.ollamataskerbridge.bridge.DefaultInferenceRepository
@@ -53,7 +54,12 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
       _uiState.value = _uiState.value.copy(activeDownloadModel = intent.getStringExtra(com.example.ollamataskerbridge.bridge.BridgeContract.EXTRA_MODEL).orEmpty(), downloadedBytes = intent.getLongExtra(com.example.ollamataskerbridge.bridge.BridgeContract.EXTRA_DOWNLOADED_BYTES, 0L), downloadTotalBytes = intent.getLongExtra(com.example.ollamataskerbridge.bridge.BridgeContract.EXTRA_TOTAL_BYTES, 0L))
     }
   }
-  init { androidx.core.content.ContextCompat.registerReceiver(application, downloadProgressReceiver, IntentFilter(com.example.ollamataskerbridge.bridge.BridgeContract.ACTION_DOWNLOAD_PROGRESS), androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED) }
+  init {
+    ContextCompat.registerReceiver(application, downloadProgressReceiver, IntentFilter(com.example.ollamataskerbridge.bridge.BridgeContract.ACTION_DOWNLOAD_PROGRESS), ContextCompat.RECEIVER_NOT_EXPORTED)
+    // Refresh the shared catalog when the model screen is opened so an older
+    // cache cannot keep Cloud entries classified as ordinary uninstalled models.
+    viewModelScope.launch(Dispatchers.IO) { runCatching { loadModelsInternal() } }
+  }
   val uiState: StateFlow<MainScreenUiState> = _uiState.asStateFlow()
 
   fun endpointChanged(value: String) {
@@ -213,6 +219,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     val enabledNames = settings.cachedModels().filter { it.enabled }.map { it.name }.toSet()
     val merged = (remote + local.filter { item -> remote.none { it.name == item.name } }).map { if (it.name in enabledNames) it.copy(enabled = true) else it }
     settings.saveCachedModels(merged)
+    DiagnosticsLog.note("モデル一覧取得: ollamaApi=${ollamaApi.size} cloudCatalog=${ollamaCloudCatalog.size} huggingFace=${huggingFaceModels.size} merged=${merged.size} cloudVision=${merged.count { it.source == ModelSource.OLLAMA && it.remote && it.supportsVision() }}")
     _uiState.value = _uiState.value.copy(models = merged)
   }
 
