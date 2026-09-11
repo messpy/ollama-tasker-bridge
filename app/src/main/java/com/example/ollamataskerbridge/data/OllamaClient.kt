@@ -67,14 +67,19 @@ class OllamaClient(private val baseUrl: String, private val apiKey: String = "")
       .put("think", "low")
     if (!system.isNullOrBlank()) payload.put("system", system)
     imageBytes?.let { payload.put("images", org.json.JSONArray().put(Base64.getEncoder().encodeToString(it))) }
-    val effectiveMaxTokens = if (model.startsWith("gpt-oss", ignoreCase = true)) maxOf(maxTokens, 1024) else maxTokens.coerceAtLeast(1)
+    // Reasoning models may spend most of num_predict in their hidden thinking
+    // stream. A small MacroDroid/Tasker value can therefore end before any
+    // final response is produced. Keep the user value for ordinary models,
+    // but reserve a usable completion budget for known reasoning families.
+    val reasoningModel = listOf("gpt-oss", "gemma4", "deepseek-r", "qwq", "qwen3").any { model.contains(it, ignoreCase = true) }
+    val effectiveMaxTokens = if (reasoningModel) maxOf(maxTokens, 2048) else maxTokens.coerceAtLeast(1)
     payload.put("options", org.json.JSONObject().put("num_predict", effectiveMaxTokens).put("temperature", temperature.coerceIn(0f, 2f)))
     val response = org.json.JSONObject(request("POST", "/api/generate", payload.toString()))
     val text = response.optString("response")
     val thinking = response.optString("thinking")
     val doneReason = response.optString("done_reason", "unknown")
     val evalCount = response.optLong("eval_count", -1L)
-    Log.d(logTag, "generate responseChars=" + text.length + " thinkingChars=" + thinking.length + " done=" + response.optBoolean("done", false) + " doneReason=" + doneReason + " evalCount=" + evalCount + " maxTokens=" + effectiveMaxTokens)
+    Log.d(logTag, "generate responseChars=" + text.length + " thinkingChars=" + thinking.length + " done=" + response.optBoolean("done", false) + " doneReason=" + doneReason + " evalCount=" + evalCount + " requestedMaxTokens=" + maxTokens + " effectiveMaxTokens=" + effectiveMaxTokens + " reasoningModel=" + reasoningModel)
     if (text.isNotBlank()) return@withContext text
     if (thinking.isNotBlank() && doneReason == "length") {
       throw IOException("Ollamaがthinking中に生成上限へ到達しました（thinkingChars=" + thinking.length + ", evalCount=" + evalCount + ", maxTokens=" + effectiveMaxTokens + ").最大トークン数を増やしてください")
