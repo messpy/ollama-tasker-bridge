@@ -57,7 +57,7 @@ class InferenceForegroundService : Service() {
       intent.getStringExtra(BridgeContract.EXTRA_MODEL).orEmpty(),
       intent.getStringExtra(BridgeContract.EXTRA_PROMPT).orEmpty(),
       intent.getStringExtra(BridgeContract.EXTRA_SYSTEM),
-      intent.getIntExtra(BridgeContract.EXTRA_MAX_TOKENS, 256),
+      intent.getIntExtra(BridgeContract.EXTRA_MAX_TOKENS, 1024),
       intent.getFloatExtra(BridgeContract.EXTRA_TEMPERATURE, 0.7f)
     );
     val result = DefaultInferenceRepository.generateText(applicationContext, request);
@@ -80,7 +80,7 @@ class InferenceForegroundService : Service() {
       "ollama" -> Backend.OLLAMA
       else -> throw IllegalArgumentException("実行先backendが未設定です。Tasker/MacroDroid設定を保存し直してください")
     };
-    val request = GenerateRequest(backend, model, values?.getString(LocalePluginContract.KEY_PROMPT).orEmpty(), system, values?.getInt(LocalePluginContract.KEY_MAX_TOKENS, 256) ?: 256, values?.getFloat(LocalePluginContract.KEY_TEMPERATURE, 0.7f) ?: 0.7f);
+    val request = GenerateRequest(backend, model, values?.getString(LocalePluginContract.KEY_PROMPT).orEmpty(), system, values?.getInt(LocalePluginContract.KEY_MAX_TOKENS, 1024) ?: 1024, values?.getFloat(LocalePluginContract.KEY_TEMPERATURE, 0.7f) ?: 0.7f);
     val result = DefaultInferenceRepository.generateText(applicationContext, request);
     Log.i(TAG, "LLM生成成功: backend=" + backend + " resultChars=" + result.length)
     DiagnosticsLog.note("LLM生成成功: backend=" + backend + " resultChars=" + result.length)

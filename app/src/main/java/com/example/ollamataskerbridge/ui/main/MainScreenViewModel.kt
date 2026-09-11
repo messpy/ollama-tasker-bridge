@@ -154,7 +154,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
       val prompt = _uiState.value.testPrompt.trim()
       require(model.isNotBlank()) { "テストするモデル名を入力してください" }
       require(prompt.isNotBlank()) { "テスト用プロンプトを入力してください" }
-      val result = DefaultInferenceRepository.generateText(getApplication(), GenerateRequest(if (localModels.fileFor(model).isFile || localModels.liteRtFileFor(model).isFile) Backend.LOCAL else Backend.OLLAMA, model, prompt, _uiState.value.systemPrompt, _uiState.value.maxTokens.toIntOrNull() ?: 256, _uiState.value.temperature.toFloatOrNull() ?: 0.7f))
+      val result = DefaultInferenceRepository.generateText(getApplication(), GenerateRequest(if (localModels.fileFor(model).isFile || localModels.liteRtFileFor(model).isFile) Backend.LOCAL else Backend.OLLAMA, model, prompt, _uiState.value.systemPrompt, _uiState.value.maxTokens.toIntOrNull() ?: 1024, _uiState.value.temperature.toFloatOrNull() ?: 0.7f))
       "テスト結果:\n$result"
     }
   }
@@ -252,7 +252,7 @@ data class MainScreenUiState(
   val systemPrompt: String = "",
   val systemPromptPresetId: String = "",
   val apiKeyVisible: Boolean = false,
-  val maxTokens: String = "256",
+  val maxTokens: String = "1024",
   val temperature: String = "0.7",
   val testPrompt: String = "Tasker連携テストです。成功したら『テスト成功』とだけ返してください。",
   val source: ModelSource = ModelSource.OLLAMA,

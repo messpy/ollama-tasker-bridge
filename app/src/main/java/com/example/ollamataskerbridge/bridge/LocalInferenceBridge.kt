@@ -20,7 +20,7 @@ import com.example.ollamataskerbridge.data.OllamaClient
 import com.example.ollamataskerbridge.data.SettingsStore
 import com.example.ollamataskerbridge.diagnostics.DiagnosticsLog
 
-data class GenerateRequest(val backend: Backend, val model: String, val prompt: String, val systemPrompt: String? = null, val maxTokens: Int = 256, val temperature: Float = 0.7f, val imageBytes: ByteArray? = null)
+data class GenerateRequest(val backend: Backend, val model: String, val prompt: String, val systemPrompt: String? = null, val maxTokens: Int = 1024, val temperature: Float = 0.7f, val imageBytes: ByteArray? = null)
 enum class Backend { LOCAL, OLLAMA }
 
 sealed interface GenerateEvent {
@@ -70,7 +70,7 @@ object LocalInferenceBridge {
   private var loadedPath: String? = null
   private var loadedSystemPrompt: String? = null
 
-  fun generate(context: Context, model: String, prompt: String, system: String?, maxTokens: Int = 256, temperature: Float = 0.7f): Flow<GenerateEvent> = flow {
+  fun generate(context: Context, model: String, prompt: String, system: String?, maxTokens: Int = 1024, temperature: Float = 0.7f): Flow<GenerateEvent> = flow {
     InferenceNotification.start(context, model)
     try {
       mutex.withLock {

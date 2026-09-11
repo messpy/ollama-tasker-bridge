@@ -60,7 +60,7 @@ class PluginSettingsActivity : ComponentActivity() {
           initialPlatform = resolvedPlatform,
           initialResultVariable = "%answer",
           initialBackend = initial?.getString(LocalePluginContract.KEY_BACKEND).orEmpty().ifBlank { if (local.any { it.name == initial?.getString(LocalePluginContract.KEY_MODEL).orEmpty() }) "local" else "ollama" },
-          initialMaxTokens = initial?.getInt(LocalePluginContract.KEY_MAX_TOKENS, 256) ?: 256,
+          initialMaxTokens = initial?.getInt(LocalePluginContract.KEY_MAX_TOKENS, 1024) ?: 1024,
           initialTemperature = initial?.getFloat(LocalePluginContract.KEY_TEMPERATURE, 0.7f) ?: 0.7f,
           models = models,
           presets = settings.presets(),
@@ -201,6 +201,6 @@ private fun PluginSettingsContent(
       } },
       confirmButton = { Button(onClick = { showVariables = false }) { Text("閉じる") } },
     )
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { OutlinedButton(onClick = onCancel) { Text("キャンセル") }; Button(onClick = { onSave(model.trim(), prompt, presetId, customSystem, platform, resultVariable, backend, maxTokens.toIntOrNull()?.coerceIn(1, 4096) ?: 256, temperature.toFloatOrNull()?.coerceIn(0f, 2f) ?: 0.7f) }, enabled = model.isNotBlank() && prompt.isNotBlank()) { Text("保存") } }
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { OutlinedButton(onClick = onCancel) { Text("キャンセル") }; Button(onClick = { onSave(model.trim(), prompt, presetId, customSystem, platform, resultVariable, backend, maxTokens.toIntOrNull()?.coerceIn(1, 4096) ?: 1024, temperature.toFloatOrNull()?.coerceIn(0f, 2f) ?: 0.7f) }, enabled = model.isNotBlank() && prompt.isNotBlank()) { Text("保存") } }
   }
 }

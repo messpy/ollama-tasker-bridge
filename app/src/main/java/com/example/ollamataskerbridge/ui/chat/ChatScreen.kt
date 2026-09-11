@@ -43,7 +43,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 
 data class ChatMessage(val user: Boolean, val text: String, val model: String = "", val generating: Boolean = false, val error: Boolean = false, val retryPrompt: String = "", val elapsedMs: Long = 0L, val inputTokens: Int = 0, val outputTokens: Int = 0, val tokenCountEstimated: Boolean = false)
-data class ChatUiState(val messages: List<ChatMessage> = emptyList(), val selectedModel: String = "", val maxTokens: String = "256", val temperature: String = "0.7", val systemPromptId: String = "", val systemPrompt: String = "", val presets: List<SystemPromptPreset> = emptyList(), val generating: Boolean = false, val input: String = "", val notice: String? = null, val imageBytes: ByteArray? = null, val imageName: String = "")
+data class ChatUiState(val messages: List<ChatMessage> = emptyList(), val selectedModel: String = "", val maxTokens: String = "1024", val temperature: String = "0.7", val systemPromptId: String = "", val systemPrompt: String = "", val presets: List<SystemPromptPreset> = emptyList(), val generating: Boolean = false, val input: String = "", val notice: String? = null, val imageBytes: ByteArray? = null, val imageName: String = "")
 
 class ChatViewModel(application: Application) : AndroidViewModel(application) {
   private val settings = SettingsStore(application)
@@ -94,7 +94,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val index = old.messages.size + 1
     _state.value = old.copy(input = "", imageBytes = null, imageName = "", generating = true, messages = old.messages + ChatMessage(true, prompt) + ChatMessage(false, "", old.selectedModel, true, retryPrompt = prompt))
     val backend = if (selectedModel?.source == ModelSource.OLLAMA) Backend.OLLAMA else Backend.LOCAL
-    val request = GenerateRequest(backend, old.selectedModel, prompt, old.systemPrompt.takeIf { it.isNotBlank() }, old.maxTokens.toIntOrNull()?.coerceAtLeast(1) ?: 256, old.temperature.toFloatOrNull()?.coerceIn(0f, 2f) ?: 0.7f, old.imageBytes)
+    val request = GenerateRequest(backend, old.selectedModel, prompt, old.systemPrompt.takeIf { it.isNotBlank() }, old.maxTokens.toIntOrNull()?.coerceAtLeast(1) ?: 1024, old.temperature.toFloatOrNull()?.coerceIn(0f, 2f) ?: 0.7f, old.imageBytes)
     val startedAt = SystemClock.elapsedRealtime()
     DiagnosticsLog.note("テストチャット生成開始: backend=" + request.backend + " model=" + request.model + " maxTokens=" + request.maxTokens + " temperature=" + request.temperature + " image=" + (request.imageBytes != null) + " promptChars=" + request.prompt.length)
     DiagnosticsLog.note("テストチャットプロンプト: " + request.prompt)

@@ -55,20 +55,24 @@ class OllamaClient(private val baseUrl: String, private val apiKey: String = "")
 
   suspend fun ping() = withContext(Dispatchers.IO) { request("GET", "/api/tags"); Unit }
 
-  suspend fun generate(model: String, prompt: String, system: String? = null, maxTokens: Int = 256, temperature: Float = 0.7f, imageBytes: ByteArray? = null): String = withContext(Dispatchers.IO) {
+  suspend fun generate(model: String, prompt: String, system: String? = null, maxTokens: Int = 1024, temperature: Float = 0.7f, imageBytes: ByteArray? = null): String = withContext(Dispatchers.IO) {
     require(model.isNotBlank()) { "モデル名が必要です" }
     require(prompt.isNotBlank()) { "プロンプトが必要です" }
     val payload = org.json.JSONObject()
       .put("model", model)
       .put("prompt", prompt)
       .put("stream", false)
+      .put("think", "low")
     if (!system.isNullOrBlank()) payload.put("system", system)
     imageBytes?.let { payload.put("images", org.json.JSONArray().put(Base64.getEncoder().encodeToString(it))) }
     payload.put("options", org.json.JSONObject().put("num_predict", maxTokens.coerceAtLeast(1)).put("temperature", temperature.coerceIn(0f, 2f)))
     for (attempt in 0..1) {
       val response = org.json.JSONObject(request("POST", "/api/generate", payload.toString()))
       val text = response.optString("response")
-      Log.d(logTag, "generate responseChars=" + text.length + " done=" + response.optBoolean("done", false) + " attempt=" + (attempt + 1))
+      val thinking = response.optString("thinking")
+      val doneReason = response.optString("done_reason", "unknown")
+      val evalCount = response.optLong("eval_count", -1L)
+      Log.d(logTag, "generate responseChars=" + text.length + " thinkingChars=" + thinking.length + " done=" + response.optBoolean("done", false) + " doneReason=" + doneReason + " evalCount=" + evalCount + " attempt=" + (attempt + 1))
       if (text.isNotBlank()) return@withContext text
       if (attempt == 0) {
         Log.w(logTag, "Ollama returned an empty response; retrying once")

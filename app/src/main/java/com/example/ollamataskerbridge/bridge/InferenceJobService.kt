@@ -52,7 +52,7 @@ class InferenceJobService : JobService() {
         val settings = SettingsStore(applicationContext)
         val presetId = data.getString(KEY_PRESET_ID).orEmpty()
         val system = if (presetId.isNotBlank() && presetId != "custom") settings.presets().firstOrNull { it.id == presetId }?.body else data.getString(KEY_CUSTOM_SYSTEM).orEmpty().ifBlank { data.getString(KEY_SYSTEM) }
-        val maxTokens = data.getString(KEY_MAX_TOKENS)?.toIntOrNull()?.coerceIn(1, 4096) ?: 256
+        val maxTokens = data.getString(KEY_MAX_TOKENS)?.toIntOrNull()?.coerceIn(1, 4096) ?: 1024
         val temperature = data.getString(KEY_TEMPERATURE)?.toFloatOrNull()?.coerceIn(0f, 2f) ?: 0.7f
         val result = DefaultInferenceRepository.generateText(applicationContext, GenerateRequest(
           backend, data.getString(KEY_MODEL).orEmpty(), data.getString(KEY_PROMPT).orEmpty(), system, maxTokens, temperature
