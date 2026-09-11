@@ -43,7 +43,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 
 data class ChatMessage(val user: Boolean, val text: String, val model: String = "", val generating: Boolean = false, val error: Boolean = false, val retryPrompt: String = "", val elapsedMs: Long = 0L, val inputTokens: Int = 0, val outputTokens: Int = 0, val tokenCountEstimated: Boolean = false)
-data class ChatUiState(val messages: List<ChatMessage> = emptyList(), val selectedModel: String = "", val maxTokens: String = "256", val temperature: String = "0.7", val systemPromptId: String = "", val systemPrompt: String = "", val presets: List<SystemPromptPreset> = emptyList(), val generating: Boolean = false, val input: String = "", val notice: String? = null, val imageBytes: ByteArray? = null, val imageName: String = "")
+data class ChatUiState(val messages: List<ChatMessage> = emptyList(), val selectedModel: String = "", val maxTokens: String = "1024", val temperature: String = "0.7", val systemPromptId: String = "", val systemPrompt: String = "", val presets: List<SystemPromptPreset> = emptyList(), val generating: Boolean = false, val input: String = "", val notice: String? = null, val imageBytes: ByteArray? = null, val imageName: String = "")
 
 class ChatViewModel(application: Application) : AndroidViewModel(application) {
   private val settings = SettingsStore(application)
@@ -66,11 +66,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
   private fun availableModels(): List<OllamaModel> {
     val local = localModels()
     val localNames = local.map { it.name }.toSet()
-    return (settings.cachedModels() + local).distinctBy { it.name }.map { it.copy(local = it.local || it.name in localNames) }
+    return (settings.cachedModels() + local).distinctBy { it.name }.filter { it.local || it.enabled || it.name in localNames }.map { it.copy(local = it.local || it.name in localNames) }
   }
-  private val _state = MutableStateFlow(ChatUiState(selectedModel = availableModels().firstOrNull()?.name.orEmpty(), presets = settings.presets(), systemPromptId = settings.lastPresetId, systemPrompt = settings.presets().firstOrNull { it.id == settings.lastPresetId }?.body.orEmpty()))
+  private val _state = MutableStateFlow(ChatUiState(selectedModel = (availableModels().firstOrNull { it.local } ?: availableModels().firstOrNull())?.name.orEmpty(), presets = settings.presets(), systemPromptId = settings.lastPresetId, systemPrompt = settings.presets().firstOrNull { it.id == settings.lastPresetId }?.body.orEmpty()))
   val state = _state.asStateFlow()
   fun models() = availableModels()
+  fun refreshPresets() { _state.value = _state.value.copy(presets = settings.presets()) }
   private fun Boolean?.orFalse() = this == true
   fun input(value: String) { _state.value = _state.value.copy(input = value) }
   fun selectModel(value: String) { _state.value = _state.value.copy(selectedModel = value) }
@@ -79,7 +80,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
   fun selectPreset(value: SystemPromptPreset?) {
     val old = _state.value
     val changed = old.systemPrompt != value?.body.orEmpty()
-    _state.value = old.copy(systemPromptId = value?.id.orEmpty(), systemPrompt = value?.body.orEmpty(), messages = if (changed && old.messages.isNotEmpty()) emptyList() else old.messages, notice = if (changed && old.messages.isNotEmpty()) "システムプロンプトを変更したため、会話をリセットしました。" else old.notice)
+    _state.value = old.copy(systemPromptId = value?.id.orEmpty(), systemPrompt = value?.body.orEmpty(), maxTokens = value?.maxTokens?.toString() ?: old.maxTokens, temperature = value?.temperature?.toString() ?: old.temperature, messages = if (changed && old.messages.isNotEmpty()) emptyList() else old.messages, notice = if (changed && old.messages.isNotEmpty()) "システムプロンプトを変更したため、会話をリセットしました。" else old.notice)
   }
   fun stop() { running?.cancel(); _state.value = _state.value.copy(generating = false) }
   fun retry(prompt: String) = send(prompt)
@@ -94,7 +95,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val index = old.messages.size + 1
     _state.value = old.copy(input = "", imageBytes = null, imageName = "", generating = true, messages = old.messages + ChatMessage(true, prompt) + ChatMessage(false, "", old.selectedModel, true, retryPrompt = prompt))
     val backend = if (selectedModel?.source == ModelSource.OLLAMA) Backend.OLLAMA else Backend.LOCAL
-    val request = GenerateRequest(backend, old.selectedModel, prompt, old.systemPrompt.takeIf { it.isNotBlank() }, old.maxTokens.toIntOrNull()?.coerceAtLeast(1) ?: 256, old.temperature.toFloatOrNull()?.coerceIn(0f, 2f) ?: 0.7f, old.imageBytes)
+    val request = GenerateRequest(backend, old.selectedModel, prompt, old.systemPrompt.takeIf { it.isNotBlank() }, old.maxTokens.toIntOrNull()?.coerceAtLeast(1) ?: 1024, old.temperature.toFloatOrNull()?.coerceIn(0f, 2f) ?: 0.7f, old.imageBytes)
     val startedAt = SystemClock.elapsedRealtime()
     DiagnosticsLog.note("テストチャット生成開始: backend=" + request.backend + " model=" + request.model + " maxTokens=" + request.maxTokens + " temperature=" + request.temperature + " image=" + (request.imageBytes != null) + " promptChars=" + request.prompt.length)
     DiagnosticsLog.note("テストチャットプロンプト: " + request.prompt)
@@ -136,7 +137,7 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), modifier: Modifier = Modi
         DropdownMenuItem({ Text("モデルを選択  ${state.selectedModel.ifBlank { "未選択" }}") }, { menu = false; models = true })
         DropdownMenuItem({ Text("最大トークン数  ${state.maxTokens}") }, { menu = false; tokens = true })
         DropdownMenuItem({ Text("Temperature  ${state.temperature}") }, { menu = false; temp = true })
-        DropdownMenuItem({ Text("システムプロンプト  ${state.presets.firstOrNull { it.id == state.systemPromptId }?.name ?: "なし"}") }, { menu = false; prompts = true })
+        DropdownMenuItem({ Text("システムプロンプト  ${state.presets.firstOrNull { it.id == state.systemPromptId }?.name ?: "なし"}") }, { menu = false; viewModel.refreshPresets(); prompts = true })
       }
       Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.Bottom) {
         IconButton({ menu = true }) { Text("＋", style = MaterialTheme.typography.headlineSmall) }
@@ -145,10 +146,16 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), modifier: Modifier = Modi
       }
     }
   }
-  if (models) AlertDialog(onDismissRequest = { models = false }, title = { Text("ダウンロード済みモデル") }, text = { Column { viewModel.models().forEach { item -> OutlinedButton({  viewModel.selectModel(item.name); models = false }, Modifier.fillMaxWidth().padding(2.dp)) { Text(item.name + if (item.supportsVision()) " 👁️" else "") } } } }, confirmButton = { Button({ models = false }) { Text("閉じる") } })
+  if (models) ModelPickerDialog(viewModel, { models = false })
   if (tokens) NumberDialog("最大トークン数", state.maxTokens, { viewModel.maxTokens(it); tokens = false }, { tokens = false })
   if (temp) NumberDialog("Temperature", state.temperature, { viewModel.temperature(it); temp = false }, { temp = false })
   if (prompts) AlertDialog(onDismissRequest = { prompts = false }, title = { Text("システムプロンプト") }, text = { Column { OutlinedButton({ viewModel.selectPreset(null); prompts = false }, Modifier.fillMaxWidth()) { Text("なし") }; state.presets.forEach { item -> OutlinedButton({ viewModel.selectPreset(item); prompts = false }, Modifier.fillMaxWidth()) { Text(item.name) } } } }, confirmButton = { Button({ prompts = false }) { Text("閉じる") } })
+}
+
+@Composable private fun ModelPickerDialog(viewModel: ChatViewModel, dismiss: () -> Unit) {
+  var showCloud by remember { mutableStateOf(false) }
+  val candidates = viewModel.models().filter { it.local || (showCloud && it.source == ModelSource.OLLAMA && !it.local) }
+  AlertDialog(onDismissRequest = dismiss, title = { Text("モデルを選択") }, text = { Column { Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(showCloud, { showCloud = it }); Text("Cloudモデルを表示") }; if (candidates.isEmpty()) Text(if (showCloud) "選択できるモデルがありません" else "ダウンロード済みモデルがありません") else candidates.forEach { item -> OutlinedButton({ viewModel.selectModel(item.name); dismiss() }, Modifier.fillMaxWidth().padding(2.dp)) { Text(buildString { append(item.name); if (item.remote && !item.local) append(" ☁"); if (item.supportsVision()) append(" 👁️") }) } } } }, confirmButton = { Button(dismiss) { Text("閉じる") } })
 }
 
 @Composable private fun NumberDialog(title: String, value: String, save: (String) -> Unit, dismiss: () -> Unit) { var input by remember(value) { mutableStateOf(value) }; AlertDialog(onDismissRequest = dismiss, title = { Text(title) }, text = { OutlinedTextField(input, { input = it }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)) }, confirmButton = { Button({ save(input) }) { Text("保存") } }, dismissButton = { OutlinedButton(dismiss) { Text("キャンセル") } }) }

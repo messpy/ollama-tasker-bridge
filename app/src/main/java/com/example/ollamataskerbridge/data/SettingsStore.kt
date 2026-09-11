@@ -1,12 +1,21 @@
 package com.example.ollamataskerbridge.data
 
 import android.content.Context
+import android.app.ActivityManager
+import android.os.StatFs
 import org.json.JSONArray
 import org.json.JSONObject
 
-data class SystemPromptPreset(val id: String, val name: String, val body: String)
+data class SystemPromptPreset(val id: String, val name: String, val body: String, val maxTokens: Int = 1024, val temperature: Float = 0.7f)
 
 class SettingsStore(context: Context) {
+  private val appContext = context.applicationContext
+
+  private fun recommendedModelSizeGb(): Float {
+    val memory = ActivityManager.MemoryInfo().also { appContext.getSystemService(ActivityManager::class.java).getMemoryInfo(it) }
+    val freeStorageGb = StatFs(appContext.filesDir.path).availableBytes / 1_000_000_000.0
+    return (minOf(memory.totalMem / 1_000_000_000.0 * 0.5, (freeStorageGb - 1.0).coerceAtLeast(0.5))).coerceIn(0.5, 8.0).toFloat()
+  }
   private val prefs = context.getSharedPreferences("connection_settings", Context.MODE_PRIVATE)
   var endpoint: String
     get() = prefs.getString("endpoint", null)
@@ -32,6 +41,10 @@ class SettingsStore(context: Context) {
     get() = prefs.getString("model_source", "").orEmpty()
     set(value) { prefs.edit().putString("model_source", value).apply() }
 
+  var liteRtContextTokens: Int
+    get() = prefs.getInt("litert_context_tokens", 2048).coerceIn(512, 8192)
+    set(value) { prefs.edit().putInt("litert_context_tokens", value.coerceIn(512, 8192)).apply() }
+
   var enabledModelSources: Set<ModelSource>
     get() = prefs.getStringSet("enabled_model_sources", null)
       ?.mapNotNull { runCatching { ModelSource.valueOf(it) }.getOrNull() }
@@ -49,18 +62,22 @@ class SettingsStore(context: Context) {
     set(value) { prefs.edit().putFloat("min_local_model_size_gb", value.coerceAtLeast(0f)).apply() }
 
   var maxLocalModelSizeGb: Float
-    get() = prefs.getFloat("max_local_model_size_gb", 15f)
+    get() {
+      val saved = if (prefs.contains("max_local_model_size_gb")) prefs.getFloat("max_local_model_size_gb", 15f) else null
+      return if (saved == null || saved == 15f) recommendedModelSizeGb() else saved
+    }
     set(value) { prefs.edit().putFloat("max_local_model_size_gb", value.coerceAtLeast(0f)).apply() }
 
   fun cachedModels(): List<OllamaModel> = runCatching {
     val array = JSONArray(prefs.getString("cached_models", "[]"))
     (0 until array.length()).mapNotNull { index -> array.optJSONObject(index)?.let {
-      OllamaModel(it.optString("name"), it.optBoolean("remote", false), it.optBoolean("downloadable", true), it.optLong("size", -1L), it.optBoolean("local", false), runCatching { ModelSource.valueOf(it.optString("source", ModelSource.OLLAMA.name)) }.getOrDefault(ModelSource.OLLAMA), it.optString("downloadUrl"))
+      OllamaModel(it.optString("name"), it.optBoolean("remote", false), it.optBoolean("downloadable", true), it.optLong("size", -1L), it.optBoolean("local", false), runCatching { ModelSource.valueOf(it.optString("source", ModelSource.OLLAMA.name)) }.getOrDefault(ModelSource.OLLAMA), it.optString("downloadUrl"), it.optBoolean("enabled", false))
     } }
   }.getOrDefault(emptyList())
 
+  fun setModelEnabled(name: String, enabled: Boolean) { saveCachedModels(cachedModels().map { if (it.name == name) it.copy(enabled = enabled) else it }) }
   fun saveCachedModels(models: List<OllamaModel>) {
-    val array = JSONArray().apply { models.forEach { put(JSONObject().put("name", it.name).put("remote", it.remote).put("downloadable", it.downloadable).put("size", it.sizeBytes).put("local", it.local).put("source", it.source.name).put("downloadUrl", it.downloadUrl)) } }
+    val array = JSONArray().apply { models.forEach { put(JSONObject().put("name", it.name).put("remote", it.remote).put("downloadable", it.downloadable).put("size", it.sizeBytes).put("local", it.local).put("source", it.source.name).put("downloadUrl", it.downloadUrl).put("enabled", it.enabled)) } }
     prefs.edit().putString("cached_models", array.toString()).apply()
   }
 
@@ -68,19 +85,19 @@ class SettingsStore(context: Context) {
     val array = JSONArray(prefs.getString("system_prompt_presets", "[]"))
     (0 until array.length()).mapNotNull { index ->
       array.optJSONObject(index)?.let { item ->
-        SystemPromptPreset(item.optString("id"), item.optString("name"), item.optString("body"))
+        SystemPromptPreset(item.optString("id"), item.optString("name"), item.optString("body"), item.optInt("maxTokens", 1024), item.optDouble("temperature", 0.7).toFloat())
       }?.takeIf { it.id.isNotBlank() && it.name.isNotBlank() }
     }
   }.getOrDefault(emptyList())
 
   fun savePreset(preset: SystemPromptPreset) {
     val values = presets().filterNot { it.id == preset.id } + preset
-    val array = JSONArray().apply { values.forEach { put(JSONObject().put("id", it.id).put("name", it.name).put("body", it.body)) } }
+    val array = JSONArray().apply { values.forEach { put(JSONObject().put("id", it.id).put("name", it.name).put("body", it.body).put("maxTokens", it.maxTokens).put("temperature", it.temperature)) } }
     prefs.edit().putString("system_prompt_presets", array.toString()).putString("last_preset_id", preset.id).apply()
   }
 
   fun deletePreset(id: String) {
-    val array = JSONArray().apply { presets().filterNot { it.id == id }.forEach { put(JSONObject().put("id", it.id).put("name", it.name).put("body", it.body)) } }
+    val array = JSONArray().apply { presets().filterNot { it.id == id }.forEach { put(JSONObject().put("id", it.id).put("name", it.name).put("body", it.body).put("maxTokens", it.maxTokens).put("temperature", it.temperature)) } }
     prefs.edit().putString("system_prompt_presets", array.toString()).apply()
   }
 }

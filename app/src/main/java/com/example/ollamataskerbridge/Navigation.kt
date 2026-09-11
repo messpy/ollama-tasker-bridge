@@ -49,7 +49,7 @@ fun MainNavigation() {
         NavigationDrawerItem(label = { Text("テストチャット") }, selected = backStack.lastOrNull() == Chat, onClick = { selectedSection = MainSection.SETTINGS; scope.launch { drawerState.close() }; backStack.removeAll { it != Main }; backStack.add(Chat) })
         NavigationDrawerItem(label = { Text("モデル管理・ダウンロード") }, selected = selectedSection == MainSection.MODELS, onClick = { selectedSection = MainSection.MODELS; scope.launch { drawerState.close() }; backStack.removeAll { it != Main }; backStack.add(Models) })
         NavigationDrawerItem(label = { Text("システムプロンプト") }, selected = selectedSection == MainSection.PROMPTS, onClick = { selectedSection = MainSection.PROMPTS; scope.launch { drawerState.close() }; backStack.removeAll { it != Main }; backStack.add(Prompts) })
-        NavigationDrawerItem(label = { Text("接続・API設定") }, selected = backStack.lastOrNull() == Main, onClick = { selectedSection = MainSection.SETTINGS; scope.launch { drawerState.close() }; backStack.removeAll { it != Main } })
+        NavigationDrawerItem(label = { Text("接続・API設定") }, selected = backStack.lastOrNull() == Main, onClick = { selectedSection = MainSection.SETTINGS; scope.launch { drawerState.close() }; backStack.removeAll { it != Home }; backStack.add(Main) })
       }
     },
   ) {

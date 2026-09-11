@@ -16,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
@@ -48,7 +49,7 @@ class PluginSettingsActivity : ComponentActivity() {
     val local = LocalModelStore(this).directory.listFiles().orEmpty()
       .filter { it.extension == "gguf" || it.extension == "litertlm" }
       .map { OllamaModel(it.nameWithoutExtension, false, true, it.length(), true) }
-    val models = (settings.cachedModels() + local).distinctBy { it.name }
+    val models = (settings.cachedModels() + local).distinctBy { it.name }.filter { it.local || it.enabled }
     setContent {
       MyApplicationTheme {
         PluginSettingsContent(
@@ -59,11 +60,13 @@ class PluginSettingsActivity : ComponentActivity() {
           initialPlatform = resolvedPlatform,
           initialResultVariable = "%answer",
           initialBackend = initial?.getString(LocalePluginContract.KEY_BACKEND).orEmpty().ifBlank { if (local.any { it.name == initial?.getString(LocalePluginContract.KEY_MODEL).orEmpty() }) "local" else "ollama" },
+          initialMaxTokens = initial?.getInt(LocalePluginContract.KEY_MAX_TOKENS, 1024) ?: 1024,
+          initialTemperature = initial?.getFloat(LocalePluginContract.KEY_TEMPERATURE, 0.7f) ?: 0.7f,
           models = models,
           presets = settings.presets(),
           onOpenApp = { startActivity(Intent(this@PluginSettingsActivity, MainActivity::class.java)) },
           onCancel = { setResult(Activity.RESULT_CANCELED); finish() },
-          onSave = { model, prompt, presetId, customSystem, platform, resultVariable, backend ->
+          onSave = { model, prompt, presetId, customSystem, platform, resultVariable, backend, maxTokens, temperature ->
             settings.pluginPlatform = platform
             if (presetId.isNotBlank() && presetId != "custom") settings.lastPresetId = presetId
             val normalizedResult = "answer"
@@ -75,6 +78,8 @@ class PluginSettingsActivity : ComponentActivity() {
               putString(LocalePluginContract.KEY_SYSTEM, customSystem)
               putString(LocalePluginContract.KEY_PLATFORM, platform)
               putString(LocalePluginContract.KEY_BACKEND, backend)
+              putInt(LocalePluginContract.KEY_MAX_TOKENS, maxTokens)
+              putFloat(LocalePluginContract.KEY_TEMPERATURE, temperature)
               putString(LocalePluginContract.KEY_RESULT_VARIABLE, normalizedResult)
             }
             val resultIntent = Intent().putExtra(LocalePluginContract.EXTRA_BUNDLE, values)
@@ -116,22 +121,27 @@ private fun PluginSettingsContent(
   initialPlatform: String,
   initialResultVariable: String,
   initialBackend: String,
+  initialMaxTokens: Int,
+  initialTemperature: Float,
   models: List<OllamaModel>,
   presets: List<SystemPromptPreset>,
   onOpenApp: () -> Unit,
   onCancel: () -> Unit,
-  onSave: (String, String, String, String, String, String, String) -> Unit,
+  onSave: (String, String, String, String, String, String, String, Int, Float) -> Unit,
 ) {
   var platform by remember { mutableStateOf(initialPlatform.ifBlank { "tasker" }) }
   var model by remember { mutableStateOf(initialModel) }
   var prompt by remember { mutableStateOf(initialPrompt) }
   var query by remember { mutableStateOf("") }
-  var localOnly by remember { mutableStateOf(true) }
+  var localOnly by remember { mutableStateOf(false) }
   var backend by remember { mutableStateOf(initialBackend.ifBlank { "ollama" }) }
   var presetId by remember { mutableStateOf(initialPresetId) }
   var customSystem by remember { mutableStateOf(initialCustomSystem) }
   var resultVariable by remember { mutableStateOf(initialResultVariable) }
+  var maxTokens by remember { mutableStateOf(initialMaxTokens.toString()) }
+  var temperature by remember { mutableStateOf(initialTemperature.toString()) }
   var presetMenu by remember { mutableStateOf(false) }
+  var showVariables by remember { mutableStateOf(false) }
   val selectedPreset = presets.firstOrNull { it.id == presetId }
   val shown = models.filter { !localOnly || it.local }.filter { query.isBlank() || it.name.contains(query, true) }
   val platformName = if (platform == "macrodroid") "MacroDroid" else "Tasker"
@@ -141,7 +151,7 @@ private fun PluginSettingsContent(
       OutlinedButton(onClick = { platform = "tasker" }) { Text("Tasker") }
       OutlinedButton(onClick = { platform = "macrodroid" }) { Text("MacroDroid") }
     }
-    Text("モデルの取得・APIキー・プリセット管理は本体アプリで行います。")
+    Text("モデルの取得・APIキー・プリセット管理は本体アプリで行います。最新のHugging Face候補は本体アプリでモデル一覧を更新すると共有されます。")
     Row { Checkbox(checked = true, onCheckedChange = null); Text("本体アプリのAPIキーを使用") }
     Button(onClick = onOpenApp, modifier = Modifier.fillMaxWidth()) { Text("本体アプリを開く") }
     OutlinedTextField(model, { }, Modifier.fillMaxWidth(), label = { Text("モデル") }, singleLine = true, readOnly = true)
@@ -155,14 +165,19 @@ private fun PluginSettingsContent(
         Card(onClick = { model = item.name; backend = if (item.local) "local" else "ollama" }, Modifier.fillMaxWidth()) {
           Row(Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             Column(Modifier.weight(1f)) { Text(item.name); if (item.remote) Text("Cloud", style = androidx.compose.material3.MaterialTheme.typography.labelSmall); Text(if (item.sizeBytes > 0) "%.2f GB".format(item.sizeBytes / 1_000_000_000.0) else "サイズ不明", style = androidx.compose.material3.MaterialTheme.typography.bodySmall) }
-            Text(if (item.local) "✓" else "未取得")
+            Text(if (item.local) "✓ ローカル" else if (item.source == com.example.ollamataskerbridge.data.ModelSource.OLLAMA) "☁ Cloudで実行" else "未取得")
           }
         }
       }
     }
-    Text(if (backend == "local") "実行先: ローカル" else "実行先: Ollama Cloud")
+    Text(if (backend == "local") "実行先: ローカル" else "実行先: Ollama Cloud（端末へのダウンロード不要）")
     OutlinedTextField(prompt, { prompt = it }, Modifier.fillMaxWidth(), label = { Text("プロンプト") }, minLines = 2)
-    Text(if (platform == "macrodroid") "入力例: {lv=prompt} こんにちは" else "入力例: %prompt こんにちは")
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+      OutlinedTextField(maxTokens, { maxTokens = it.filter(Char::isDigit) }, Modifier.weight(1f), label = { Text("最大トークン数") }, singleLine = true)
+      OutlinedTextField(temperature, { temperature = it }, Modifier.weight(1f), label = { Text("Temperature") }, singleLine = true)
+    }
+    Text("入力例: %prompt こんにちは")
+    if (platform == "macrodroid") OutlinedButton(onClick = { showVariables = true }, modifier = Modifier.fillMaxWidth()) { Text("MacroDroid用変数を表示") }
     Row {
       OutlinedButton(onClick = { presetMenu = true }, modifier = Modifier.weight(1f)) { Text(selectedPreset?.name ?: "カスタム入力…") }
       DropdownMenu(expanded = presetMenu, onDismissRequest = { presetMenu = false }) {
@@ -174,6 +189,18 @@ private fun PluginSettingsContent(
     if (presetId == "custom") OutlinedTextField(customSystem, { customSystem = it }, Modifier.fillMaxWidth(), label = { Text("システムプロンプト（カスタム）") }, minLines = 3)
     OutlinedTextField("%answer", {}, Modifier.fillMaxWidth(), label = { Text("出力変数") }, supportingText = { Text("成功: %answer / %ok、失敗: %error") }, singleLine = true, readOnly = true)
     Text("結果: %answer（回答）・%ok（成否）・%error（エラー）")
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { OutlinedButton(onClick = onCancel) { Text("キャンセル") }; Button(onClick = { onSave(model.trim(), prompt, presetId, customSystem, platform, resultVariable, backend) }, enabled = model.isNotBlank() && prompt.isNotBlank()) { Text("保存") } }
+    if (showVariables) AlertDialog(
+      onDismissRequest = { showVariables = false },
+      title = { Text("MacroDroid用の変数") },
+      text = { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("入力（プロンプト）: %prompt")
+        Text("出力（回答）: %answer")
+        Text("成功: %ok")
+        Text("失敗: %error")
+        Text("Prompt欄には %prompt を入力してください。MacroDroidの次のアクションでは、受け取った answer を {lv=answer} で参照します。")
+      } },
+      confirmButton = { Button(onClick = { showVariables = false }) { Text("閉じる") } },
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { OutlinedButton(onClick = onCancel) { Text("キャンセル") }; Button(onClick = { onSave(model.trim(), prompt, presetId, customSystem, platform, resultVariable, backend, maxTokens.toIntOrNull()?.coerceIn(1, 4096) ?: 1024, temperature.toFloatOrNull()?.coerceIn(0f, 2f) ?: 0.7f) }, enabled = model.isNotBlank() && prompt.isNotBlank()) { Text("保存") } }
   }
 }

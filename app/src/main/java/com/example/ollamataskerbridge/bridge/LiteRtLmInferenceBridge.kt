@@ -2,6 +2,7 @@ package com.example.ollamataskerbridge.bridge
 
 import android.content.Context
 import com.example.ollamataskerbridge.data.LocalModelStore
+import com.example.ollamataskerbridge.data.SettingsStore
 import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Content
 import com.google.ai.edge.litertlm.Contents
@@ -26,6 +27,7 @@ object LiteRtLmInferenceBridge {
   private var loadedSystem: String? = null
   private var loadedMaxTokens: Int = 0
   private var loadedTemperature: Float = -1f
+  private var loadedContextTokens: Int = 0
   private var engine: Engine? = null
   private var conversation: Conversation? = null
 
@@ -36,10 +38,12 @@ object LiteRtLmInferenceBridge {
         val file = LocalModelStore(context).liteRtFileFor(model)
         require(file.isFile) { "LiteRT-LMモデル未取得です: $model" }
         val normalizedSystem = system?.takeIf { it.isNotBlank() }
-        if (loadedPath != file.absolutePath || loadedSystem != normalizedSystem || loadedMaxTokens != maxTokens || loadedTemperature != temperature) {
+        if (loadedPath != file.absolutePath || loadedSystem != normalizedSystem || loadedMaxTokens != maxTokens || loadedTemperature != temperature || loadedContextTokens != SettingsStore(context).liteRtContextTokens) {
           // System instructions belong to ConversationConfig, so changing them creates a fresh conversation.
           closeLocked()
-          val newEngine = Engine(EngineConfig(modelPath = file.absolutePath, backend = Backend.CPU(), maxNumTokens = maxTokens.coerceAtLeast(1)))
+          // maxNumTokens is context capacity, not the UI output limit. Keep normal prompts and history above 256 tokens.
+          val contextTokens = SettingsStore(context).liteRtContextTokens
+          val newEngine = Engine(EngineConfig(modelPath = file.absolutePath, backend = Backend.CPU(), maxNumTokens = contextTokens))
           newEngine.initialize()
           engine = newEngine
           conversation = newEngine.createConversation(ConversationConfig(systemInstruction = normalizedSystem?.let { Contents.of(it) } ?: Contents.of(""), samplerConfig = SamplerConfig(topK = 20, topP = 0.95, temperature = temperature.coerceIn(0f, 2f).toDouble(), seed = 0)))
@@ -47,6 +51,7 @@ object LiteRtLmInferenceBridge {
           loadedSystem = normalizedSystem
           loadedMaxTokens = maxTokens
           loadedTemperature = temperature
+          loadedContextTokens = contextTokens
         }
         val activeConversation = requireNotNull(conversation)
         val fullText = StringBuilder()
@@ -77,5 +82,6 @@ object LiteRtLmInferenceBridge {
     loadedSystem = null
     loadedMaxTokens = 0
     loadedTemperature = -1f
+    loadedContextTokens = 0
   }
 }

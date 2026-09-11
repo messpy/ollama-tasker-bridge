@@ -66,7 +66,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     } else {
       val preset = settings.presets().firstOrNull { it.id == id } ?: return
       settings.lastPresetId = id
-      _uiState.value = _uiState.value.copy(systemPromptPresetId = id, systemPrompt = preset.body, presets = settings.presets(), message = null)
+      _uiState.value = _uiState.value.copy(systemPromptPresetId = id, systemPrompt = preset.body, maxTokens = preset.maxTokens.toString(), temperature = preset.temperature.toString(), presets = settings.presets(), message = null)
     }
   }
   fun gemmaTermsAccepted(): Boolean = settings.gemmaTermsAccepted
@@ -105,6 +105,13 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   fun maxTokensChanged(value: String) { _uiState.value = _uiState.value.copy(maxTokens = value) }
   fun temperatureChanged(value: String) { _uiState.value = _uiState.value.copy(temperature = value) }
   fun selectModel(name: String) { _uiState.value = _uiState.value.copy(selectedModel = name, downloadModel = name, message = null) }
+  fun refreshInstalledModels() {
+    val installed = installedModels()
+    val installedByName = installed.associateBy { it.name }
+    val merged = (_uiState.value.models.map { item -> item.copy(local = installedByName[item.name] != null, sizeBytes = installedByName[item.name]?.sizeBytes ?: item.sizeBytes) } + installed.filter { it.name !in _uiState.value.models.map { model -> model.name } }).distinctBy { it.name }
+    settings.saveCachedModels(merged)
+    _uiState.value = _uiState.value.copy(models = merged)
+  }
   fun sourceChanged(source: ModelSource) { settings.modelSource = source.name; _uiState.value = _uiState.value.copy(source = source, search = "", showLocal = true, showCloud = true, message = null) }
   fun sourceFilterChanged(source: ModelSource?) {
     val next = source?.let { setOf(it) } ?: ModelSource.values().toSet()
@@ -118,9 +125,18 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     _uiState.value = _uiState.value.copy(enabledSources = next, message = null)
   }
   fun apiKeyVisibleChanged(value: Boolean) { _uiState.value = _uiState.value.copy(apiKeyVisible = value) }
-  fun savePreset(name: String, body: String, id: String = java.util.UUID.randomUUID().toString()) { settings.savePreset(SystemPromptPreset(id, name, body)); _uiState.value = _uiState.value.copy(presets = settings.presets()) }
+  fun savePreset(name: String, body: String, maxTokens: Int, temperature: Float, id: String = java.util.UUID.randomUUID().toString()) { settings.savePreset(SystemPromptPreset(id, name, body, maxTokens, temperature)); _uiState.value = _uiState.value.copy(presets = settings.presets()) }
   fun deletePreset(id: String) { settings.deletePreset(id); _uiState.value = _uiState.value.copy(presets = settings.presets()) }
 
+  fun enableCloudModel(name: String) { runRequest("Cloudモデルの登録に失敗しました。") {
+    val model = _uiState.value.models.firstOrNull { it.name == name } ?: error("モデルが一覧にありません")
+    require(model.source == ModelSource.OLLAMA && !model.local) { "このモデルはCloud登録の対象ではありません" }
+    settings.setModelEnabled(name, true)
+    val updated = _uiState.value.models.map { if (it.name == name) it.copy(enabled = true) else it }
+    settings.saveCachedModels(updated)
+    _uiState.value = _uiState.value.copy(models = updated, selectedModel = name)
+    "Cloudモデルを登録しました。端末には保存せず、Ollama Cloudで実行します"
+  } }
   fun downloadModel(name: String) { runRequest("モデルの取得を開始できません。HTTP応答・保存先・空き容量を確認してください。") {
     _uiState.value = _uiState.value.copy(activeDownloadModel = name, message = name + " のダウンロードを開始しています")
     val maxBytes = settings.maxLocalModelSizeGb.toDouble().times(1000000000.0).toLong()
@@ -147,7 +163,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
       val prompt = _uiState.value.testPrompt.trim()
       require(model.isNotBlank()) { "テストするモデル名を入力してください" }
       require(prompt.isNotBlank()) { "テスト用プロンプトを入力してください" }
-      val result = DefaultInferenceRepository.generateText(getApplication(), GenerateRequest(if (localModels.fileFor(model).isFile || localModels.liteRtFileFor(model).isFile) Backend.LOCAL else Backend.OLLAMA, model, prompt, _uiState.value.systemPrompt, _uiState.value.maxTokens.toIntOrNull() ?: 256, _uiState.value.temperature.toFloatOrNull() ?: 0.7f))
+      val result = DefaultInferenceRepository.generateText(getApplication(), GenerateRequest(if (localModels.fileFor(model).isFile || localModels.liteRtFileFor(model).isFile) Backend.LOCAL else Backend.OLLAMA, model, prompt, _uiState.value.systemPrompt, _uiState.value.maxTokens.toIntOrNull() ?: 1024, _uiState.value.temperature.toFloatOrNull() ?: 0.7f))
       "テスト結果:\n$result"
     }
   }
@@ -177,7 +193,8 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     val huggingFaceNames = huggingFaceModels.map { it.name }.toSet()
     // 同名モデルは取得元タブを混在させず、HFカタログを優先する。
     val remote = ollama.filterNot { it.name in huggingFaceNames } + huggingFaceModels
-    val merged = (remote + local.filter { item -> remote.none { it.name == item.name } })
+    val enabledNames = settings.cachedModels().filter { it.enabled }.map { it.name }.toSet()
+    val merged = (remote + local.filter { item -> remote.none { it.name == item.name } }).map { if (it.name in enabledNames) it.copy(enabled = true) else it }
     settings.saveCachedModels(merged)
     _uiState.value = _uiState.value.copy(models = merged)
   }
@@ -245,7 +262,7 @@ data class MainScreenUiState(
   val systemPrompt: String = "",
   val systemPromptPresetId: String = "",
   val apiKeyVisible: Boolean = false,
-  val maxTokens: String = "256",
+  val maxTokens: String = "1024",
   val temperature: String = "0.7",
   val testPrompt: String = "Tasker連携テストです。成功したら『テスト成功』とだけ返してください。",
   val source: ModelSource = ModelSource.OLLAMA,

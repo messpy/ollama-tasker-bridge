@@ -3,7 +3,6 @@ package com.example.ollamataskerbridge.data
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.delay
 import org.json.JSONArray
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -25,6 +24,7 @@ data class OllamaModel(
   val local: Boolean = false,
   val source: ModelSource = ModelSource.OLLAMA,
   val downloadUrl: String = "",
+  val enabled: Boolean = false,
 )
 
 class OllamaClient(private val baseUrl: String, private val apiKey: String = "") {
@@ -55,27 +55,29 @@ class OllamaClient(private val baseUrl: String, private val apiKey: String = "")
 
   suspend fun ping() = withContext(Dispatchers.IO) { request("GET", "/api/tags"); Unit }
 
-  suspend fun generate(model: String, prompt: String, system: String? = null, maxTokens: Int = 256, temperature: Float = 0.7f, imageBytes: ByteArray? = null): String = withContext(Dispatchers.IO) {
+  suspend fun generate(model: String, prompt: String, system: String? = null, maxTokens: Int = 1024, temperature: Float = 0.7f, imageBytes: ByteArray? = null): String = withContext(Dispatchers.IO) {
     require(model.isNotBlank()) { "モデル名が必要です" }
     require(prompt.isNotBlank()) { "プロンプトが必要です" }
     val payload = org.json.JSONObject()
       .put("model", model)
       .put("prompt", prompt)
       .put("stream", false)
+      .put("think", "low")
     if (!system.isNullOrBlank()) payload.put("system", system)
     imageBytes?.let { payload.put("images", org.json.JSONArray().put(Base64.getEncoder().encodeToString(it))) }
-    payload.put("options", org.json.JSONObject().put("num_predict", maxTokens.coerceAtLeast(1)).put("temperature", temperature.coerceIn(0f, 2f)))
-    for (attempt in 0..1) {
-      val response = org.json.JSONObject(request("POST", "/api/generate", payload.toString()))
-      val text = response.optString("response")
-      Log.d(logTag, "generate responseChars=" + text.length + " done=" + response.optBoolean("done", false) + " attempt=" + (attempt + 1))
-      if (text.isNotBlank()) return@withContext text
-      if (attempt == 0) {
-        Log.w(logTag, "Ollama returned an empty response; retrying once")
-        delay(500)
-      }
+    val effectiveMaxTokens = if (model.startsWith("gpt-oss", ignoreCase = true)) maxOf(maxTokens, 1024) else maxTokens.coerceAtLeast(1)
+    payload.put("options", org.json.JSONObject().put("num_predict", effectiveMaxTokens).put("temperature", temperature.coerceIn(0f, 2f)))
+    val response = org.json.JSONObject(request("POST", "/api/generate", payload.toString()))
+    val text = response.optString("response")
+    val thinking = response.optString("thinking")
+    val doneReason = response.optString("done_reason", "unknown")
+    val evalCount = response.optLong("eval_count", -1L)
+    Log.d(logTag, "generate responseChars=" + text.length + " thinkingChars=" + thinking.length + " done=" + response.optBoolean("done", false) + " doneReason=" + doneReason + " evalCount=" + evalCount + " maxTokens=" + effectiveMaxTokens)
+    if (text.isNotBlank()) return@withContext text
+    if (thinking.isNotBlank() && doneReason == "length") {
+      throw IOException("Ollamaがthinking中に生成上限へ到達しました（thinkingChars=" + thinking.length + ", evalCount=" + evalCount + ", maxTokens=" + effectiveMaxTokens + ").最大トークン数を増やしてください")
     }
-    throw IOException("Ollamaから応答がありません（空の応答）")
+    throw IOException(if (thinking.isNotBlank()) "Ollamaが本文を返さず終了しました（thinkingChars=" + thinking.length + ", doneReason=" + doneReason + ")" else "Ollamaから応答がありません（responseとthinkingが空です、doneReason=" + doneReason + ")")
   }
 
   private fun request(method: String, path: String, body: String? = null, readTimeoutMs: Int = 30_000, authenticated: Boolean = true): String {

@@ -69,6 +69,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ollamataskerbridge.data.OllamaModel
 import com.example.ollamataskerbridge.diagnostics.DiagnosticsLog
 import com.example.ollamataskerbridge.data.ModelSource
+import com.example.ollamataskerbridge.data.SettingsStore
 import com.example.ollamataskerbridge.data.SystemPromptPreset
 import com.example.ollamataskerbridge.theme.MyApplicationTheme
 
@@ -101,29 +102,33 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
   var availabilityMenu by remember { mutableStateOf(false) }
   var kindMenu by remember { mutableStateOf(false) }
   var sourceFilterMenu by remember { mutableStateOf(false) }
-  var kindFilter by remember { mutableStateOf("すべて") }
+  var kindFilter by remember { mutableStateOf(setOf("LLM", "VLM", "Audio-Language Model", "その他")) }
+  var executionFilter by remember { mutableStateOf(setOf("ローカル", "Cloud", "未取得")) }
+  var executionMenu by remember { mutableStateOf(false) }
   var sourceMenu by remember { mutableStateOf(false) }
   var modelTab by remember { mutableStateOf(0) }
   val clipboard = LocalClipboardManager.current
   val diagnosticsScope = rememberCoroutineScope()
   val context = LocalContext.current
+  var contextTokens by remember { mutableStateOf(SettingsStore(context).liteRtContextTokens.toString()) }
   val memoryInfo = ActivityManager.MemoryInfo().also { context.getSystemService(ActivityManager::class.java).getMemoryInfo(it) }
   val totalRamGb = memoryInfo.totalMem / 1_000_000_000.0
   val freeStorageGb = StatFs(context.filesDir.path).availableBytes / 1_000_000_000.0
   val recommendedModelGb = minOf(totalRamGb * 0.5, (freeStorageGb - 1.0).coerceAtLeast(0.5)).coerceIn(0.5, 8.0)
-  val requestDownload: (String) -> Unit = { name -> if (name.contains("gemma", ignoreCase = true) && !viewModel.gemmaTermsAccepted()) pendingGemmaDownload = name else viewModel.downloadModel(name) }
+  val requestDownload: (String) -> Unit = { name -> val item = state.models.firstOrNull { it.name == name }; if (item?.source == ModelSource.OLLAMA && !item.local && !item.downloadable) viewModel.enableCloudModel(name) else if (name.contains("gemma", ignoreCase = true) && !viewModel.gemmaTermsAccepted()) pendingGemmaDownload = name else viewModel.downloadModel(name) }
   val minBytes = state.minLocalModelSizeGb.toDoubleOrNull()?.coerceAtLeast(0.0)?.times(1_000_000_000.0)?.toLong() ?: 0L
   val maxBytes = state.maxLocalModelSizeGb.toDoubleOrNull()?.takeIf { it >= 0 }?.times(1_000_000_000.0)?.toLong() ?: Long.MAX_VALUE
-  val shownModels = state.models.filter { it.source in state.enabledSources }.filter { if (modelTab == 0) !it.local else it.local }
-    .filter { if (state.downloadedOnly) it.local else if (state.showLocal == state.showCloud) true else if (state.showCloud) it.isCloudOnly() else !it.isCloudOnly() }
+  val shownModels = state.models.filter { it.source in state.enabledSources }.filter { if (modelTab == 0) it.local || it.enabled else !it.local && !it.enabled }
+    .filter { if (state.downloadedOnly) it.local || it.enabled else if (state.showLocal == state.showCloud) true else if (state.showCloud) it.isCloudOnly() else !it.isCloudOnly() }
     .filter { it.remote || it.sizeBytes <= 0L || (it.sizeBytes >= minBytes && it.sizeBytes <= maxBytes) }
-    .filter { kindFilter == "すべて" || it.modelKind() == kindFilter }
+    .filter { (if (it.local) "ローカル" else if (it.source == ModelSource.OLLAMA) "Cloud" else "未取得") in executionFilter }
+    .filter { it.modelKind() in kindFilter }
     .filter { state.search.isBlank() || it.name.contains(state.search, true) }
   Column(modifier.fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) { IconButton(onClick = onOpenDrawer) { Text("☰") }; Text("AI Model Bridge", style = MaterialTheme.typography.headlineSmall) }
-    Text(if (section == MainSection.MODELS) "モデル管理・ダウンロード" else "接続・API設定", style = MaterialTheme.typography.titleLarge)
     if (section == MainSection.SETTINGS) {
     OutlinedTextField(state.endpoint, viewModel::endpointChanged, Modifier.fillMaxWidth(), label = { Text("Ollama URL") }, supportingText = { Text("Cloudは https://ollama.com") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri))
+    OutlinedTextField(contextTokens, { value -> contextTokens = value.filter(Char::isDigit); value.toIntOrNull()?.let { SettingsStore(context).liteRtContextTokens = it } }, Modifier.fillMaxWidth(), label = { Text("LiteRT-LMコンテキスト上限") }, supportingText = { Text("入力＋会話履歴の上限（512〜8192）。最大トークン数とは別設定です") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
     OutlinedTextField(
       value = state.apiKey,
       onValueChange = viewModel::apiKeyChanged,
@@ -148,24 +153,33 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
     }
     }
     if (section == MainSection.MODELS) {
+    TabRow(selectedTabIndex = modelTab, modifier = Modifier.fillMaxWidth()) { Tab(selected = modelTab == 0, onClick = { modelTab = 0; viewModel.refreshInstalledModels() }, text = { Text("ダウンロード済み") }); Tab(selected = modelTab == 1, onClick = { modelTab = 1; viewModel.refreshInstalledModels() }, text = { Text("モデルを探す") }) }
     Text("端末情報: RAM %.1fGB / 空き容量 %.1fGB / CPU %s".format(totalRamGb, freeStorageGb, Build.SUPPORTED_ABIS.firstOrNull() ?: "不明"), style = MaterialTheme.typography.bodySmall)
     Text("推奨モデルサイズ: %.1fGB以下（目安）".format(recommendedModelGb), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
-    TabRow(selectedTabIndex = modelTab, modifier = Modifier.fillMaxWidth()) { Tab(selected = modelTab == 0, onClick = { modelTab = 0 }, text = { Text("オンラインモデル") }); Tab(selected = modelTab == 1, onClick = { modelTab = 1 }, text = { Text("ダウンロード済み") }) }
-    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) { OutlinedTextField(state.search, viewModel::searchChanged, Modifier.weight(1f), label = { Text("モデルを検索") }, singleLine = true); OutlinedButton(onClick = viewModel::loadModels, enabled = !state.loading) { Text("↻") } }
-    Text("容量範囲: ${state.minLocalModelSizeGb}〜${state.maxLocalModelSizeGb} GB", style = MaterialTheme.typography.bodySmall)
+    OutlinedTextField(state.search, viewModel::searchChanged, Modifier.fillMaxWidth().height(48.dp), label = { Text("モデルを検索", fontSize = 12.sp) }, singleLine = true, textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp))
+    Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) { Text("容量範囲: ${state.minLocalModelSizeGb}〜${state.maxLocalModelSizeGb} GB", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f)); OutlinedButton(onClick = { viewModel.modelSizeRangeChanged(0f, recommendedModelGb.toFloat()) }) { Text("推奨") } }
     RangeSlider(value = (state.minLocalModelSizeGb.toFloatOrNull()?.coerceIn(0f, 200f) ?: 0f)..(state.maxLocalModelSizeGb.toFloatOrNull()?.coerceIn(0f, 200f) ?: 15f), onValueChange = { viewModel.modelSizeRangeChanged(it.start, it.endInclusive) }, valueRange = 0f..200f, steps = 199)
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
       Box {
-        OutlinedButton(onClick = { sourceFilterMenu = true }) { Text(if (state.enabledSources.size == ModelSource.values().size) "サービス: すべて" else "サービス: ${state.enabledSources.firstOrNull()?.displayName() ?: "なし"}") }
-        DropdownMenu(expanded = sourceFilterMenu, onDismissRequest = { sourceFilterMenu = false }) { DropdownMenuItem(text = { Text("すべて") }, onClick = { viewModel.sourceFilterChanged(null); sourceFilterMenu = false }); ModelSource.values().forEach { source -> DropdownMenuItem(text = { Text(source.displayName()) }, onClick = { viewModel.sourceFilterChanged(source); sourceFilterMenu = false }) } }
+        OutlinedButton(onClick = { sourceFilterMenu = true }) { Text("サービス: " + if (state.enabledSources.size == ModelSource.values().size) "すべて" else state.enabledSources.size.toString() + "件") }
+        DropdownMenu(expanded = sourceFilterMenu, onDismissRequest = { sourceFilterMenu = false }) {
+          DropdownMenuItem(text = { Text("すべて") }, onClick = { viewModel.sourceFilterChanged(null) })
+          ModelSource.values().forEach { source -> DropdownMenuItem(text = { Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) { Checkbox(source in state.enabledSources, { checked -> viewModel.sourceEnabled(source, checked) }); Text(source.displayName()) } }, onClick = { viewModel.sourceEnabled(source, source !in state.enabledSources) }) }
+        }
       }
       Box {
-        OutlinedButton(onClick = { kindMenu = true }) { Text("種類: $kindFilter") }
-        DropdownMenu(expanded = kindMenu, onDismissRequest = { kindMenu = false }) { listOf("すべて", "LLM", "VLM", "Audio-Language Model", "その他").forEach { kind -> DropdownMenuItem(text = { Text(kind) }, onClick = { kindFilter = kind; kindMenu = false }) } }
+        OutlinedButton(onClick = { kindMenu = true }) { Text("種類: " + if (kindFilter.size == 4) "すべて" else kindFilter.size.toString() + "件") }
+        DropdownMenu(expanded = kindMenu, onDismissRequest = { kindMenu = false }) {
+          listOf("LLM", "VLM", "Audio-Language Model", "その他").forEach { kind -> DropdownMenuItem(text = { Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) { Checkbox(kind in kindFilter, { checked -> kindFilter = if (checked) kindFilter + kind else kindFilter - kind }); Text(kind) } }, onClick = { kindFilter = if (kind in kindFilter) kindFilter - kind else kindFilter + kind }) }
+        }
       }
-      Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) { Spacer(Modifier.weight(1f)) }
+      Box {
+        OutlinedButton(onClick = { executionMenu = true }) { Text("実行先: " + if (executionFilter.size == 3) "すべて" else executionFilter.size.toString() + "件") }
+        DropdownMenu(expanded = executionMenu, onDismissRequest = { executionMenu = false }) {
+          listOf("ローカル", "Cloud", "未取得").forEach { target -> DropdownMenuItem(text = { Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) { Checkbox(target in executionFilter, { checked -> executionFilter = if (checked) executionFilter + target else executionFilter - target }); Text(target) } }, onClick = { executionFilter = if (target in executionFilter) executionFilter - target else executionFilter + target }) }
+        }
+      }
     }
-    
     state.activeDownloadModel?.let { active -> Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) { Text("ダウンロード中: $active", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f)); TextButton(onClick = viewModel::cancelDownload) { Text("キャンセル") } } }
     Text("${shownModels.size}件（上限以下。未知サイズは取得時に確認）", style = MaterialTheme.typography.bodySmall)
     if (shownModels.isEmpty()) {
@@ -176,9 +190,6 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
       }
     }
     Text(if (state.selectedModel.isBlank()) "モデル未選択" else "選択中: ${state.selectedModel}（${if (state.models.firstOrNull { it.name == state.selectedModel }?.local == true) "ローカル実行" else "Cloud実行"}）")
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-      Button(onClick = { requestDownload(state.selectedModel) }, enabled = !state.loading && state.selectedModel.isNotBlank() && state.models.firstOrNull { it.name == state.selectedModel }?.let { !it.local && it.downloadable } == true) { Text("選択モデルを取得") }
-    }
     if (state.downloadTotalBytes > 0L) {
       val progress = (state.downloadedBytes.toFloat() / state.downloadTotalBytes.toFloat()).coerceIn(0f, 1f)
       LinearProgressIndicator(progress = progress, modifier = Modifier.fillMaxWidth())
@@ -213,8 +224,8 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
   pendingDelete?.let { target ->
     AlertDialog(onDismissRequest = { pendingDelete = null }, title = { Text("削除しますか？") }, text = { Text(if (target.startsWith("preset:")) "プリセットを削除します。" else "$target を削除します。") }, confirmButton = { TextButton(onClick = { if (target.startsWith("preset:")) viewModel.deletePreset(target.removePrefix("preset:")) else viewModel.deleteModel(target); pendingDelete = null }) { Text("削除") } }, dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("キャンセル") } })
   }
-  if (showPresetDialog) PresetDialog(null, { showPresetDialog = false }) { name, body -> viewModel.savePreset(name, body); showPresetDialog = false }
-  editingPreset?.let { preset -> PresetDialog(preset, { editingPreset = null }) { name, body -> viewModel.savePreset(name, body, preset.id); editingPreset = null } }
+  if (showPresetDialog) PresetDialog(null, { showPresetDialog = false }) { name, body, maxTokens, temperature -> viewModel.savePreset(name, body, maxTokens, temperature); showPresetDialog = false }
+  editingPreset?.let { preset -> PresetDialog(preset, { editingPreset = null }) { name, body, maxTokens, temperature -> viewModel.savePreset(name, body, maxTokens, temperature, preset.id); editingPreset = null } }
 }
 
 @Composable
@@ -233,16 +244,18 @@ private fun ModelRow(model: OllamaModel, loading: Boolean, selected: Boolean, do
         }
         Text(if (model.sizeBytes > 0) "%.2f GB".format(model.sizeBytes / 1_000_000_000.0) else "サイズ不明", style = MaterialTheme.typography.bodySmall)
       }
-      if (model.local) TextButton(onClick = { onDelete(model.name) }, enabled = !loading) { Text("選択モデル削除", color = MaterialTheme.colorScheme.error) } else if (model.downloadable) IconButton(onClick = { if (downloading) onCancel() else onDownload(model.name) }, enabled = !loading || downloading) { if (downloading) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) else Text("↓") } else Text("Cloudのみ（取得不可）", style = MaterialTheme.typography.labelSmall)
+      if (model.local) TextButton(onClick = { onDelete(model.name) }, enabled = !loading) { Text("選択モデル削除", color = MaterialTheme.colorScheme.error) } else if (model.downloadable || (model.source == ModelSource.OLLAMA && !model.enabled)) IconButton(onClick = { if (downloading) onCancel() else onDownload(model.name) }, enabled = !loading || downloading) { if (downloading) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) else Text(if (model.enabled) "✓" else "↓") } else if (model.enabled) Text("✓ Cloud登録済み", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary) else Text("未取得", style = MaterialTheme.typography.labelSmall)
     }
   }
 }
 
 @Composable
-private fun PresetDialog(initial: SystemPromptPreset?, onDismiss: () -> Unit, onSave: (String, String) -> Unit) {
+private fun PresetDialog(initial: SystemPromptPreset?, onDismiss: () -> Unit, onSave: (String, String, Int, Float) -> Unit) {
   var name by remember(initial) { mutableStateOf(initial?.name.orEmpty()) }
   var body by remember(initial) { mutableStateOf(initial?.body.orEmpty()) }
-  AlertDialog(onDismissRequest = onDismiss, title = { Text(if (initial == null) "新しいプリセット" else "プリセットを編集") }, text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedTextField(name, { name = it }, label = { Text("名前") }); OutlinedTextField(body, { body = it }, label = { Text("本文") }, minLines = 5) } }, confirmButton = { TextButton(onClick = { onSave(name.trim(), body) }, enabled = name.isNotBlank() && body.isNotBlank()) { Text("保存") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("キャンセル") } })
+  var maxTokens by remember(initial) { mutableStateOf(initial?.maxTokens?.toString() ?: "1024") }
+  var temperature by remember(initial) { mutableStateOf(initial?.temperature?.toString() ?: "0.7") }
+  AlertDialog(onDismissRequest = onDismiss, title = { Text(if (initial == null) "新しいプリセット" else "プリセットを編集") }, text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedTextField(name, { name = it }, label = { Text("名前") }); OutlinedTextField(body, { body = it }, label = { Text("本文") }, minLines = 5); Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedTextField(maxTokens, { maxTokens = it.filter(Char::isDigit) }, Modifier.weight(1f), label = { Text("最大トークン数") }); OutlinedTextField(temperature, { temperature = it }, Modifier.weight(1f), label = { Text("Temperature") }) } } }, confirmButton = { TextButton(onClick = { onSave(name.trim(), body, maxTokens.toIntOrNull()?.coerceIn(1, 4096) ?: 1024, temperature.toFloatOrNull()?.coerceIn(0f, 2f) ?: 0.7f) }, enabled = name.isNotBlank() && body.isNotBlank()) { Text("保存") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("キャンセル") } })
 }
 
 private fun ModelSource.serviceEmoji(): String = when (this) { ModelSource.OLLAMA -> "🦙"; ModelSource.HUGGING_FACE -> "🤗"; ModelSource.LITERT_LM -> "🌞" }

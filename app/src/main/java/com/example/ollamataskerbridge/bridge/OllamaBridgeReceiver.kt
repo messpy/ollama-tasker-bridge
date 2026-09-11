@@ -33,7 +33,7 @@ class OllamaBridgeReceiver : BroadcastReceiver() {
             val prompt = intent.getStringExtra(BridgeContract.EXTRA_PROMPT).orEmpty()
             val system = intent.getStringExtra(BridgeContract.EXTRA_SYSTEM)
             val backend = intent.getStringExtra(BridgeContract.EXTRA_BACKEND)?.lowercase()
-            val maxTokens = intent.getIntExtra(BridgeContract.EXTRA_MAX_TOKENS, 256)
+            val maxTokens = intent.getIntExtra(BridgeContract.EXTRA_MAX_TOKENS, 1024)
             val temperature = intent.getFloatExtra(BridgeContract.EXTRA_TEMPERATURE, 0.7f)
 
             val resolvedBackend = backend ?: throw IllegalArgumentException("backendを明示指定してください（local または ollama）")
