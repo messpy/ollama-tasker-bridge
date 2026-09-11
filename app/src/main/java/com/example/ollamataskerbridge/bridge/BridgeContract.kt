@@ -9,6 +9,7 @@ object BridgeContract {
   const val ACTION_UNLOAD_MODEL = "com.example.ollamataskerbridge.action.UNLOAD_MODEL"
   const val ACTION_DOWNLOAD_MODEL = "com.example.ollamataskerbridge.action.DOWNLOAD_MODEL"
   const val ACTION_CANCEL_DOWNLOAD = "com.example.aimodelbridge.action.CANCEL_DOWNLOAD"
+  const val ACTION_DOWNLOAD_PROGRESS = "com.example.aimodelbridge.action.DOWNLOAD_PROGRESS"
   const val ACTION_LIST_MODELS = "com.example.ollamataskerbridge.action.LIST_MODELS"
   const val ACTION_STOP = "com.example.ollamataskerbridge.action.STOP"
 
@@ -27,4 +28,6 @@ object BridgeContract {
   const val EXTRA_RESULT = "result"
   const val EXTRA_ERROR = "error"
   const val EXTRA_OK = "ok"
+  const val EXTRA_DOWNLOADED_BYTES = "downloaded_bytes"
+  const val EXTRA_TOTAL_BYTES = "total_bytes"
 }

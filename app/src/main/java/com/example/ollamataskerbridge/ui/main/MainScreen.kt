@@ -49,6 +49,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -124,6 +125,9 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
     .filter { (if (it.local) "ローカル" else if (it.source == ModelSource.OLLAMA) "Cloud" else "未取得") in executionFilter }
     .filter { it.modelKind() in kindFilter }
     .filter { state.search.isBlank() || it.name.contains(state.search, true) }
+  LaunchedEffect(state.models.size, state.enabledSources, kindFilter, executionFilter, modelTab, state.search, state.minLocalModelSizeGb, state.maxLocalModelSizeGb) {
+    DiagnosticsLog.note("モデル一覧フィルタ: service=${state.enabledSources.joinToString()} kind=${kindFilter.joinToString()} execution=${executionFilter.joinToString()} tab=$modelTab searchChars=${state.search.length} resultCount=${shownModels.size}")
+  }
   Column(modifier.fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) { IconButton(onClick = onOpenDrawer) { Text("☰") }; Text("AI Model Bridge", style = MaterialTheme.typography.headlineSmall) }
     if (section == MainSection.SETTINGS) {

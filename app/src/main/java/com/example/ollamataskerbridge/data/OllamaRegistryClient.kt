@@ -63,7 +63,7 @@ class OllamaRegistryClient(
     }
     ModelMetadata(downloadable, size)
   }
-  fun download(model: String): File {
+  fun download(model: String, onProgress: (Long, Long) -> Unit = { _, _ -> }): File {
     com.example.ollamataskerbridge.diagnostics.DiagnosticsLog.note("モデル取得開始: model=" + model + " format=ollama-registry")
     hfUrlFor(model)?.let { return downloadHf(it, model) }
     val parsed = parseModel(model)
@@ -85,7 +85,7 @@ class OllamaRegistryClient(
     Log.d(logTag, "model=" + model + " size=" + modelSize + " digest=" + digest)
     val target = store.fileFor(model)
     val temp = File(target.path + ".download")
-    downloadBlob(registryBase + "/v2/library/" + parsed.first + "/blobs/" + digest, digest, modelSize, temp)
+    downloadBlob(registryBase + "/v2/library/" + parsed.first + "/blobs/" + digest, digest, modelSize, temp, onProgress)
     if (!temp.renameTo(target)) {
         try { temp.copyTo(target, overwrite = true); check(temp.delete()) { "一時ファイルを削除できません" } }
         catch (error: Exception) { throw java.io.IOException("モデル保存に失敗しました: " + (error.message ?: target.absolutePath), error) }
@@ -204,7 +204,7 @@ class OllamaRegistryClient(
     } finally { connection.disconnect() }
   }
 
-  private fun downloadBlob(url: String, digest: String, expectedSize: Long, temp: File) {
+  private fun downloadBlob(url: String, digest: String, expectedSize: Long, temp: File, onProgress: (Long, Long) -> Unit) {
     Log.d(logTag, "download start url=" + url + " expectedSize=" + expectedSize + " temp=" + temp.name)
     preparePartialDownload(temp, temp.name)
     markPartialDownload(temp)
@@ -229,6 +229,7 @@ class OllamaRegistryClient(
         }
       }
       var total = 0L
+      onProgress(resumeBytes, expectedSize)
       FileOutputStream(temp, resumeBytes > 0L).use { output ->
         connection.inputStream.use { input ->
           val buffer = ByteArray(1024 * 1024)
@@ -239,6 +240,7 @@ class OllamaRegistryClient(
             output.write(buffer, 0, count)
             digestor.update(buffer, 0, count)
             total += count
+            onProgress(resumeBytes + total, expectedSize)
           }
         }
       }

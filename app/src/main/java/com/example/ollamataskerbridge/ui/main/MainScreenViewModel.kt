@@ -2,6 +2,8 @@ package com.example.ollamataskerbridge.ui.main
 
 import android.app.Application
 import android.content.Intent
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.ollamataskerbridge.data.OllamaClient
@@ -45,6 +47,13 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   private val initialPresets = settings.presets()
   private val initialPreset = initialPresets.firstOrNull { it.id == settings.lastPresetId } ?: initialPresets.firstOrNull()
   private val _uiState = MutableStateFlow(MainScreenUiState(endpoint = settings.endpoint, apiKey = settings.apiKey, huggingFaceToken = settings.huggingFaceToken, minLocalModelSizeGb = settings.minLocalModelSizeGb.toString(), maxLocalModelSizeGb = settings.maxLocalModelSizeGb.toString(), systemPromptPresetId = initialPreset?.id.orEmpty(), systemPrompt = initialPreset?.body.orEmpty(), presets = initialPresets, models = initialModels, source = initialSource, enabledSources = settings.enabledModelSources))
+  private val downloadProgressReceiver = object : BroadcastReceiver() {
+    override fun onReceive(context: android.content.Context, intent: Intent) {
+      if (intent.action != com.example.ollamataskerbridge.bridge.BridgeContract.ACTION_DOWNLOAD_PROGRESS) return
+      _uiState.value = _uiState.value.copy(activeDownloadModel = intent.getStringExtra(com.example.ollamataskerbridge.bridge.BridgeContract.EXTRA_MODEL).orEmpty(), downloadedBytes = intent.getLongExtra(com.example.ollamataskerbridge.bridge.BridgeContract.EXTRA_DOWNLOADED_BYTES, 0L), downloadTotalBytes = intent.getLongExtra(com.example.ollamataskerbridge.bridge.BridgeContract.EXTRA_TOTAL_BYTES, 0L))
+    }
+  }
+  init { androidx.core.content.ContextCompat.registerReceiver(application, downloadProgressReceiver, IntentFilter(com.example.ollamataskerbridge.bridge.BridgeContract.ACTION_DOWNLOAD_PROGRESS), androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED) }
   val uiState: StateFlow<MainScreenUiState> = _uiState.asStateFlow()
 
   fun endpointChanged(value: String) {
@@ -141,6 +150,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     _uiState.value = _uiState.value.copy(activeDownloadModel = name, message = name + " のダウンロードを開始しています")
     val maxBytes = settings.maxLocalModelSizeGb.toDouble().times(1000000000.0).toLong()
     val model = _uiState.value.models.firstOrNull { it.name == name } ?: error("モデルが一覧にありません")
+    DiagnosticsLog.note("モデル取得経路: model=$name service=${model.source} remote=${model.remote} downloadable=${model.downloadable} visionFlag=${model.vision} sizeBytes=${model.sizeBytes}")
     require(model.downloadable && !model.local) { "このモデルはCloud専用のため、Androidへダウンロードできません" }
     require(model.sizeBytes <= 0L || model.sizeBytes <= maxBytes) { "上限超過です（%.2fGB）。ローカル上限を上げてください".format(model.sizeBytes / 1000000000.0) }
     val intent = Intent(getApplication(), ModelDownloadService::class.java).apply {
@@ -167,6 +177,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
       "テスト結果:\n$result"
     }
   }
+  override fun onCleared() { getApplication<Application>().unregisterReceiver(downloadProgressReceiver); super.onCleared() }
 
   private suspend fun loadModelsInternal() {
     val local = localModels.directory.listFiles()
@@ -176,9 +187,15 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     val localByName = local.associateBy { it.name }
     // Keep the two sources independent: a 401/403 from /api/tags must not hide the
     // public Ollama catalog (and vice versa).
-    val ollama = (runCatching { client().listModels() }.getOrDefault(emptyList()) +
-      runCatching { registry.catalog() }.getOrDefault(emptyList()))
-      .distinctBy { it.name }.map { item ->
+    val ollamaApi = runCatching { client().listModels() }.getOrDefault(emptyList())
+    val ollamaCloudCatalog = runCatching { registry.catalog() }.getOrDefault(emptyList())
+    // The Cloud catalog is authoritative for names present in it.  /api/tags can
+    // contain the same name with incomplete local metadata; keeping that entry
+    // first would incorrectly route a Cloud model into Registry blob download.
+    val ollamaByName = LinkedHashMap<String, com.example.ollamataskerbridge.data.OllamaModel>()
+    ollamaApi.forEach { ollamaByName[it.name] = it }
+    ollamaCloudCatalog.forEach { ollamaByName[it.name] = it }
+    val ollama = ollamaByName.values.map { item ->
       val registryInfo = runCatching { registry.metadata(item.name) }.getOrNull()
       item.copy(
         remote = item.remote || isOllamaCloudModel(item.name),
