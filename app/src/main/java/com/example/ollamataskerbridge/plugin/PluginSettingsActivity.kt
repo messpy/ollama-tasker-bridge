@@ -165,12 +165,12 @@ private fun PluginSettingsContent(
         Card(onClick = { model = item.name; backend = if (item.local) "local" else "ollama" }, Modifier.fillMaxWidth()) {
           Row(Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             Column(Modifier.weight(1f)) { Text(item.name); if (item.remote) Text("Cloud", style = androidx.compose.material3.MaterialTheme.typography.labelSmall); Text(if (item.sizeBytes > 0) "%.2f GB".format(item.sizeBytes / 1_000_000_000.0) else "サイズ不明", style = androidx.compose.material3.MaterialTheme.typography.bodySmall) }
-            Text(if (item.local) "✓" else "未取得")
+            Text(if (item.local) "✓ ローカル" else if (item.source == com.example.ollamataskerbridge.data.ModelSource.OLLAMA) "☁ Cloudで実行" else "未取得")
           }
         }
       }
     }
-    Text(if (backend == "local") "実行先: ローカル" else "実行先: Ollama Cloud")
+    Text(if (backend == "local") "実行先: ローカル" else "実行先: Ollama Cloud（端末へのダウンロード不要）")
     OutlinedTextField(prompt, { prompt = it }, Modifier.fillMaxWidth(), label = { Text("プロンプト") }, minLines = 2)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       OutlinedTextField(maxTokens, { maxTokens = it.filter(Char::isDigit) }, Modifier.weight(1f), label = { Text("最大トークン数") }, singleLine = true)
