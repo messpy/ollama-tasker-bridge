@@ -24,8 +24,7 @@ class LocaleFireReceiver : BroadcastReceiver() {
     val backend = values?.getString(LocalePluginContract.KEY_BACKEND).orEmpty()
     val suppliedExecutionId = intent.getStringExtra("com.example.ollamataskerbridge.REQUEST_ID").orEmpty()
     val executionId = suppliedExecutionId.ifBlank { UUID.randomUUID().toString() }
-    val fingerprint = model + "\u0000" + backend + "\u0000" + values?.getString(LocalePluginContract.KEY_PROMPT).orEmpty()
-    if (!RequestTracker.accept(executionId, fingerprint)) {
+    if (!RequestTracker.accept(executionId)) {
       DiagnosticsLog.warn("重複FIRE_SETTINGを無視: executionId=" + executionId)
       setResultCode(TaskerPlugin.Setting.RESULT_CODE_FAILED)
       return
@@ -68,7 +67,7 @@ class LocaleFireReceiver : BroadcastReceiver() {
       original.getStringExtra(COMPLETION_INTENT)?.let { putString(InferenceJobService.KEY_COMPLETION, it) }
     }
     val result = context.getSystemService(JobScheduler::class.java).schedule(
-      JobInfo.Builder(InferenceJobService.jobIdFor(executionId), ComponentName(context, InferenceJobService::class.java))
+      JobInfo.Builder(allocateJobId(context), ComponentName(context, InferenceJobService::class.java))
         .setMinimumLatency(0).setOverrideDeadline(5_000)
         .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY).setExtras(extras).build()
     )
@@ -76,18 +75,23 @@ class LocaleFireReceiver : BroadcastReceiver() {
   }
 
   companion object {
-    private const val JOB_ID_BASE = 3002
     private const val COMPLETION_INTENT = "net.dinglisch.android.tasker.extras.COMPLETION_INTENT"
+    private const val JOB_ID_BASE = 3002
+    private val jobIdLock = Any()
+    private var nextJobId = JOB_ID_BASE
+    private fun allocateJobId(context: Context): Int = synchronized(jobIdLock) {
+      val pendingIds = context.getSystemService(JobScheduler::class.java).allPendingJobs.map { it.id }.toHashSet()
+      var candidate = nextJobId
+      while (candidate in pendingIds || candidate <= 0) candidate = if (candidate == Int.MAX_VALUE) JOB_ID_BASE else candidate + 1
+      nextJobId = if (candidate == Int.MAX_VALUE) JOB_ID_BASE else candidate + 1
+      candidate
+    }
     private object RequestTracker {
       private val ids = ConcurrentHashMap<String, Long>()
-      private val fingerprints = ConcurrentHashMap<String, Long>()
-      fun accept(id: String, fingerprint: String): Boolean {
+      fun accept(id: String): Boolean {
         val now = System.currentTimeMillis()
         ids.entries.removeIf { now - it.value > 600000 }
-        fingerprints.entries.removeIf { now - it.value > 1000 }
-        if (ids.putIfAbsent(id, now) != null) return false
-        if (fingerprint.isNotBlank() && fingerprints.putIfAbsent(fingerprint, now) != null) { ids.remove(id); return false }
-        return true
+        return ids.putIfAbsent(id, now) == null
       }
     }
   }

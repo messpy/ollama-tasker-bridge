@@ -25,6 +25,7 @@ import net.dinglisch.android.tasker.TaskerPlugin
 class InferenceJobService : JobService() {
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
   private val runningJobs = ConcurrentHashMap<Int, Job>()
+  private val rescheduleJobs = ConcurrentHashMap<Int, Boolean>()
 
   override fun onStartJob(params: JobParameters): Boolean {
     val data = params.extras
@@ -75,15 +76,22 @@ class InferenceJobService : JobService() {
         DiagnosticsLog.note("推論Job失敗通知: signalFinish=" + signaled + " errorChars=" + message.length)
       } finally {
         getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
+        val shouldReschedule = rescheduleJobs.remove(params.jobId) == true
         runningJobs.remove(params.jobId)
-        jobFinished(params, false)
+        jobFinished(params, shouldReschedule)
       }
     }
     runningJobs[params.jobId] = task
     return true
   }
 
-  override fun onStopJob(params: JobParameters): Boolean { runningJobs.remove(params.jobId)?.cancel(); DiagnosticsLog.warn("推論Job停止: jobId=" + params.jobId); return true }
+  override fun onStopJob(params: JobParameters): Boolean {
+    if (runningJobs.remove(params.jobId) != null) {
+      rescheduleJobs[params.jobId] = true
+      DiagnosticsLog.warn("推論Job停止・再スケジュール: jobId=" + params.jobId)
+    }
+    return true
+  }
   override fun onDestroy() { scope.cancel(); super.onDestroy() }
 
   companion object {
@@ -92,7 +100,6 @@ class InferenceJobService : JobService() {
     private const val NOTIFICATION_ID = 3002
     const val KEY_MODEL = "inference.job.model"
     const val KEY_EXECUTION_ID = "inference.job.execution_id"
-    fun jobIdFor(executionId: String): Int = JOB_ID_BASE + (executionId.hashCode() and 0x7fffffff) % 100000
     const val KEY_BACKEND = "inference.job.backend"
     const val KEY_PROMPT = "inference.job.prompt"
     const val KEY_SYSTEM = "inference.job.system"
@@ -102,7 +109,6 @@ class InferenceJobService : JobService() {
     const val KEY_MAX_TOKENS = "inference.job.max_tokens"
     const val KEY_TEMPERATURE = "inference.job.temperature"
     const val KEY_COMPLETION = "inference.job.completion"
-    private const val JOB_ID_BASE = 3002
     private const val COMPLETION_INTENT = "net.dinglisch.android.tasker.extras.COMPLETION_INTENT"
   }
 
