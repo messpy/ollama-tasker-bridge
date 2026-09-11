@@ -98,7 +98,8 @@ class InferenceJobService : JobService() {
 
   companion object {
     private const val TAG = "OllamaTaskerBridge"
-    private const val CHANNEL_ID = "inference_background"
+    // v2 avoids an already-created IMPORTANCE_LOW channel being permanently silent.
+    private const val CHANNEL_ID = "inference_background_v2"
     private const val NOTIFICATION_ID = 3002
     const val KEY_MODEL = "inference.job.model"
     const val KEY_EXECUTION_ID = "inference.job.execution_id"
@@ -117,7 +118,7 @@ class InferenceJobService : JobService() {
 
   private fun createNotificationChannel() {
     getSystemService(NotificationManager::class.java).createNotificationChannel(
-      NotificationChannel(CHANNEL_ID, "LLMバックグラウンド推論", NotificationManager.IMPORTANCE_LOW)
+      NotificationChannel(CHANNEL_ID, "LLMバックグラウンド推論", NotificationManager.IMPORTANCE_DEFAULT)
     )
   }
 

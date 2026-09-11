@@ -143,7 +143,7 @@ class InferenceForegroundService : Service() {
 
   private fun createChannel() {
     getSystemService(NotificationManager::class.java).createNotificationChannel(
-      NotificationChannel(CHANNEL_ID, "LLM推論", NotificationManager.IMPORTANCE_LOW)
+      NotificationChannel(CHANNEL_ID, "LLM推論", NotificationManager.IMPORTANCE_DEFAULT)
     );
   }
 
@@ -162,7 +162,8 @@ class InferenceForegroundService : Service() {
     private const val TAG = "OllamaTaskerBridge"
     const val ORIGIN_LOCALE = "locale";
     const val EXTRA_EXECUTION_ID = "com.example.ollamataskerbridge.bridge.EXECUTION_ID"
-    private const val CHANNEL_ID = "inference_foreground";
+    // v2 avoids an already-created IMPORTANCE_LOW channel being permanently silent.
+    private const val CHANNEL_ID = "inference_foreground_v2";
     private const val NOTIFICATION_ID = 3001;
   }
 }

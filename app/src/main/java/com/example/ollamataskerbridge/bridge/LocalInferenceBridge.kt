@@ -116,12 +116,13 @@ object LocalInferenceBridge {
 }
 
 object InferenceNotification {
-  private const val CHANNEL_ID = "inference"
+  // v2 avoids an already-created IMPORTANCE_LOW channel being permanently silent.
+  private const val CHANNEL_ID = "inference_v2"
   private const val NOTIFICATION_ID = 2001
 
   fun start(context: Context, model: String) {
     val manager = context.getSystemService(NotificationManager::class.java)
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) manager.createNotificationChannel(NotificationChannel(CHANNEL_ID, "LLM推論", NotificationManager.IMPORTANCE_LOW))
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) manager.createNotificationChannel(NotificationChannel(CHANNEL_ID, "LLM推論", NotificationManager.IMPORTANCE_DEFAULT))
     manager.notify(NOTIFICATION_ID, android.app.Notification.Builder(context, CHANNEL_ID)
       .setContentTitle("推論中")
       .setContentText(model + " を実行しています")
