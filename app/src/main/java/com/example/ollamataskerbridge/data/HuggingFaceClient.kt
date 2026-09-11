@@ -23,13 +23,25 @@ class HuggingFaceClient {
           .firstOrNull() ?: continue
         val litert = candidate.first.endsWith(".litertlm", true)
         val source = if (litert) ModelSource.LITERT_LM else ModelSource.HUGGING_FACE
-        val fileSize = candidate.second ?: -1L
-        found[id + ":" + candidate.first] = OllamaModel(id, false, true, fileSize, false, source, "https://huggingface.co/" + id + "/resolve/main/" + candidate.first)
+        val downloadUrl = "https://huggingface.co/" + id + "/resolve/main/" + candidate.first
+        val fileSize = candidate.second?.takeIf { it > 0L } ?: headSize(downloadUrl, accessToken)
+        found[id + ":" + candidate.first] = OllamaModel(id, false, true, fileSize, false, source, downloadUrl)
       }
     }
     found.values.toList()
   }
 
+  private fun headSize(url: String, accessToken: String): Long {
+    val connection = URL(url).openConnection() as HttpURLConnection
+    return try {
+      connection.requestMethod = "HEAD"
+      connection.instanceFollowRedirects = true
+      connection.connectTimeout = 8000
+      connection.readTimeout = 15000
+      if (accessToken.isNotBlank()) connection.setRequestProperty("Authorization", "Bearer " + accessToken.removePrefix("Bearer ").trim())
+      if (connection.responseCode in 200..399) connection.contentLengthLong else -1L
+    } catch (_: Exception) { -1L } finally { connection.disconnect() }
+  }
   private fun request(url: String, accessToken: String): String {
     val connection = URL(url).openConnection() as HttpURLConnection
     try {
