@@ -11,16 +11,20 @@ import android.util.Log
 import com.example.ollamataskerbridge.data.SettingsStore
 import com.example.ollamataskerbridge.diagnostics.DiagnosticsLog
 import com.example.ollamataskerbridge.plugin.LocalePluginContract
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import java.util.concurrent.ConcurrentHashMap
 import net.dinglisch.android.tasker.TaskerPlugin
 
 /** Runs plugin inference when Android rejects a background foreground-service start. */
 class InferenceJobService : JobService() {
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+  private val runningJobs = ConcurrentHashMap<Int, Job>()
 
   override fun onStartJob(params: JobParameters): Boolean {
     val data = params.extras
@@ -29,7 +33,7 @@ class InferenceJobService : JobService() {
     getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, Notification.Builder(this, CHANNEL_ID)
       .setContentTitle("推論中").setContentText(model + " を実行しています")
       .setSmallIcon(android.R.drawable.stat_sys_upload).setOngoing(true).build())
-    val original = Intent(LocalePluginContract.ACTION_FIRE_SETTING).putExtra(LocalePluginContract.EXTRA_BUNDLE, Bundle().apply {
+    val original = Intent(LocalePluginContract.ACTION_FIRE_SETTING).putExtra("com.example.ollamataskerbridge.REQUEST_ID", data.getString(KEY_EXECUTION_ID)).putExtra(LocalePluginContract.EXTRA_BUNDLE, Bundle().apply {
       putString(LocalePluginContract.KEY_MODEL, data.getString(KEY_MODEL).orEmpty())
       putString(LocalePluginContract.KEY_PROMPT, data.getString(KEY_PROMPT).orEmpty())
       putString(LocalePluginContract.KEY_SYSTEM, data.getString(KEY_SYSTEM))
@@ -42,7 +46,7 @@ class InferenceJobService : JobService() {
     })
     data.getString(KEY_COMPLETION)?.let { original.putExtra(COMPLETION_INTENT, it) }
     DiagnosticsLog.note("推論Job開始: model=" + model + " backend=" + data.getString(KEY_BACKEND).orEmpty())
-    scope.launch {
+    val task = scope.launch {
       try {
         val backend = when (data.getString(KEY_BACKEND).orEmpty().lowercase()) {
           "local" -> Backend.LOCAL
@@ -60,6 +64,8 @@ class InferenceJobService : JobService() {
         val signaled = TaskerPlugin.Setting.signalFinish(applicationContext, original, TaskerPlugin.Setting.RESULT_CODE_OK,
           Bundle().apply { putString("%answer", result); putString("%ok", "true") })
         DiagnosticsLog.note("推論Job完了: resultChars=" + result.length + " signalFinish=" + signaled)
+      } catch (error: CancellationException) {
+        DiagnosticsLog.warn("推論Jobキャンセル: jobId=" + params.jobId)
       } catch (error: Exception) {
         val message = error.message ?: "推論に失敗しました"
         Log.e(TAG, "推論Job失敗: " + message, error)
@@ -69,13 +75,15 @@ class InferenceJobService : JobService() {
         DiagnosticsLog.note("推論Job失敗通知: signalFinish=" + signaled + " errorChars=" + message.length)
       } finally {
         getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
+        runningJobs.remove(params.jobId)
         jobFinished(params, false)
       }
     }
+    runningJobs[params.jobId] = task
     return true
   }
 
-  override fun onStopJob(params: JobParameters): Boolean = true
+  override fun onStopJob(params: JobParameters): Boolean { runningJobs.remove(params.jobId)?.cancel(); DiagnosticsLog.warn("推論Job停止: jobId=" + params.jobId); return true }
   override fun onDestroy() { scope.cancel(); super.onDestroy() }
 
   companion object {
@@ -83,6 +91,8 @@ class InferenceJobService : JobService() {
     private const val CHANNEL_ID = "inference_background"
     private const val NOTIFICATION_ID = 3002
     const val KEY_MODEL = "inference.job.model"
+    const val KEY_EXECUTION_ID = "inference.job.execution_id"
+    fun jobIdFor(executionId: String): Int = JOB_ID_BASE + (executionId.hashCode() and 0x7fffffff) % 100000
     const val KEY_BACKEND = "inference.job.backend"
     const val KEY_PROMPT = "inference.job.prompt"
     const val KEY_SYSTEM = "inference.job.system"
@@ -92,6 +102,7 @@ class InferenceJobService : JobService() {
     const val KEY_MAX_TOKENS = "inference.job.max_tokens"
     const val KEY_TEMPERATURE = "inference.job.temperature"
     const val KEY_COMPLETION = "inference.job.completion"
+    private const val JOB_ID_BASE = 3002
     private const val COMPLETION_INTENT = "net.dinglisch.android.tasker.extras.COMPLETION_INTENT"
   }
 

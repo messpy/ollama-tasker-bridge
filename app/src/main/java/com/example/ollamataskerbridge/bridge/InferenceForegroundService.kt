@@ -12,6 +12,7 @@ import com.example.ollamataskerbridge.data.SettingsStore;
 import com.example.ollamataskerbridge.diagnostics.DiagnosticsLog;
 import com.example.ollamataskerbridge.plugin.LocalePluginContract;
 import net.dinglisch.android.tasker.TaskerPlugin
+import kotlinx.coroutines.CancellationException;
 import kotlinx.coroutines.CoroutineScope;
 import kotlinx.coroutines.Dispatchers;
 import kotlinx.coroutines.SupervisorJob;
@@ -24,11 +25,13 @@ class InferenceForegroundService : Service() {
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     createChannel();
     startForeground(NOTIFICATION_ID, notification(intent?.getStringExtra(BridgeContract.EXTRA_MODEL).orEmpty()));
-    Log.i(TAG, "推論Service開始: origin=" + intent?.getStringExtra(EXTRA_ORIGIN) + " model=" + intent?.getStringExtra(BridgeContract.EXTRA_MODEL))
-    DiagnosticsLog.note("推論Service開始: origin=" + intent?.getStringExtra(EXTRA_ORIGIN) + " model=" + intent?.getStringExtra(BridgeContract.EXTRA_MODEL))
+    Log.i(TAG, "推論Service開始: executionId=" + intent?.getStringExtra(EXTRA_EXECUTION_ID) + " origin=" + intent?.getStringExtra(EXTRA_ORIGIN) + " model=" + intent?.getStringExtra(BridgeContract.EXTRA_MODEL))
+    DiagnosticsLog.note("推論Service開始: executionId=" + intent?.getStringExtra(EXTRA_EXECUTION_ID) + " origin=" + intent?.getStringExtra(EXTRA_ORIGIN) + " model=" + intent?.getStringExtra(BridgeContract.EXTRA_MODEL))
     scope.launch {
       try {
         if (intent?.getStringExtra(EXTRA_ORIGIN) == ORIGIN_LOCALE) runLocale(intent) else runBridge(intent ?: Intent());
+      } catch (error: CancellationException) {
+        DiagnosticsLog.warn("推論Serviceキャンセル: startId=" + startId)
       } catch (error: Exception) {
         val message = error.message ?: "推論に失敗しました";
         Log.e(TAG, "推論Service失敗: " + message, error)
@@ -42,7 +45,7 @@ class InferenceForegroundService : Service() {
           DiagnosticsLog.note("signalFinish失敗通知: signaled=" + signaled + " errorChars=" + message.length)
         }
       } finally {
-        stopSelf(startId);
+        stopSelfResult(startId);
       }
     }
     return START_NOT_STICKY;
@@ -138,6 +141,7 @@ class InferenceForegroundService : Service() {
     const val EXTRA_ORIGIN = "com.example.ollamataskerbridge.bridge.ORIGIN";
     private const val TAG = "OllamaTaskerBridge"
     const val ORIGIN_LOCALE = "locale";
+    const val EXTRA_EXECUTION_ID = "com.example.ollamataskerbridge.bridge.EXECUTION_ID"
     private const val CHANNEL_ID = "inference_foreground";
     private const val NOTIFICATION_ID = 3001;
   }
