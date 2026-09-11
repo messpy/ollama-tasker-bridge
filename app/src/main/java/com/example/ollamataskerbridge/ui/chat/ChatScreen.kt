@@ -71,6 +71,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
   private val _state = MutableStateFlow(ChatUiState(selectedModel = (availableModels().firstOrNull { it.local } ?: availableModels().firstOrNull())?.name.orEmpty(), presets = settings.presets(), systemPromptId = settings.lastPresetId, systemPrompt = settings.presets().firstOrNull { it.id == settings.lastPresetId }?.body.orEmpty()))
   val state = _state.asStateFlow()
   fun models() = availableModels()
+  fun refreshPresets() { _state.value = _state.value.copy(presets = settings.presets()) }
   private fun Boolean?.orFalse() = this == true
   fun input(value: String) { _state.value = _state.value.copy(input = value) }
   fun selectModel(value: String) { _state.value = _state.value.copy(selectedModel = value) }
@@ -136,7 +137,7 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), modifier: Modifier = Modi
         DropdownMenuItem({ Text("モデルを選択  ${state.selectedModel.ifBlank { "未選択" }}") }, { menu = false; models = true })
         DropdownMenuItem({ Text("最大トークン数  ${state.maxTokens}") }, { menu = false; tokens = true })
         DropdownMenuItem({ Text("Temperature  ${state.temperature}") }, { menu = false; temp = true })
-        DropdownMenuItem({ Text("システムプロンプト  ${state.presets.firstOrNull { it.id == state.systemPromptId }?.name ?: "なし"}") }, { menu = false; prompts = true })
+        DropdownMenuItem({ Text("システムプロンプト  ${state.presets.firstOrNull { it.id == state.systemPromptId }?.name ?: "なし"}") }, { menu = false; viewModel.refreshPresets(); prompts = true })
       }
       Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.Bottom) {
         IconButton({ menu = true }) { Text("＋", style = MaterialTheme.typography.headlineSmall) }
