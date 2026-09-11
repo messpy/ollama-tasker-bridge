@@ -18,6 +18,11 @@ AndroidアプリからローカルGGUFモデルを実行し、Ollama Cloud/Serve
 
 MacroDroidの結果受信は[設定手順](docs/MACRODROID_RESULT.md)を参照してください。
 
+MacroDroidの設定資料:
+- [1つのマクロで実行する手順](docs/MACRODROID_ONE_MACRO.md)
+- [結果変数の受け取り](docs/MACRODROID_RESULT.md)
+- [Intent送受信の互換手順](docs/MACRODROID_INTENT.md)
+
 ## 画面例
 
 実機のMacroDroidマクロ設定例です。Tasker/Locale Pluginでプロンプトを渡し、完了後に`%answer`をMacroDroid変数へマッピングできます。
