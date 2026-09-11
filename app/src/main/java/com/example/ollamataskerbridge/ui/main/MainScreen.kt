@@ -75,7 +75,10 @@ import com.example.ollamataskerbridge.data.SettingsStore
 import com.example.ollamataskerbridge.data.SystemPromptPreset
 import com.example.ollamataskerbridge.theme.MyApplicationTheme
 
-private fun OllamaModel.isCloudOnly(): Boolean = source == ModelSource.OLLAMA && !local && (remote || name.contains(":cloud", ignoreCase = true) || !downloadable)
+// An Ollama service model is executed remotely whenever it is not stored in
+// this app. This also migrates older cached entries whose remote flag was
+// incorrectly persisted as false.
+private fun OllamaModel.isCloudOnly(): Boolean = source == ModelSource.OLLAMA && !local
 private fun OllamaModel.executionLabel(): String = when {
   local -> "端末に保存済み"
   isCloudOnly() -> "Cloud利用可能"

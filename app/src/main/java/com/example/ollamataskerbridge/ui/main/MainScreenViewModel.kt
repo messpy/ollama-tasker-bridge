@@ -219,7 +219,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     val enabledNames = settings.cachedModels().filter { it.enabled }.map { it.name }.toSet()
     val merged = (remote + local.filter { item -> remote.none { it.name == item.name } }).map { if (it.name in enabledNames) it.copy(enabled = true) else it }
     settings.saveCachedModels(merged)
-    DiagnosticsLog.note("モデル一覧取得: ollamaApi=${ollamaApi.size} cloudCatalog=${ollamaCloudCatalog.size} huggingFace=${huggingFaceModels.size} merged=${merged.size} cloudVision=${merged.count { it.source == ModelSource.OLLAMA && it.remote && it.supportsVision() }}")
+    DiagnosticsLog.note("モデル一覧取得: ollamaApi=${ollamaApi.size} cloudCatalog=${ollamaCloudCatalog.size} huggingFace=${huggingFaceModels.size} merged=${merged.size} cloudVision=${merged.count { it.source == ModelSource.OLLAMA && !it.local && it.supportsVision() }}")
     _uiState.value = _uiState.value.copy(models = merged)
   }
 
