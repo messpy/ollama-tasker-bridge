@@ -102,7 +102,9 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
   var availabilityMenu by remember { mutableStateOf(false) }
   var kindMenu by remember { mutableStateOf(false) }
   var sourceFilterMenu by remember { mutableStateOf(false) }
-  var kindFilter by remember { mutableStateOf("すべて") }
+  var kindFilter by remember { mutableStateOf(setOf("LLM", "VLM", "Audio-Language Model", "その他")) }
+  var executionFilter by remember { mutableStateOf(setOf("ローカル", "Cloud", "未取得")) }
+  var executionMenu by remember { mutableStateOf(false) }
   var sourceMenu by remember { mutableStateOf(false) }
   var modelTab by remember { mutableStateOf(0) }
   val clipboard = LocalClipboardManager.current
@@ -119,7 +121,8 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
   val shownModels = state.models.filter { it.source in state.enabledSources }.filter { if (modelTab == 0) it.local || it.enabled else !it.local && !it.enabled }
     .filter { if (state.downloadedOnly) it.local || it.enabled else if (state.showLocal == state.showCloud) true else if (state.showCloud) it.isCloudOnly() else !it.isCloudOnly() }
     .filter { it.remote || it.sizeBytes <= 0L || (it.sizeBytes >= minBytes && it.sizeBytes <= maxBytes) }
-    .filter { kindFilter == "すべて" || it.modelKind() == kindFilter }
+    .filter { (if (it.local) "ローカル" else if (it.source == ModelSource.OLLAMA) "Cloud" else "未取得") in executionFilter }
+    .filter { it.modelKind() in kindFilter }
     .filter { state.search.isBlank() || it.name.contains(state.search, true) }
   Column(modifier.fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) { IconButton(onClick = onOpenDrawer) { Text("☰") }; Text("AI Model Bridge", style = MaterialTheme.typography.headlineSmall) }
@@ -159,16 +162,25 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
     RangeSlider(value = (state.minLocalModelSizeGb.toFloatOrNull()?.coerceIn(0f, 200f) ?: 0f)..(state.maxLocalModelSizeGb.toFloatOrNull()?.coerceIn(0f, 200f) ?: 15f), onValueChange = { viewModel.modelSizeRangeChanged(it.start, it.endInclusive) }, valueRange = 0f..200f, steps = 199)
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
       Box {
-        OutlinedButton(onClick = { sourceFilterMenu = true }) { Text(if (state.enabledSources.size == ModelSource.values().size) "サービス: すべて" else "サービス: ${state.enabledSources.firstOrNull()?.displayName() ?: "なし"}") }
-        DropdownMenu(expanded = sourceFilterMenu, onDismissRequest = { sourceFilterMenu = false }) { DropdownMenuItem(text = { Text("すべて") }, onClick = { viewModel.sourceFilterChanged(null); sourceFilterMenu = false }); ModelSource.values().forEach { source -> DropdownMenuItem(text = { Text(source.displayName()) }, onClick = { viewModel.sourceFilterChanged(source); sourceFilterMenu = false }) } }
+        OutlinedButton(onClick = { sourceFilterMenu = true }) { Text("サービス: " + if (state.enabledSources.size == ModelSource.values().size) "すべて" else state.enabledSources.size.toString() + "件") }
+        DropdownMenu(expanded = sourceFilterMenu, onDismissRequest = { sourceFilterMenu = false }) {
+          DropdownMenuItem(text = { Text("すべて") }, onClick = { viewModel.sourceFilterChanged(null) })
+          ModelSource.values().forEach { source -> DropdownMenuItem(text = { Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) { Checkbox(source in state.enabledSources, { checked -> viewModel.sourceEnabled(source, checked) }); Text(source.displayName()) } }, onClick = { viewModel.sourceEnabled(source, source !in state.enabledSources) }) }
+        }
       }
       Box {
-        OutlinedButton(onClick = { kindMenu = true }) { Text("種類: $kindFilter") }
-        DropdownMenu(expanded = kindMenu, onDismissRequest = { kindMenu = false }) { listOf("すべて", "LLM", "VLM", "Audio-Language Model", "その他").forEach { kind -> DropdownMenuItem(text = { Text(kind) }, onClick = { kindFilter = kind; kindMenu = false }) } }
+        OutlinedButton(onClick = { kindMenu = true }) { Text("種類: " + if (kindFilter.size == 4) "すべて" else kindFilter.size.toString() + "件") }
+        DropdownMenu(expanded = kindMenu, onDismissRequest = { kindMenu = false }) {
+          listOf("LLM", "VLM", "Audio-Language Model", "その他").forEach { kind -> DropdownMenuItem(text = { Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) { Checkbox(kind in kindFilter, { checked -> kindFilter = if (checked) kindFilter + kind else kindFilter - kind }); Text(kind) } }, onClick = { kindFilter = if (kind in kindFilter) kindFilter - kind else kindFilter + kind }) }
+        }
       }
-      Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) { Spacer(Modifier.weight(1f)) }
+      Box {
+        OutlinedButton(onClick = { executionMenu = true }) { Text("実行先: " + if (executionFilter.size == 3) "すべて" else executionFilter.size.toString() + "件") }
+        DropdownMenu(expanded = executionMenu, onDismissRequest = { executionMenu = false }) {
+          listOf("ローカル", "Cloud", "未取得").forEach { target -> DropdownMenuItem(text = { Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) { Checkbox(target in executionFilter, { checked -> executionFilter = if (checked) executionFilter + target else executionFilter - target }); Text(target) } }, onClick = { executionFilter = if (target in executionFilter) executionFilter - target else executionFilter + target }) }
+        }
+      }
     }
-    
     state.activeDownloadModel?.let { active -> Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) { Text("ダウンロード中: $active", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f)); TextButton(onClick = viewModel::cancelDownload) { Text("キャンセル") } } }
     Text("${shownModels.size}件（上限以下。未知サイズは取得時に確認）", style = MaterialTheme.typography.bodySmall)
     if (shownModels.isEmpty()) {
