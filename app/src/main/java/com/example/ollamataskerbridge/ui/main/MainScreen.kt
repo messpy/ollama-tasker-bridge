@@ -68,6 +68,7 @@ import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ollamataskerbridge.data.OllamaModel
+import com.example.ollamataskerbridge.data.supportsVision
 import com.example.ollamataskerbridge.diagnostics.DiagnosticsLog
 import com.example.ollamataskerbridge.data.ModelSource
 import com.example.ollamataskerbridge.data.SettingsStore
@@ -84,10 +85,6 @@ private fun OllamaModel.modelKind(): String {
     listOf("embed", "rerank", "embedding").any { value.contains(it) } -> "その他"
     else -> "LLM"
   }
-}
-private fun OllamaModel.supportsVision(): Boolean {
-  val value = name.lowercase()
-  return when (source) { ModelSource.LITERT_LM -> listOf("gemma3n", "gemma-3n").any { value.contains(it) }; ModelSource.OLLAMA, ModelSource.HUGGING_FACE -> listOf("minicpm-v", "llava", "gemma3n", "gemma-3n", "gemma3", "gemma-3", "qwen2-vl", "qwen2.5-vl", "qwen3-vl", "vision", "moondream").any { value.contains(it) } }
 }
 enum class MainSection { SETTINGS, MODELS, PROMPTS }
 
@@ -122,11 +119,12 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
   val shownModels = state.models.filter { it.source in state.enabledSources }.filter { if (modelTab == 0) it.local || it.enabled else !it.local && !it.enabled }
     .filter { if (state.downloadedOnly) it.local || it.enabled else if (state.showLocal == state.showCloud) true else if (state.showCloud) it.isCloudOnly() else !it.isCloudOnly() }
     .filter { it.remote || it.sizeBytes <= 0L || (it.sizeBytes >= minBytes && it.sizeBytes <= maxBytes) }
-    .filter { (if (it.local) "ローカル" else if (it.source == ModelSource.OLLAMA) "Cloud" else "未取得") in executionFilter }
+    .filter { (if (it.local) "ローカル" else if (it.isCloudOnly()) "Cloud" else "未取得") in executionFilter }
     .filter { it.modelKind() in kindFilter }
     .filter { state.search.isBlank() || it.name.contains(state.search, true) }
   LaunchedEffect(state.models.size, state.enabledSources, kindFilter, executionFilter, modelTab, state.search, state.minLocalModelSizeGb, state.maxLocalModelSizeGb) {
-    DiagnosticsLog.note("モデル一覧フィルタ: service=${state.enabledSources.joinToString()} kind=${kindFilter.joinToString()} execution=${executionFilter.joinToString()} tab=$modelTab searchChars=${state.search.length} resultCount=${shownModels.size}")
+    val cloudVisionCount = shownModels.count { it.isCloudOnly() && it.supportsVision() }
+    DiagnosticsLog.note("モデル一覧フィルタ: service=${state.enabledSources.joinToString()} kind=${kindFilter.joinToString()} execution=${executionFilter.joinToString()} tab=$modelTab searchChars=${state.search.length} resultCount=${shownModels.size} cloudVisionCount=$cloudVisionCount")
   }
   Column(modifier.fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) { IconButton(onClick = onOpenDrawer) { Text("☰") }; Text("AI Model Bridge", style = MaterialTheme.typography.headlineSmall) }
