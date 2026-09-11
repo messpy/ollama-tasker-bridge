@@ -36,6 +36,8 @@ import com.example.ollamataskerbridge.data.LocalModelStore
 import com.example.ollamataskerbridge.data.OllamaModel
 import com.example.ollamataskerbridge.data.SettingsStore
 import com.example.ollamataskerbridge.data.SystemPromptPreset
+import com.example.ollamataskerbridge.data.ModelSource
+import com.example.ollamataskerbridge.data.supportsVision
 import com.example.ollamataskerbridge.theme.MyApplicationTheme
 import net.dinglisch.android.tasker.TaskerPlugin
 
@@ -48,7 +50,7 @@ class PluginSettingsActivity : ComponentActivity() {
     val resolvedPlatform = hostPlatform ?: initial?.getString(LocalePluginContract.KEY_PLATFORM) ?: settings.pluginPlatform
     val local = LocalModelStore(this).directory.listFiles().orEmpty()
       .filter { it.extension == "gguf" || it.extension == "litertlm" }
-      .map { OllamaModel(it.nameWithoutExtension, false, true, it.length(), true) }
+      .map { file -> OllamaModel(file.nameWithoutExtension, false, true, file.length(), true, if (file.extension == "litertlm") ModelSource.LITERT_LM else ModelSource.HUGGING_FACE) }
     val models = (settings.cachedModels() + local).distinctBy { it.name }.filter { it.local || it.enabled }
     setContent {
       MyApplicationTheme(darkTheme = false) {
@@ -168,8 +170,16 @@ private fun PluginSettingsContent(
       items(shown, key = { it.name }) { item ->
         Card(onClick = { model = item.name; backend = if (item.local) "local" else "ollama" }, Modifier.fillMaxWidth()) {
           Row(Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            Column(Modifier.weight(1f)) { Text(item.name); if (item.remote) Text("Cloud", style = androidx.compose.material3.MaterialTheme.typography.labelSmall); Text(if (item.sizeBytes > 0) "%.2f GB".format(item.sizeBytes / 1_000_000_000.0) else "サイズ不明", style = androidx.compose.material3.MaterialTheme.typography.bodySmall) }
-            Text(if (item.local) "✓ 端末に保存済み" else if (item.source == com.example.ollamataskerbridge.data.ModelSource.OLLAMA) "☁ Cloud利用可能" else "未登録")
+            Column(Modifier.weight(1f)) {
+              Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(item.name)
+                Text(item.source.serviceEmoji(), style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
+                if (item.supportsVision()) Text("👁️", style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
+                if (item.remote && !item.local) Text("☁", style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
+              }
+              Text(if (item.sizeBytes > 0) "%.2f GB".format(item.sizeBytes / 1_000_000_000.0) else "サイズ不明", style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+            }
+            Text(if (item.local) "✓ 端末に保存済み" else if (item.remote) "☁ Cloud利用可能" else "未登録")
           }
         }
       }
@@ -208,4 +218,10 @@ private fun PluginSettingsContent(
     )
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { OutlinedButton(onClick = onCancel) { Text("キャンセル") }; Button(onClick = { onSave(model.trim(), prompt, imageUri.trim(), presetId, customSystem, platform, resultVariable, backend, maxTokens.toIntOrNull()?.coerceIn(1, 4096) ?: 1024, temperature.toFloatOrNull()?.coerceIn(0f, 2f) ?: 0.7f) }, enabled = model.isNotBlank() && prompt.isNotBlank()) { Text("保存") } }
   }
+}
+
+private fun ModelSource.serviceEmoji(): String = when (this) {
+  ModelSource.OLLAMA -> "🦙"
+  ModelSource.HUGGING_FACE -> "🤗"
+  ModelSource.LITERT_LM -> "🌞"
 }
