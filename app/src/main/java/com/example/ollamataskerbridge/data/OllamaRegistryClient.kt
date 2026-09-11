@@ -39,7 +39,9 @@ class OllamaRegistryClient(
         .findAll(html)
         .map { it.groupValues[1] }
         .distinct()
-        .map { OllamaModel(it, true, false, -1L, false) }
+        // Keep Cloud entries distinct from a same-named local/Hugging Face
+        // model.  Ollama executes these catalog entries with the :cloud tag.
+        .map { name -> OllamaModel(if (name.contains(":")) name else "$name:cloud", true, false, -1L, false) }
         .toList()
       // The public catalog page is rendered dynamically and may omit cloud-only
       // models from its HTML. Keep the documented OSS cloud model discoverable.

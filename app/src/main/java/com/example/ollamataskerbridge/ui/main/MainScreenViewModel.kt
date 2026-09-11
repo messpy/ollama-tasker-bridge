@@ -207,9 +207,9 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     val huggingFaceModels = runCatching { huggingFace.catalog(settings.huggingFaceToken) }.getOrDefault(emptyList()).map { item ->
       item.copy(local = localByName[item.name] != null, sizeBytes = localByName[item.name]?.sizeBytes ?: item.sizeBytes)
     }
-    val huggingFaceNames = huggingFaceModels.map { it.name }.toSet()
-    // 同名モデルは取得元タブを混在させず、HFカタログを優先する。
-    val remote = ollama.filterNot { it.name in huggingFaceNames } + huggingFaceModels
+    // Ollama Cloud and Hugging Face are separate services even when their
+    // display names match; Cloud entries already carry the :cloud suffix.
+    val remote = ollama + huggingFaceModels
     val enabledNames = settings.cachedModels().filter { it.enabled }.map { it.name }.toSet()
     val merged = (remote + local.filter { item -> remote.none { it.name == item.name } }).map { if (it.name in enabledNames) it.copy(enabled = true) else it }
     settings.saveCachedModels(merged)
