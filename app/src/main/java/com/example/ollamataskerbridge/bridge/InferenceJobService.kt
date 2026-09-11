@@ -100,6 +100,7 @@ class InferenceJobService : JobService() {
           val signaled = if (InferenceExecutionRegistry.markSignalFinished(executionId)) TaskerPlugin.Setting.signalFinish(applicationContext, original, TaskerPlugin.Setting.RESULT_CODE_OK,
             Bundle().apply { putString("%answer", result); putString("%ok", "true") }) else false
           DiagnosticsLog.note("推論成功: jobId=" + params.jobId + " executionId=" + executionId + " model=" + model + " backend=" + data.getString(KEY_BACKEND).orEmpty() + " resultChars=" + result.length + " signalFinish=" + signaled)
+          sendMacroDroidResult(data, executionId, params.jobId, model, true, result, null)
         }
       } catch (error: CancellationException) {
         val decision = stopDecisions[params.jobId]
@@ -113,6 +114,7 @@ class InferenceJobService : JobService() {
         val signaled = if (InferenceExecutionRegistry.markSignalFinished(executionId)) TaskerPlugin.Setting.signalFinish(applicationContext, original, TaskerPlugin.Setting.RESULT_CODE_FAILED,
           Bundle().apply { putString("%error", message); putString("%ok", "false") }) else false
         DiagnosticsLog.note("推論Job失敗通知: jobId=" + params.jobId + " executionId=" + executionId + " model=" + model + " backend=" + data.getString(KEY_BACKEND).orEmpty() + " signalFinish=" + signaled + " errorChars=" + message.length)
+        sendMacroDroidResult(data, executionId, params.jobId, model, false, null, message)
       } finally {
         getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
         val shouldReschedule = stopDecisions.remove(params.jobId) == true && InferenceExecutionRegistry.canRetry(executionId)
@@ -136,7 +138,10 @@ class InferenceJobService : JobService() {
     val actualInferenceRunning = state == InferenceExecutionRegistry.State.RUNNING
     val queued = state == InferenceExecutionRegistry.State.QUEUED
     val retryableReason = isRetryableStopReason(stopReason)
-    val retry = actualInferenceRunning && !completed && !obsolete && retryableReason && InferenceExecutionRegistry.reserveRetry(
+    // A queued request is still valid work; retry it with the same bounded
+    // policy when the system stops the Job before it acquires the slot.
+    val retryCandidate = actualInferenceRunning || queued
+    val retry = retryCandidate && !completed && !obsolete && retryableReason && InferenceExecutionRegistry.reserveRetry(
       executionId,
       System.currentTimeMillis(),
       MAX_RETRIES,
@@ -144,7 +149,8 @@ class InferenceJobService : JobService() {
       RETRY_MIN_INTERVAL_MS,
     )
     stopDecisions[params.jobId] = retry
-    DiagnosticsLog.warn("推論Job停止: jobId=" + params.jobId + " executionId=" + executionId + " model=" + params.extras.getString(KEY_MODEL).orEmpty() + " backend=" + params.extras.getString(KEY_BACKEND).orEmpty() + " stopReason=" + stopReason + " stopReasonName=" + stopReasonName(stopReason) + " running=" + actualInferenceRunning + " queued=" + queued + " completed=" + completed + " obsolete=" + obsolete + " retry=" + retry)
+    val retryCount = InferenceExecutionRegistry.snapshot(executionId)?.retryCount ?: 0
+    DiagnosticsLog.warn("推論Job停止: jobId=" + params.jobId + " executionId=" + executionId + " model=" + params.extras.getString(KEY_MODEL).orEmpty() + " backend=" + params.extras.getString(KEY_BACKEND).orEmpty() + " stopReason=" + stopReason + " stopReasonName=" + stopReasonName(stopReason) + " running=" + actualInferenceRunning + " queued=" + queued + " completed=" + completed + " obsolete=" + obsolete + " retry=" + retry + " retryCount=" + retryCount)
     if (stopReason == JobParameters.STOP_REASON_DEVICE_STATE) logDeviceState(executionId, params.jobId)
     if (runningJobs[params.jobId] != null) {
       runningJobs[params.jobId]?.cancel()
@@ -220,6 +226,29 @@ class InferenceJobService : JobService() {
     val capacity = battery?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
     val restricted = android.os.Build.VERSION.SDK_INT >= 28 && activity.isBackgroundRestricted
     DiagnosticsLog.warn("DEVICE_STATE詳細: jobId=" + jobId + " executionId=" + executionId + " idle=" + (power?.isDeviceIdleMode ?: false) + " powerSave=" + (power?.isPowerSaveMode ?: false) + " batteryLevel=" + level + "/" + scale + " capacity=" + capacity + " charging=" + charging + " backgroundRestricted=" + restricted)
+  }
+
+  /** Sends an additional explicit result for MacroDroid hosts that do not consume
+   * Tasker variable-return extras from signalFinish(). */
+  private fun sendMacroDroidResult(data: android.os.PersistableBundle, executionId: String, jobId: Int, model: String, ok: Boolean, result: String?, error: String?) {
+    if (!data.getString(KEY_PLATFORM).orEmpty().equals("macrodroid", ignoreCase = true)) return
+    val extras = Bundle().apply {
+      putBoolean(BridgeContract.EXTRA_OK, ok)
+      putString(BridgeContract.EXTRA_REQUEST_ID, executionId)
+      putString(BridgeContract.EXTRA_MODEL, model)
+      putString("answer", result.orEmpty())
+      putString("result", result.orEmpty())
+      putString("%answer", result.orEmpty())
+      putString("%ok", ok.toString())
+      if (!ok) {
+        putString("error", error.orEmpty())
+        putString("%error", error.orEmpty())
+      }
+    }
+    val intent = Intent(BridgeContract.ACTION_MACRODROID_RESULT).putExtras(extras).putExtra("jobId", jobId)
+    intent.putExtra("platform", "macrodroid")
+    sendBroadcast(intent)
+    DiagnosticsLog.note("MacroDroid完了結果送信: jobId=" + jobId + " executionId=" + executionId + " model=" + model + " ok=" + ok + " answerChars=" + result.orEmpty().length + " errorChars=" + error.orEmpty().length)
   }
 
   private fun readImage(value: String?): ByteArray? {

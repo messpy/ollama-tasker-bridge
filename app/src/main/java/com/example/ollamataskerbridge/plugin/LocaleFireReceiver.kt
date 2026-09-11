@@ -74,6 +74,7 @@ class LocaleFireReceiver : BroadcastReceiver() {
     val result = context.getSystemService(JobScheduler::class.java).schedule(
       JobInfo.Builder(jobId, ComponentName(context, InferenceJobService::class.java))
         .setMinimumLatency(0).setOverrideDeadline(5_000)
+        .setBackoffCriteria(30_000L, JobInfo.BACKOFF_POLICY_EXPONENTIAL)
         .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY).setExtras(extras).build()
     )
     if (result != JobScheduler.RESULT_SUCCESS) {
