@@ -78,7 +78,7 @@ private fun OllamaModel.isCloudOnly(): Boolean = source == ModelSource.OLLAMA &&
 private fun OllamaModel.modelKind(): String {
   val value = name.lowercase().replace("_", "-").replace(":", "-")
   return when {
-    value.contains("gemma3n") || value.contains("gemma-3n") || ((value.contains("gemma3") || value.contains("gemma-3")) && listOf("-4b", "-12b", "-27b").any { value.contains(it) }) || listOf("vlm", "vision", "llava", "minicpm-v", "moondream").any { value.contains(it) } -> "VLM"
+    supportsVision() || listOf("vlm", "vision", "llava", "minicpm-v", "moondream", "qwen2-vl", "qwen2.5-vl", "qwen2.5vl", "qwen3-vl", "qwen3vl", "qwen-vl", "pixtral", "internvl", "molmo", "glm-5.3-flash", "qwen3.8", "ornith").any { value.contains(it) } -> "VLM"
     listOf("whisper", "speech", "audio", "audio-language", "audiolanguage", "ultravox", "voxtral", "qwen2-audio", "voice", "tts").any { value.contains(it) } -> "Audio-Language Model"
     listOf("embed", "rerank", "embedding").any { value.contains(it) } -> "その他"
     else -> "LLM"

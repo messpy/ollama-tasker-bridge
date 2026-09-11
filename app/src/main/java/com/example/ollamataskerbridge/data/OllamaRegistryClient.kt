@@ -31,7 +31,7 @@ class OllamaRegistryClient(
 ) {
   data class ModelMetadata(val downloadable: Boolean, val sizeBytes: Long)
   suspend fun catalog(): List<OllamaModel> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-    val connection = open("https://ollama.com/search?o=newest", readTimeoutMs = 30_000)
+    val connection = open("https://ollama.com/search?c=cloud", readTimeoutMs = 30_000)
     try {
       check(connection.responseCode in 200..299) { "モデル検索 HTTP " + connection.responseCode }
       val html = connection.inputStream.bufferedReader().use { it.readText() }
@@ -39,7 +39,7 @@ class OllamaRegistryClient(
         .findAll(html)
         .map { it.groupValues[1] }
         .distinct()
-        .map { OllamaModel(it, false, true, -1L, false) }
+        .map { OllamaModel(it, true, false, -1L, false) }
         .toList()
       // The public catalog page is rendered dynamically and may omit cloud-only
       // models from its HTML. Keep the documented OSS cloud model discoverable.
