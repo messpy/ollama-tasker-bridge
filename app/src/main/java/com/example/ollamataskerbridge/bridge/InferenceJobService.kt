@@ -8,6 +8,10 @@ import android.app.NotificationManager
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
+import android.os.BatteryManager
+import android.os.PowerManager
+import android.content.IntentFilter
+import android.app.ActivityManager
 import com.example.ollamataskerbridge.data.SettingsStore
 import com.example.ollamataskerbridge.diagnostics.DiagnosticsLog
 import com.example.ollamataskerbridge.plugin.LocalePluginContract
@@ -52,11 +56,24 @@ class InferenceJobService : JobService() {
       DiagnosticsLog.error("推論Job拒否: executionIdが空 jobId=" + params.jobId + " model=" + model)
       return false
     }
-    if (!completedExecutions.add(executionId)) {
-      DiagnosticsLog.warn("完了済み推論Jobを無視: jobId=" + params.jobId + " executionId=" + executionId + " model=" + model)
+    var snapshot = InferenceExecutionRegistry.snapshot(executionId)
+    if (snapshot?.state == InferenceExecutionRegistry.State.COMPLETED || snapshot?.state == InferenceExecutionRegistry.State.CANCELLED || snapshot?.state == InferenceExecutionRegistry.State.OBSOLETE || snapshot?.signalFinished == true) {
+      DiagnosticsLog.warn("不要な推論Jobを無視: jobId=" + params.jobId + " executionId=" + executionId + " model=" + model + " state=" + snapshot.state + " completed=" + (snapshot.state == InferenceExecutionRegistry.State.COMPLETED) + " obsolete=" + (snapshot.state == InferenceExecutionRegistry.State.OBSOLETE))
       getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
       return false
     }
+    if (snapshot == null) {
+      val createdAt = data.getLong(KEY_CREATED_AT, 0L)
+      if (createdAt > 0L && System.currentTimeMillis() - createdAt <= MAX_EXECUTION_AGE_MS && InferenceExecutionRegistry.register(executionId)) {
+        snapshot = InferenceExecutionRegistry.snapshot(executionId)
+        DiagnosticsLog.note("再起動後の未登録推論Jobを復元: jobId=" + params.jobId + " executionId=" + executionId + " model=" + model)
+      } else {
+        DiagnosticsLog.warn("古い・未登録の推論Jobを無視: jobId=" + params.jobId + " executionId=" + executionId + " model=" + model + " createdAt=" + createdAt)
+        getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
+        return false
+      }
+    }
+    InferenceExecutionRegistry.markRunning(executionId)
     DiagnosticsLog.note("推論Job開始: jobId=" + params.jobId + " executionId=" + executionId + " model=" + model + " backend=" + data.getString(KEY_BACKEND).orEmpty())
     val task = scope.launch {
       try {
@@ -76,30 +93,28 @@ class InferenceJobService : JobService() {
             backend, model, data.getString(KEY_PROMPT).orEmpty(), system, maxTokens, temperature,
             readImage(data.getString(KEY_IMAGE_URI))
           ))
-          val signaled = TaskerPlugin.Setting.signalFinish(applicationContext, original, TaskerPlugin.Setting.RESULT_CODE_OK,
-            Bundle().apply { putString("%answer", result); putString("%ok", "true") })
+          InferenceExecutionRegistry.markCompleted(executionId)
+          val signaled = if (InferenceExecutionRegistry.markSignalFinished(executionId)) TaskerPlugin.Setting.signalFinish(applicationContext, original, TaskerPlugin.Setting.RESULT_CODE_OK,
+            Bundle().apply { putString("%answer", result); putString("%ok", "true") }) else false
           DiagnosticsLog.note("推論成功: jobId=" + params.jobId + " executionId=" + executionId + " model=" + model + " backend=" + data.getString(KEY_BACKEND).orEmpty() + " resultChars=" + result.length + " signalFinish=" + signaled)
         }
       } catch (error: CancellationException) {
-        completedExecutions.remove(executionId)
+        InferenceExecutionRegistry.markPending(executionId)
         DiagnosticsLog.warn("推論キャンセル: jobId=" + params.jobId + " executionId=" + executionId + " model=" + model + " reason=job-stopped")
       } catch (error: Exception) {
-        completedExecutions.remove(executionId)
+        InferenceExecutionRegistry.markCancelled(executionId)
         val message = error.message ?: "推論に失敗しました"
         Log.e(TAG, "推論Job失敗: " + message, error)
         DiagnosticsLog.error("推論Job失敗: jobId=" + params.jobId + " executionId=" + executionId + " model=" + model + " backend=" + data.getString(KEY_BACKEND).orEmpty() + " message=" + message)
-        val signaled = TaskerPlugin.Setting.signalFinish(applicationContext, original, TaskerPlugin.Setting.RESULT_CODE_FAILED,
-          Bundle().apply { putString("%error", message); putString("%ok", "false") })
+        val signaled = if (InferenceExecutionRegistry.markSignalFinished(executionId)) TaskerPlugin.Setting.signalFinish(applicationContext, original, TaskerPlugin.Setting.RESULT_CODE_FAILED,
+          Bundle().apply { putString("%error", message); putString("%ok", "false") }) else false
         DiagnosticsLog.note("推論Job失敗通知: signalFinish=" + signaled + " errorChars=" + message.length)
       } finally {
         getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
-        val shouldReschedule = rescheduleJobs.remove(params.jobId) == true
+        val shouldReschedule = rescheduleJobs.remove(params.jobId) == true && InferenceExecutionRegistry.canRetry(executionId)
         runningJobs.remove(params.jobId)
-        if (shouldReschedule) {
-          DiagnosticsLog.note("推論Job再スケジュール: jobId=" + params.jobId + " executionId=" + executionId + " model=" + model)
-        } else {
-          jobFinished(params, false)
-        }
+        DiagnosticsLog.note("推論Job完了: jobId=" + params.jobId + " executionId=" + executionId + " model=" + model + " reschedule=" + shouldReschedule)
+        if (!shouldReschedule) jobFinished(params, false)
       }
     }
     runningJobs[params.jobId] = task
@@ -109,14 +124,21 @@ class InferenceJobService : JobService() {
   override fun onStopJob(params: JobParameters): Boolean {
     val executionId = params.extras.getString(KEY_EXECUTION_ID).orEmpty()
     val stopReason = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) params.stopReason else -1
+    val snapshot = InferenceExecutionRegistry.snapshot(executionId)
+    val completed = snapshot?.state == InferenceExecutionRegistry.State.COMPLETED || snapshot?.signalFinished == true
+    val obsolete = snapshot?.state == InferenceExecutionRegistry.State.OBSOLETE
     val wasRunning = runningJobs[params.jobId] != null
-    DiagnosticsLog.warn("推論Job停止: jobId=" + params.jobId + " executionId=" + executionId + " model=" + params.extras.getString(KEY_MODEL).orEmpty() + " stopReason=" + stopReason + " stopReasonName=" + stopReasonName(stopReason) + " running=" + wasRunning)
-    if (wasRunning) {
+    val retry = wasRunning && !completed && !obsolete && InferenceExecutionRegistry.canRetry(executionId) && isRetryableStopReason(stopReason)
+    DiagnosticsLog.warn("推論Job停止: jobId=" + params.jobId + " executionId=" + executionId + " model=" + params.extras.getString(KEY_MODEL).orEmpty() + " backend=" + params.extras.getString(KEY_BACKEND).orEmpty() + " stopReason=" + stopReason + " stopReasonName=" + stopReasonName(stopReason) + " running=" + wasRunning + " completed=" + completed + " obsolete=" + obsolete + " retry=" + retry)
+    if (stopReason == JobParameters.STOP_REASON_DEVICE_STATE) logDeviceState(executionId, params.jobId)
+    if (retry) {
       rescheduleJobs[params.jobId] = true
       runningJobs[params.jobId]?.cancel()
-      DiagnosticsLog.warn("推論Job停止・該当実行をキャンセル: jobId=" + params.jobId + " executionId=" + executionId)
+      DiagnosticsLog.warn("推論キャンセル: jobId=" + params.jobId + " executionId=" + executionId + " reason=job-stopped")
+    } else if (!completed && !obsolete) {
+      InferenceExecutionRegistry.markObsolete(executionId)
     }
-    return true
+    return retry
   }
   override fun onDestroy() { scope.cancel(); super.onDestroy() }
 
@@ -125,7 +147,7 @@ class InferenceJobService : JobService() {
     // v2 avoids an already-created IMPORTANCE_LOW channel being permanently silent.
     private const val CHANNEL_ID = "inference_background_v2"
     private const val NOTIFICATION_ID = 3002
-    private val completedExecutions = ConcurrentHashMap.newKeySet<String>()
+    private const val MAX_EXECUTION_AGE_MS = 24L * 60L * 60L * 1000L
     const val KEY_MODEL = "inference.job.model"
     const val KEY_EXECUTION_ID = "inference.job.execution_id"
     const val KEY_BACKEND = "inference.job.backend"
@@ -138,32 +160,49 @@ class InferenceJobService : JobService() {
     const val KEY_MAX_TOKENS = "inference.job.max_tokens"
     const val KEY_TEMPERATURE = "inference.job.temperature"
     const val KEY_COMPLETION = "inference.job.completion"
+    const val KEY_CREATED_AT = "inference.job.created_at"
     private const val COMPLETION_INTENT = "net.dinglisch.android.tasker.extras.COMPLETION_INTENT"
 
     private fun stopReasonName(reason: Int): String = when (reason) {
-      0 -> "UNDEFINED"
-      1 -> "CANCELLED_BY_APP"
-      2 -> "PREEMPT"
-      3 -> "TIMEOUT"
-      4 -> "DEVICE_IDLE"
-      5 -> "DEVICE_THERMAL"
-      6 -> "CONSTRAINTS_NOT_SATISFIED"
-      7 -> "UNINSTALL"
-      8 -> "DEVICE_STATE"
-      9 -> "QUOTA"
-      10 -> "APP_STANDBY"
-      11 -> "USER"
-      12 -> "SYSTEM_PROCESSING"
-      13 -> "TOTAL原則"
-      -1 -> "UNAVAILABLE"
-      else -> "UNKNOWN"
+      JobParameters.STOP_REASON_UNDEFINED -> "UNDEFINED"
+      JobParameters.STOP_REASON_CANCELLED_BY_APP -> "CANCELLED_BY_APP"
+      JobParameters.STOP_REASON_PREEMPT -> "PREEMPT"
+      JobParameters.STOP_REASON_TIMEOUT -> "TIMEOUT"
+      JobParameters.STOP_REASON_DEVICE_STATE -> "DEVICE_STATE"
+      JobParameters.STOP_REASON_CONSTRAINT_BATTERY_NOT_LOW -> "CONSTRAINT_BATTERY_NOT_LOW"
+      JobParameters.STOP_REASON_CONSTRAINT_CHARGING -> "CONSTRAINT_CHARGING"
+      JobParameters.STOP_REASON_CONSTRAINT_CONNECTIVITY -> "CONSTRAINT_CONNECTIVITY"
+      JobParameters.STOP_REASON_CONSTRAINT_DEVICE_IDLE -> "CONSTRAINT_DEVICE_IDLE"
+      JobParameters.STOP_REASON_CONSTRAINT_STORAGE_NOT_LOW -> "CONSTRAINT_STORAGE_NOT_LOW"
+      JobParameters.STOP_REASON_QUOTA -> "QUOTA"
+      JobParameters.STOP_REASON_BACKGROUND_RESTRICTION -> "BACKGROUND_RESTRICTION"
+      JobParameters.STOP_REASON_APP_STANDBY -> "APP_STANDBY"
+      JobParameters.STOP_REASON_USER -> "USER"
+      JobParameters.STOP_REASON_SYSTEM_PROCESSING -> "SYSTEM_PROCESSING"
+      JobParameters.STOP_REASON_ESTIMATED_APP_LAUNCH_TIME_CHANGED -> "ESTIMATED_APP_LAUNCH_TIME_CHANGED"
+      else -> "UNKNOWN(" + reason + ")"
     }
+
+    private fun isRetryableStopReason(reason: Int): Boolean = reason == JobParameters.STOP_REASON_PREEMPT || reason == JobParameters.STOP_REASON_TIMEOUT || reason == JobParameters.STOP_REASON_DEVICE_STATE || reason == JobParameters.STOP_REASON_SYSTEM_PROCESSING
   }
 
   private fun createNotificationChannel() {
     getSystemService(NotificationManager::class.java).createNotificationChannel(
       NotificationChannel(CHANNEL_ID, "LLMバックグラウンド推論", NotificationManager.IMPORTANCE_DEFAULT)
     )
+  }
+
+  private fun logDeviceState(executionId: String, jobId: Int) {
+    val power = getSystemService(PowerManager::class.java)
+    val activity = getSystemService(ActivityManager::class.java)
+    val battery = getSystemService(BatteryManager::class.java)
+    val batteryIntent = registerReceiver(null, IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED))
+    val level = batteryIntent?.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1) ?: -1
+    val scale = batteryIntent?.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, -1) ?: -1
+    val charging = batteryIntent?.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1) == android.os.BatteryManager.BATTERY_STATUS_CHARGING || batteryIntent?.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1) == android.os.BatteryManager.BATTERY_STATUS_FULL
+    val capacity = battery?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
+    val restricted = android.os.Build.VERSION.SDK_INT >= 28 && activity.isBackgroundRestricted
+    DiagnosticsLog.warn("DEVICE_STATE詳細: jobId=" + jobId + " executionId=" + executionId + " idle=" + (power?.isDeviceIdleMode ?: false) + " powerSave=" + (power?.isPowerSaveMode ?: false) + " batteryLevel=" + level + "/" + scale + " capacity=" + capacity + " charging=" + charging + " backgroundRestricted=" + restricted)
   }
 
   private fun readImage(value: String?): ByteArray? {

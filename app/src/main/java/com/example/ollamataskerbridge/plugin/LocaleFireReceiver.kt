@@ -11,6 +11,7 @@ import android.os.Build
 import android.util.Log
 import com.example.ollamataskerbridge.bridge.InferenceJobService
 import com.example.ollamataskerbridge.bridge.InferenceForegroundService
+import com.example.ollamataskerbridge.bridge.InferenceExecutionRegistry
 import com.example.ollamataskerbridge.diagnostics.DiagnosticsLog
 import net.dinglisch.android.tasker.TaskerPlugin
 import java.util.UUID
@@ -24,7 +25,7 @@ class LocaleFireReceiver : BroadcastReceiver() {
     val backend = values?.getString(LocalePluginContract.KEY_BACKEND).orEmpty()
     val suppliedExecutionId = intent.getStringExtra("com.example.ollamataskerbridge.REQUEST_ID").orEmpty()
     val executionId = suppliedExecutionId.ifBlank { UUID.randomUUID().toString() }
-    if (!RequestTracker.accept(executionId)) {
+    if (!RequestTracker.accept(executionId) || !InferenceExecutionRegistry.register(executionId)) {
       DiagnosticsLog.warn("重複FIRE_SETTINGを無視: executionId=" + executionId)
       setResultCode(TaskerPlugin.Setting.RESULT_CODE_FAILED)
       return
@@ -47,7 +48,7 @@ class LocaleFireReceiver : BroadcastReceiver() {
     } catch (error: Exception) {
       val message = error.message ?: "推論Serviceの起動に失敗しました"
       Log.e("OllamaTaskerBridge", "推論Service起動失敗: " + message, error)
-      DiagnosticsLog.warn("ForegroundService起動不可、JobSchedulerへ切替: " + message)
+      DiagnosticsLog.warn("ForegroundService起動不可、JobSchedulerへ切替: executionId=" + executionId + " model=" + model + " backend=" + backend + " reason=" + message)
       scheduleFallbackJob(context, intent, values, executionId)
     }
   }
@@ -65,14 +66,20 @@ class LocaleFireReceiver : BroadcastReceiver() {
       values?.getInt(LocalePluginContract.KEY_MAX_TOKENS)?.let { putString(InferenceJobService.KEY_MAX_TOKENS, it.toString()) }
       values?.getFloat(LocalePluginContract.KEY_TEMPERATURE)?.let { putString(InferenceJobService.KEY_TEMPERATURE, it.toString()) }
       putString(InferenceJobService.KEY_EXECUTION_ID, executionId)
+      putLong(InferenceJobService.KEY_CREATED_AT, System.currentTimeMillis())
       original.getStringExtra(COMPLETION_INTENT)?.let { putString(InferenceJobService.KEY_COMPLETION, it) }
     }
+    val jobId = allocateJobId(context)
     val result = context.getSystemService(JobScheduler::class.java).schedule(
-      JobInfo.Builder(allocateJobId(context), ComponentName(context, InferenceJobService::class.java))
+      JobInfo.Builder(jobId, ComponentName(context, InferenceJobService::class.java))
         .setMinimumLatency(0).setOverrideDeadline(5_000)
         .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY).setExtras(extras).build()
     )
-    DiagnosticsLog.note("推論Job登録: executionPath=macrodroid-job-scheduler result=" + result)
+    if (result != JobScheduler.RESULT_SUCCESS) {
+      InferenceExecutionRegistry.markObsolete(executionId)
+      DiagnosticsLog.error("推論Job登録失敗: jobId=" + jobId + " executionId=" + executionId + " model=" + values?.getString(LocalePluginContract.KEY_MODEL).orEmpty() + " backend=" + values?.getString(LocalePluginContract.KEY_BACKEND).orEmpty() + " result=" + result)
+    }
+    DiagnosticsLog.note("推論Job登録: jobId=" + jobId + " executionId=" + executionId + " model=" + values?.getString(LocalePluginContract.KEY_MODEL).orEmpty() + " backend=" + values?.getString(LocalePluginContract.KEY_BACKEND).orEmpty() + " executionPath=macrodroid-job-scheduler result=" + result)
   }
 
   companion object {
