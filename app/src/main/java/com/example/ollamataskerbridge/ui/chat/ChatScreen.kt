@@ -43,7 +43,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 
 data class ChatMessage(val user: Boolean, val text: String, val model: String = "", val generating: Boolean = false, val error: Boolean = false, val retryPrompt: String = "", val elapsedMs: Long = 0L, val inputTokens: Int = 0, val outputTokens: Int = 0, val tokenCountEstimated: Boolean = false)
-data class ChatUiState(val messages: List<ChatMessage> = emptyList(), val selectedModel: String = "", val maxTokens: String = "1024", val temperature: String = "0.7", val systemPromptId: String = "", val systemPrompt: String = "", val presets: List<SystemPromptPreset> = emptyList(), val generating: Boolean = false, val input: String = "", val notice: String? = null, val imageBytes: ByteArray? = null, val imageName: String = "")
+data class ChatUiState(val messages: List<ChatMessage> = emptyList(), val selectedModel: String = "", val maxTokens: String = "1024", val temperature: String = "0.7", val systemPromptId: String = "", val systemPrompt: String = "", val presets: List<SystemPromptPreset> = emptyList(), val generating: Boolean = false, val input: String = "", val notice: String? = null, val imageBytes: ByteArray? = null, val imageName: String = "", val modalError: String? = null)
 
 class ChatViewModel(application: Application) : AndroidViewModel(application) {
   private val settings = SettingsStore(application)
@@ -61,6 +61,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
       }
       .onFailure { _state.value = _state.value.copy(notice = "画像を読み込めませんでした: " + it.message) }
   }
+  fun dismissErrorDialog() { _state.value = _state.value.copy(modalError = null) }
   fun clearImage() { _state.value = _state.value.copy(imageBytes = null, imageName = "", notice = null) }
   private fun localModels(): List<OllamaModel> = store.directory.listFiles().orEmpty().filter { it.extension == "gguf" || it.extension == "litertlm" }.map { file -> OllamaModel(file.nameWithoutExtension, false, true, file.length(), true, if (file.extension == "litertlm") ModelSource.LITERT_LM else ModelSource.HUGGING_FACE) }
   private fun availableModels(): List<OllamaModel> {
@@ -100,9 +101,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     DiagnosticsLog.note("テストチャット生成開始: backend=" + request.backend + " model=" + request.model + " maxTokens=" + request.maxTokens + " temperature=" + request.temperature + " image=" + (request.imageBytes != null) + " promptChars=" + request.prompt.length)
     DiagnosticsLog.note("テストチャットプロンプト: " + request.prompt)
     running = viewModelScope.launch {
-      try { DefaultInferenceRepository.generate(getApplication(), request).collect { event -> when (event) { is GenerateEvent.Token -> update(index, ChatMessage(false, _state.value.messages.getOrNull(index)?.text.orEmpty() + event.text, request.model, true, retryPrompt = prompt)); is GenerateEvent.Done -> { val elapsed = SystemClock.elapsedRealtime() - startedAt; val exact = event.inputTokens > 0 || event.outputTokens > 0; val inputTokens = if (exact) event.inputTokens else estimateTokens(prompt); val outputTokens = if (exact) event.outputTokens else estimateTokens(event.fullText); DiagnosticsLog.note("テストチャット応答: " + event.fullText); update(index, ChatMessage(false, event.fullText, request.model, false, retryPrompt = prompt, elapsedMs = elapsed, inputTokens = inputTokens, outputTokens = outputTokens, tokenCountEstimated = !exact)) }; is GenerateEvent.Error -> { DiagnosticsLog.error(event.message); update(index, ChatMessage(false, event.message, request.model, false, true, prompt)) } } } }
+      try { DefaultInferenceRepository.generate(getApplication(), request).collect { event -> when (event) { is GenerateEvent.Token -> update(index, ChatMessage(false, _state.value.messages.getOrNull(index)?.text.orEmpty() + event.text, request.model, true, retryPrompt = prompt)); is GenerateEvent.Done -> { val elapsed = SystemClock.elapsedRealtime() - startedAt; val exact = event.inputTokens > 0 || event.outputTokens > 0; val inputTokens = if (exact) event.inputTokens else estimateTokens(prompt); val outputTokens = if (exact) event.outputTokens else estimateTokens(event.fullText); DiagnosticsLog.note("テストチャット応答: " + event.fullText); update(index, ChatMessage(false, event.fullText, request.model, false, retryPrompt = prompt, elapsedMs = elapsed, inputTokens = inputTokens, outputTokens = outputTokens, tokenCountEstimated = !exact)) }; is GenerateEvent.Error -> { DiagnosticsLog.error(event.message); update(index, ChatMessage(false, event.message, request.model, false, true, prompt)); _state.value = _state.value.copy(modalError = event.message) } } } }
       catch (e: CancellationException) { DiagnosticsLog.warn("生成を中断しました"); update(index, ChatMessage(false, "生成を中断しました", request.model, error = true, retryPrompt = prompt)) }
-      catch (e: Exception) { DiagnosticsLog.error(e.message ?: "生成に失敗しました"); update(index, ChatMessage(false, "生成に失敗しました: ${e.message ?: "モデルを確認してください"}", request.model, error = true, retryPrompt = prompt)) }
+      catch (e: Exception) { val message = e.message ?: "生成に失敗しました"; DiagnosticsLog.error(message); update(index, ChatMessage(false, "生成に失敗しました: $message", request.model, error = true, retryPrompt = prompt)); _state.value = _state.value.copy(modalError = message) }
       finally { DiagnosticsLog.note("テストチャット生成終了: model=" + request.model); _state.value = _state.value.copy(generating = false) }
     }
   }
@@ -146,6 +147,7 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), modifier: Modifier = Modi
       }
     }
   }
+  state.modalError?.let { message -> AlertDialog(onDismissRequest = viewModel::dismissErrorDialog, title = { Text("生成できませんでした") }, text = { Text(if (message.contains("memory", true) || message.contains("allocation", true) || message.contains("容量") || message.contains("context", true)) "モデルが端末のメモリまたはコンテキスト上限を超えた可能性があります。軽いモデルを選ぶか、最大トークン数を下げてください。\n\n$message" else message) }, confirmButton = { Button(onClick = viewModel::dismissErrorDialog) { Text("閉じる") } }) }
   if (models) ModelPickerDialog(viewModel, { models = false })
   if (tokens) NumberDialog("最大トークン数", state.maxTokens, { viewModel.maxTokens(it); tokens = false }, { tokens = false })
   if (temp) NumberDialog("Temperature", state.temperature, { viewModel.temperature(it); temp = false }, { temp = false })
