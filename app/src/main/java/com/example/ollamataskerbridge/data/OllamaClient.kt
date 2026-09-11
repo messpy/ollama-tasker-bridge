@@ -13,7 +13,7 @@ enum class ModelSource { OLLAMA, HUGGING_FACE, LITERT_LM }
 
 fun OllamaModel.supportsVision(): Boolean {
   val value = name.lowercase()
-  return vision || when (source) { ModelSource.LITERT_LM -> listOf("gemma3n", "gemma-3n").any { value.contains(it) }; ModelSource.OLLAMA, ModelSource.HUGGING_FACE -> listOf("minicpm-v", "minicpmv", "llava", "gemma3n", "gemma-3n", "gemma3", "gemma-3", "qwen2-vl", "qwen2.5-vl", "qwen2.5vl", "qwen3-vl", "qwen3vl", "qwen-vl", "vision", "moondream", "pixtral", "internvl", "molmo", "glm-5.3-flash", "glm-4.1v", "qwen3.8", "ornith", "llama4", "mistral-small3.1", "mistral-small3.2", "granite-vision", "granite3.2-vision", "phi-4-multimodal", "phi4-multimodal").any { value.contains(it) } }
+  return vision || when (source) { ModelSource.LITERT_LM -> listOf("gemma3n", "gemma-3n").any { value.contains(it) }; ModelSource.OLLAMA, ModelSource.HUGGING_FACE -> listOf("minicpm-v", "minicpmv", "llava", "gemma3n", "gemma-3n", "gemma3", "gemma-3", "gemma4", "qwen2-vl", "qwen2.5-vl", "qwen2.5vl", "qwen3-vl", "qwen3vl", "qwen3.5", "qwen-vl", "vision", "moondream", "pixtral", "internvl", "molmo", "glm-5.3-flash", "glm-4.1v", "qwen3.8", "ornith", "llama4", "mistral-small3.1", "mistral-small3.2", "mistral-large-3", "granite-vision", "granite3.2-vision", "phi-4-multimodal", "phi4-multimodal").any { value.contains(it) } }
 }
 
 data class OllamaModel(
