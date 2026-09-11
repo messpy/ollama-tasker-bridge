@@ -169,7 +169,7 @@ private fun PluginSettingsContent(
         Card(onClick = { model = item.name; backend = if (item.local) "local" else "ollama" }, Modifier.fillMaxWidth()) {
           Row(Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             Column(Modifier.weight(1f)) { Text(item.name); if (item.remote) Text("Cloud", style = androidx.compose.material3.MaterialTheme.typography.labelSmall); Text(if (item.sizeBytes > 0) "%.2f GB".format(item.sizeBytes / 1_000_000_000.0) else "サイズ不明", style = androidx.compose.material3.MaterialTheme.typography.bodySmall) }
-            Text(if (item.local) "✓ ローカル" else if (item.source == com.example.ollamataskerbridge.data.ModelSource.OLLAMA) "☁ Cloudで実行" else "未取得")
+            Text(if (item.local) "✓ 端末に保存済み" else if (item.source == com.example.ollamataskerbridge.data.ModelSource.OLLAMA) "☁ Cloud利用可能" else "未登録")
           }
         }
       }

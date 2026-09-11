@@ -76,6 +76,11 @@ import com.example.ollamataskerbridge.data.SystemPromptPreset
 import com.example.ollamataskerbridge.theme.MyApplicationTheme
 
 private fun OllamaModel.isCloudOnly(): Boolean = source == ModelSource.OLLAMA && !local && (remote || name.contains(":cloud", ignoreCase = true) || !downloadable)
+private fun OllamaModel.executionLabel(): String = when {
+  local -> "端末に保存済み"
+  isCloudOnly() -> "Cloud利用可能"
+  else -> "未登録"
+}
 
 private fun OllamaModel.modelKind(): String {
   val value = name.lowercase().replace("_", "-").replace(":", "-")
@@ -101,7 +106,7 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
   var kindMenu by remember { mutableStateOf(false) }
   var sourceFilterMenu by remember { mutableStateOf(false) }
   var kindFilter by remember { mutableStateOf(setOf("LLM", "VLM", "Audio-Language Model", "その他")) }
-  var executionFilter by remember { mutableStateOf(setOf("ローカル", "Cloud", "未取得")) }
+  var executionFilter by remember { mutableStateOf(setOf("端末に保存済み", "Cloud利用可能", "未登録")) }
   var executionMenu by remember { mutableStateOf(false) }
   var sourceMenu by remember { mutableStateOf(false) }
   var modelTab by remember { mutableStateOf(0) }
@@ -121,7 +126,7 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
   val shownModels = state.models.filter { it.source in state.enabledSources }.filter { if (modelTab == 0) it.local else !it.local }
     .filter { if (state.downloadedOnly) it.local || it.enabled else if (state.showLocal == state.showCloud) true else if (state.showCloud) it.isCloudOnly() else !it.isCloudOnly() }
     .filter { it.remote || it.sizeBytes <= 0L || (it.sizeBytes >= minBytes && it.sizeBytes <= maxBytes) }
-    .filter { (if (it.local) "ローカル" else if (it.isCloudOnly()) "Cloud" else "未取得") in executionFilter }
+    .filter { it.executionLabel() in executionFilter }
     .filter { it.modelKind() in kindFilter }
     .filter { state.search.isBlank() || it.name.contains(state.search, true) }
   LaunchedEffect(state.models.size, state.enabledSources, kindFilter, executionFilter, modelTab, state.search, state.minLocalModelSizeGb, state.maxLocalModelSizeGb) {
@@ -180,7 +185,7 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
       Box {
         OutlinedButton(onClick = { executionMenu = true }) { Text("実行先: " + if (executionFilter.size == 3) "すべて" else executionFilter.size.toString() + "件") }
         DropdownMenu(expanded = executionMenu, onDismissRequest = { executionMenu = false }) {
-          listOf("ローカル", "Cloud", "未取得").forEach { target -> DropdownMenuItem(text = { Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) { Checkbox(target in executionFilter, { checked -> executionFilter = if (checked) executionFilter + target else executionFilter - target }); Text(target) } }, onClick = { executionFilter = if (target in executionFilter) executionFilter - target else executionFilter + target }) }
+          listOf("端末に保存済み", "Cloud利用可能", "未登録").forEach { target -> DropdownMenuItem(text = { Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) { Checkbox(target in executionFilter, { checked -> executionFilter = if (checked) executionFilter + target else executionFilter - target }); Text(target) } }, onClick = { executionFilter = if (target in executionFilter) executionFilter - target else executionFilter + target }) }
         }
       }
     }
@@ -193,7 +198,7 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
         shownModels.forEach { model -> ModelRow(model, state.loading, state.selectedModel == model.name, state.activeDownloadModel == model.name, viewModel::selectModel, requestDownload, { pendingDelete = it }, { pendingCancel = true }) }
       }
     }
-    Text(if (state.selectedModel.isBlank()) "モデル未選択" else "選択中: ${state.selectedModel}（${if (state.models.firstOrNull { it.name == state.selectedModel }?.local == true) "ローカル実行" else "Cloud実行"}）")
+    Text(if (state.selectedModel.isBlank()) "モデル未選択" else "選択中: ${state.selectedModel}（${state.models.firstOrNull { it.name == state.selectedModel }?.let { if (it.local) "ローカル実行" else if (it.isCloudOnly()) "Cloud実行" else "未登録" } ?: "未登録"}）")
     if (state.downloadTotalBytes > 0L) {
       val progress = (state.downloadedBytes.toFloat() / state.downloadTotalBytes.toFloat()).coerceIn(0f, 1f)
       LinearProgressIndicator(progress = progress, modifier = Modifier.fillMaxWidth())
@@ -248,7 +253,7 @@ private fun ModelRow(model: OllamaModel, loading: Boolean, selected: Boolean, do
         }
         Text(if (model.sizeBytes > 0) "%.2f GB".format(model.sizeBytes / 1_000_000_000.0) else "サイズ不明", style = MaterialTheme.typography.bodySmall)
       }
-      if (model.local) TextButton(onClick = { onDelete(model.name) }, enabled = !loading) { Text("選択モデル削除", color = MaterialTheme.colorScheme.error) } else if (model.downloadable || (model.source == ModelSource.OLLAMA && !model.enabled)) IconButton(onClick = { if (downloading) onCancel() else onDownload(model.name) }, enabled = !loading || downloading) { if (downloading) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) else Text(if (model.enabled) "✓" else "↓") } else if (model.enabled) Text("✓ Cloud登録済み", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary) else Text("未取得", style = MaterialTheme.typography.labelSmall)
+      if (model.local) TextButton(onClick = { onDelete(model.name) }, enabled = !loading) { Text("選択モデル削除", color = MaterialTheme.colorScheme.error) } else if (model.downloadable || (model.source == ModelSource.OLLAMA && !model.enabled)) IconButton(onClick = { if (downloading) onCancel() else onDownload(model.name) }, enabled = !loading || downloading) { if (downloading) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) else Text(if (model.enabled) "✓" else "↓") } else if (model.enabled) Text("✓ Cloud利用可能", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary) else Text("未登録", style = MaterialTheme.typography.labelSmall)
     }
   }
 }
