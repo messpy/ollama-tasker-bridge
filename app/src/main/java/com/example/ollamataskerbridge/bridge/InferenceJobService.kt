@@ -32,6 +32,7 @@ class InferenceJobService : JobService() {
   private val rescheduleJobs = ConcurrentHashMap<Int, Boolean>()
 
   override fun onStartJob(params: JobParameters): Boolean {
+    InferenceExecutionRegistry.initialize(this)
     val data = params.extras
     val executionId = data.getString(KEY_EXECUTION_ID).orEmpty()
     createNotificationChannel()
@@ -99,7 +100,11 @@ class InferenceJobService : JobService() {
           DiagnosticsLog.note("推論成功: jobId=" + params.jobId + " executionId=" + executionId + " model=" + model + " backend=" + data.getString(KEY_BACKEND).orEmpty() + " resultChars=" + result.length + " signalFinish=" + signaled)
         }
       } catch (error: CancellationException) {
-        InferenceExecutionRegistry.markPending(executionId)
+        // onStopJob() marks non-retryable work obsolete. Do not overwrite that
+        // decision from the cancellation callback racing with this coroutine.
+        if (InferenceExecutionRegistry.canRetry(executionId)) {
+          InferenceExecutionRegistry.markPending(executionId)
+        }
         DiagnosticsLog.warn("推論キャンセル: jobId=" + params.jobId + " executionId=" + executionId + " model=" + model + " reason=job-stopped")
       } catch (error: Exception) {
         InferenceExecutionRegistry.markCancelled(executionId)
@@ -108,7 +113,7 @@ class InferenceJobService : JobService() {
         DiagnosticsLog.error("推論Job失敗: jobId=" + params.jobId + " executionId=" + executionId + " model=" + model + " backend=" + data.getString(KEY_BACKEND).orEmpty() + " message=" + message)
         val signaled = if (InferenceExecutionRegistry.markSignalFinished(executionId)) TaskerPlugin.Setting.signalFinish(applicationContext, original, TaskerPlugin.Setting.RESULT_CODE_FAILED,
           Bundle().apply { putString("%error", message); putString("%ok", "false") }) else false
-        DiagnosticsLog.note("推論Job失敗通知: signalFinish=" + signaled + " errorChars=" + message.length)
+        DiagnosticsLog.note("推論Job失敗通知: jobId=" + params.jobId + " executionId=" + executionId + " model=" + model + " backend=" + data.getString(KEY_BACKEND).orEmpty() + " signalFinish=" + signaled + " errorChars=" + message.length)
       } finally {
         getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
         val shouldReschedule = rescheduleJobs.remove(params.jobId) == true && InferenceExecutionRegistry.canRetry(executionId)

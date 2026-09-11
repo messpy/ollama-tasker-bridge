@@ -20,6 +20,7 @@ import java.util.concurrent.ConcurrentHashMap
 class LocaleFireReceiver : BroadcastReceiver() {
   override fun onReceive(context: Context, intent: Intent) {
     if (intent.action != LocalePluginContract.ACTION_FIRE_SETTING) return
+    InferenceExecutionRegistry.initialize(context)
     val values = intent.getBundleExtra(LocalePluginContract.EXTRA_BUNDLE)
     val model = values?.getString(LocalePluginContract.KEY_MODEL).orEmpty()
     val backend = values?.getString(LocalePluginContract.KEY_BACKEND).orEmpty()
