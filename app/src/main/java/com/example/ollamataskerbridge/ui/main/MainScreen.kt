@@ -126,7 +126,7 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
     .filter { state.search.isBlank() || it.name.contains(state.search, true) }
   Column(modifier.fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) { IconButton(onClick = onOpenDrawer) { Text("☰") }; Text("AI Model Bridge", style = MaterialTheme.typography.headlineSmall) }
-    Text("本体アプリ", style = MaterialTheme.typography.titleLarge)
+    Text("端末上", style = MaterialTheme.typography.titleLarge)
     if (section == MainSection.SETTINGS) {
     OutlinedTextField(state.endpoint, viewModel::endpointChanged, Modifier.fillMaxWidth(), label = { Text("Ollama URL") }, supportingText = { Text("Cloudは https://ollama.com") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri))
     OutlinedTextField(contextTokens, { value -> contextTokens = value.filter(Char::isDigit); value.toIntOrNull()?.let { SettingsStore(context).liteRtContextTokens = it } }, Modifier.fillMaxWidth(), label = { Text("LiteRT-LMコンテキスト上限") }, supportingText = { Text("入力＋会話履歴の上限（512〜8192）。最大トークン数とは別設定です") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
@@ -191,9 +191,6 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
       }
     }
     Text(if (state.selectedModel.isBlank()) "モデル未選択" else "選択中: ${state.selectedModel}（${if (state.models.firstOrNull { it.name == state.selectedModel }?.local == true) "ローカル実行" else "Cloud実行"}）")
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-      Button(onClick = { requestDownload(state.selectedModel) }, enabled = !state.loading && state.selectedModel.isNotBlank() && state.models.firstOrNull { it.name == state.selectedModel }?.let { !it.local && it.downloadable } == true) { Text("選択モデルを取得") }
-    }
     if (state.downloadTotalBytes > 0L) {
       val progress = (state.downloadedBytes.toFloat() / state.downloadTotalBytes.toFloat()).coerceIn(0f, 1f)
       LinearProgressIndicator(progress = progress, modifier = Modifier.fillMaxWidth())
@@ -248,7 +245,7 @@ private fun ModelRow(model: OllamaModel, loading: Boolean, selected: Boolean, do
         }
         Text(if (model.sizeBytes > 0) "%.2f GB".format(model.sizeBytes / 1_000_000_000.0) else "サイズ不明", style = MaterialTheme.typography.bodySmall)
       }
-      if (model.local) TextButton(onClick = { onDelete(model.name) }, enabled = !loading) { Text("選択モデル削除", color = MaterialTheme.colorScheme.error) } else if (model.source == ModelSource.OLLAMA) IconButton(onClick = { if (downloading) onCancel() else onDownload(model.name) }, enabled = !loading || downloading) { if (downloading) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) else Text(if (model.enabled) "✓" else "↓") } else Text("未取得", style = MaterialTheme.typography.labelSmall)
+      if (model.local) TextButton(onClick = { onDelete(model.name) }, enabled = !loading) { Text("選択モデル削除", color = MaterialTheme.colorScheme.error) } else if (model.downloadable || (model.source == ModelSource.OLLAMA && !model.enabled)) IconButton(onClick = { if (downloading) onCancel() else onDownload(model.name) }, enabled = !loading || downloading) { if (downloading) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) else Text(if (model.enabled) "✓" else "↓") } else if (model.enabled) Text("✓ Cloud登録済み", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary) else Text("未取得", style = MaterialTheme.typography.labelSmall)
     }
   }
 }
