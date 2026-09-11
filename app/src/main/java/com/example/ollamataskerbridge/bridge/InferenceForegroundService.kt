@@ -33,7 +33,11 @@ class InferenceForegroundService : Service() {
     DiagnosticsLog.note("推論Service開始: executionId=" + intent?.getStringExtra(EXTRA_EXECUTION_ID) + " origin=" + intent?.getStringExtra(EXTRA_ORIGIN) + " model=" + displayModel)
     scope.launch {
       try {
-        if (intent?.getStringExtra(EXTRA_ORIGIN) == ORIGIN_LOCALE) runLocale(intent) else runBridge(intent ?: Intent());
+        // FGS requests and JobScheduler fallbacks share one queue. A second
+        // MacroDroid trigger waits for the first model execution to finish.
+        InferenceQueue.withSlot {
+          if (intent?.getStringExtra(EXTRA_ORIGIN) == ORIGIN_LOCALE) runLocale(intent) else runBridge(intent ?: Intent())
+        }
       } catch (error: CancellationException) {
         DiagnosticsLog.warn("推論Serviceキャンセル: startId=" + startId)
       } catch (error: Exception) {
