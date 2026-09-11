@@ -3,6 +3,8 @@ package com.example.ollamataskerbridge.ui.chat
 import android.app.Application
 import android.net.Uri
 import android.graphics.BitmapFactory
+import android.graphics.Bitmap
+import java.io.ByteArrayOutputStream
 import android.os.SystemClock
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -56,10 +58,29 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         when {
           bytes.size > 20 * 1024 * 1024 -> _state.value = _state.value.copy(notice = "画像が大きすぎます（20MB以下にしてください）")
           BitmapFactory.decodeByteArray(bytes, 0, bytes.size) == null -> _state.value = _state.value.copy(notice = "対応していない画像形式です。PNGまたはJPEGを選択してください。")
-          else -> _state.value = _state.value.copy(imageBytes = bytes, imageName = uri.lastPathSegment ?: "image", notice = null)
+          else -> {
+            val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            val normalized = bitmap?.let(::normalizeImageForVision)
+            if (normalized == null) {
+              _state.value = _state.value.copy(notice = "画像を読み込めませんでした")
+            } else {
+              _state.value = _state.value.copy(imageBytes = normalized, imageName = uri.lastPathSegment ?: "image", notice = null)
+            }
+            bitmap?.recycle()
+          }
         }
       }
       .onFailure { _state.value = _state.value.copy(notice = "画像を読み込めませんでした: " + it.message) }
+  }
+  /** Match Gallery's LiteRT-LM input path: bounded Bitmap, encoded as PNG. */
+  private fun normalizeImageForVision(bitmap: Bitmap, maxDimension: Int = 1024): ByteArray {
+    val scale = minOf(1f, maxDimension.toFloat() / maxOf(bitmap.width, bitmap.height))
+    val scaled = if (scale < 1f) Bitmap.createScaledBitmap(bitmap, (bitmap.width * scale).toInt().coerceAtLeast(1), (bitmap.height * scale).toInt().coerceAtLeast(1), true) else bitmap
+    return ByteArrayOutputStream().use { stream ->
+      scaled.compress(Bitmap.CompressFormat.PNG, 100, stream)
+      if (scaled !== bitmap) scaled.recycle()
+      stream.toByteArray()
+    }
   }
   fun dismissErrorDialog() { _state.value = _state.value.copy(modalError = null) }
   fun clearImage() { _state.value = _state.value.copy(imageBytes = null, imageName = "", notice = null) }
