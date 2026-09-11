@@ -216,8 +216,8 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
   pendingDelete?.let { target ->
     AlertDialog(onDismissRequest = { pendingDelete = null }, title = { Text("削除しますか？") }, text = { Text(if (target.startsWith("preset:")) "プリセットを削除します。" else "$target を削除します。") }, confirmButton = { TextButton(onClick = { if (target.startsWith("preset:")) viewModel.deletePreset(target.removePrefix("preset:")) else viewModel.deleteModel(target); pendingDelete = null }) { Text("削除") } }, dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("キャンセル") } })
   }
-  if (showPresetDialog) PresetDialog(null, { showPresetDialog = false }) { name, body -> viewModel.savePreset(name, body); showPresetDialog = false }
-  editingPreset?.let { preset -> PresetDialog(preset, { editingPreset = null }) { name, body -> viewModel.savePreset(name, body, preset.id); editingPreset = null } }
+  if (showPresetDialog) PresetDialog(null, { showPresetDialog = false }) { name, body, maxTokens, temperature -> viewModel.savePreset(name, body, maxTokens, temperature); showPresetDialog = false }
+  editingPreset?.let { preset -> PresetDialog(preset, { editingPreset = null }) { name, body, maxTokens, temperature -> viewModel.savePreset(name, body, maxTokens, temperature, preset.id); editingPreset = null } }
 }
 
 @Composable
@@ -242,10 +242,12 @@ private fun ModelRow(model: OllamaModel, loading: Boolean, selected: Boolean, do
 }
 
 @Composable
-private fun PresetDialog(initial: SystemPromptPreset?, onDismiss: () -> Unit, onSave: (String, String) -> Unit) {
+private fun PresetDialog(initial: SystemPromptPreset?, onDismiss: () -> Unit, onSave: (String, String, Int, Float) -> Unit) {
   var name by remember(initial) { mutableStateOf(initial?.name.orEmpty()) }
   var body by remember(initial) { mutableStateOf(initial?.body.orEmpty()) }
-  AlertDialog(onDismissRequest = onDismiss, title = { Text(if (initial == null) "新しいプリセット" else "プリセットを編集") }, text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedTextField(name, { name = it }, label = { Text("名前") }); OutlinedTextField(body, { body = it }, label = { Text("本文") }, minLines = 5) } }, confirmButton = { TextButton(onClick = { onSave(name.trim(), body) }, enabled = name.isNotBlank() && body.isNotBlank()) { Text("保存") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("キャンセル") } })
+  var maxTokens by remember(initial) { mutableStateOf(initial?.maxTokens?.toString() ?: "1024") }
+  var temperature by remember(initial) { mutableStateOf(initial?.temperature?.toString() ?: "0.7") }
+  AlertDialog(onDismissRequest = onDismiss, title = { Text(if (initial == null) "新しいプリセット" else "プリセットを編集") }, text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedTextField(name, { name = it }, label = { Text("名前") }); OutlinedTextField(body, { body = it }, label = { Text("本文") }, minLines = 5); Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedTextField(maxTokens, { maxTokens = it.filter(Char::isDigit) }, Modifier.weight(1f), label = { Text("最大トークン数") }); OutlinedTextField(temperature, { temperature = it }, Modifier.weight(1f), label = { Text("Temperature") }) } } }, confirmButton = { TextButton(onClick = { onSave(name.trim(), body, maxTokens.toIntOrNull()?.coerceIn(1, 4096) ?: 1024, temperature.toFloatOrNull()?.coerceIn(0f, 2f) ?: 0.7f) }, enabled = name.isNotBlank() && body.isNotBlank()) { Text("保存") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("キャンセル") } })
 }
 
 private fun ModelSource.serviceEmoji(): String = when (this) { ModelSource.OLLAMA -> "🦙"; ModelSource.HUGGING_FACE -> "🤗"; ModelSource.LITERT_LM -> "🌞" }

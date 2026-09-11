@@ -66,7 +66,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     } else {
       val preset = settings.presets().firstOrNull { it.id == id } ?: return
       settings.lastPresetId = id
-      _uiState.value = _uiState.value.copy(systemPromptPresetId = id, systemPrompt = preset.body, presets = settings.presets(), message = null)
+      _uiState.value = _uiState.value.copy(systemPromptPresetId = id, systemPrompt = preset.body, maxTokens = preset.maxTokens.toString(), temperature = preset.temperature.toString(), presets = settings.presets(), message = null)
     }
   }
   fun gemmaTermsAccepted(): Boolean = settings.gemmaTermsAccepted
@@ -125,7 +125,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     _uiState.value = _uiState.value.copy(enabledSources = next, message = null)
   }
   fun apiKeyVisibleChanged(value: Boolean) { _uiState.value = _uiState.value.copy(apiKeyVisible = value) }
-  fun savePreset(name: String, body: String, id: String = java.util.UUID.randomUUID().toString()) { settings.savePreset(SystemPromptPreset(id, name, body)); _uiState.value = _uiState.value.copy(presets = settings.presets()) }
+  fun savePreset(name: String, body: String, maxTokens: Int, temperature: Float, id: String = java.util.UUID.randomUUID().toString()) { settings.savePreset(SystemPromptPreset(id, name, body, maxTokens, temperature)); _uiState.value = _uiState.value.copy(presets = settings.presets()) }
   fun deletePreset(id: String) { settings.deletePreset(id); _uiState.value = _uiState.value.copy(presets = settings.presets()) }
 
   fun enableCloudModel(name: String) { runRequest("Cloudモデルの登録に失敗しました。") {

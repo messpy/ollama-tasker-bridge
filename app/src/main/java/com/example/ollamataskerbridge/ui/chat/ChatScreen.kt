@@ -80,7 +80,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
   fun selectPreset(value: SystemPromptPreset?) {
     val old = _state.value
     val changed = old.systemPrompt != value?.body.orEmpty()
-    _state.value = old.copy(systemPromptId = value?.id.orEmpty(), systemPrompt = value?.body.orEmpty(), messages = if (changed && old.messages.isNotEmpty()) emptyList() else old.messages, notice = if (changed && old.messages.isNotEmpty()) "システムプロンプトを変更したため、会話をリセットしました。" else old.notice)
+    _state.value = old.copy(systemPromptId = value?.id.orEmpty(), systemPrompt = value?.body.orEmpty(), maxTokens = value?.maxTokens?.toString() ?: old.maxTokens, temperature = value?.temperature?.toString() ?: old.temperature, messages = if (changed && old.messages.isNotEmpty()) emptyList() else old.messages, notice = if (changed && old.messages.isNotEmpty()) "システムプロンプトを変更したため、会話をリセットしました。" else old.notice)
   }
   fun stop() { running?.cancel(); _state.value = _state.value.copy(generating = false) }
   fun retry(prompt: String) = send(prompt)

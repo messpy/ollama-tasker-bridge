@@ -6,7 +6,7 @@ import android.os.StatFs
 import org.json.JSONArray
 import org.json.JSONObject
 
-data class SystemPromptPreset(val id: String, val name: String, val body: String)
+data class SystemPromptPreset(val id: String, val name: String, val body: String, val maxTokens: Int = 1024, val temperature: Float = 0.7f)
 
 class SettingsStore(context: Context) {
   private val appContext = context.applicationContext
@@ -85,19 +85,19 @@ class SettingsStore(context: Context) {
     val array = JSONArray(prefs.getString("system_prompt_presets", "[]"))
     (0 until array.length()).mapNotNull { index ->
       array.optJSONObject(index)?.let { item ->
-        SystemPromptPreset(item.optString("id"), item.optString("name"), item.optString("body"))
+        SystemPromptPreset(item.optString("id"), item.optString("name"), item.optString("body"), item.optInt("maxTokens", 1024), item.optDouble("temperature", 0.7).toFloat())
       }?.takeIf { it.id.isNotBlank() && it.name.isNotBlank() }
     }
   }.getOrDefault(emptyList())
 
   fun savePreset(preset: SystemPromptPreset) {
     val values = presets().filterNot { it.id == preset.id } + preset
-    val array = JSONArray().apply { values.forEach { put(JSONObject().put("id", it.id).put("name", it.name).put("body", it.body)) } }
+    val array = JSONArray().apply { values.forEach { put(JSONObject().put("id", it.id).put("name", it.name).put("body", it.body).put("maxTokens", it.maxTokens).put("temperature", it.temperature)) } }
     prefs.edit().putString("system_prompt_presets", array.toString()).putString("last_preset_id", preset.id).apply()
   }
 
   fun deletePreset(id: String) {
-    val array = JSONArray().apply { presets().filterNot { it.id == id }.forEach { put(JSONObject().put("id", it.id).put("name", it.name).put("body", it.body)) } }
+    val array = JSONArray().apply { presets().filterNot { it.id == id }.forEach { put(JSONObject().put("id", it.id).put("name", it.name).put("body", it.body).put("maxTokens", it.maxTokens).put("temperature", it.temperature)) } }
     prefs.edit().putString("system_prompt_presets", array.toString()).apply()
   }
 }
