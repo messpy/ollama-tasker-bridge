@@ -116,7 +116,9 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
   val requestDownload: (String) -> Unit = { name -> val item = state.models.firstOrNull { it.name == name }; if (item?.source == ModelSource.OLLAMA && !item.local && !item.downloadable) viewModel.enableCloudModel(name) else if (name.contains("gemma", ignoreCase = true) && !viewModel.gemmaTermsAccepted()) pendingGemmaDownload = name else viewModel.downloadModel(name) }
   val minBytes = state.minLocalModelSizeGb.toDoubleOrNull()?.coerceAtLeast(0.0)?.times(1_000_000_000.0)?.toLong() ?: 0L
   val maxBytes = state.maxLocalModelSizeGb.toDoubleOrNull()?.takeIf { it >= 0 }?.times(1_000_000_000.0)?.toLong() ?: Long.MAX_VALUE
-  val shownModels = state.models.filter { it.source in state.enabledSources }.filter { if (modelTab == 0) it.local || it.enabled else !it.local && !it.enabled }
+  // Tabs represent storage state only. Cloud-enabled models are still online
+  // catalog entries and must not disappear from the model search tab.
+  val shownModels = state.models.filter { it.source in state.enabledSources }.filter { if (modelTab == 0) it.local else !it.local }
     .filter { if (state.downloadedOnly) it.local || it.enabled else if (state.showLocal == state.showCloud) true else if (state.showCloud) it.isCloudOnly() else !it.isCloudOnly() }
     .filter { it.remote || it.sizeBytes <= 0L || (it.sizeBytes >= minBytes && it.sizeBytes <= maxBytes) }
     .filter { (if (it.local) "ローカル" else if (it.isCloudOnly()) "Cloud" else "未取得") in executionFilter }
