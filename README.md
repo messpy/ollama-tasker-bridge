@@ -18,6 +18,12 @@ AndroidアプリからローカルGGUFモデルを実行し、Ollama Cloud/Serve
 
 MacroDroidの結果受信は[設定手順](docs/MACRODROID_RESULT.md)を参照してください。
 
+## 画面例
+
+実機のMacroDroidマクロ設定例です。Tasker/Locale Pluginでプロンプトを渡し、完了後に`%answer`をMacroDroid変数へマッピングできます。
+
+![MacroDroidマクロ設定例](docs/screenshots/macro-workflow.png)
+
 ## ライセンス
 
 プロジェクト固有部分はMIT Licenseです。`lib`に含まれるArm AI Chat由来コードの原文ライセンスは[LICENSES/ARM-AI-CHAT-LICENSE.txt](LICENSES/ARM-AI-CHAT-LICENSE.txt)に保存しています。第三者コードの権利表示は[NOTICE](NOTICE)を参照してください。
