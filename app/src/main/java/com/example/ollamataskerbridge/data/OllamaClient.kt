@@ -25,6 +25,7 @@ data class OllamaModel(
   val local: Boolean = false,
   val source: ModelSource = ModelSource.OLLAMA,
   val downloadUrl: String = "",
+  val enabled: Boolean = false,
 )
 
 class OllamaClient(private val baseUrl: String, private val apiKey: String = "") {

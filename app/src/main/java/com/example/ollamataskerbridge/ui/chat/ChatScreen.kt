@@ -66,7 +66,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
   private fun availableModels(): List<OllamaModel> {
     val local = localModels()
     val localNames = local.map { it.name }.toSet()
-    return (settings.cachedModels() + local).distinctBy { it.name }.map { it.copy(local = it.local || it.name in localNames) }
+    return (settings.cachedModels() + local).distinctBy { it.name }.filter { it.local || it.enabled || it.name in localNames }.map { it.copy(local = it.local || it.name in localNames) }
   }
   private val _state = MutableStateFlow(ChatUiState(selectedModel = (availableModels().firstOrNull { it.local } ?: availableModels().firstOrNull())?.name.orEmpty(), presets = settings.presets(), systemPromptId = settings.lastPresetId, systemPrompt = settings.presets().firstOrNull { it.id == settings.lastPresetId }?.body.orEmpty()))
   val state = _state.asStateFlow()

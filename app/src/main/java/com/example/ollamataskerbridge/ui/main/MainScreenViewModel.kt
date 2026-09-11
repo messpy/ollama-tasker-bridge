@@ -128,6 +128,15 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   fun savePreset(name: String, body: String, id: String = java.util.UUID.randomUUID().toString()) { settings.savePreset(SystemPromptPreset(id, name, body)); _uiState.value = _uiState.value.copy(presets = settings.presets()) }
   fun deletePreset(id: String) { settings.deletePreset(id); _uiState.value = _uiState.value.copy(presets = settings.presets()) }
 
+  fun enableCloudModel(name: String) { runRequest("Cloudモデルの登録に失敗しました。") {
+    val model = _uiState.value.models.firstOrNull { it.name == name } ?: error("モデルが一覧にありません")
+    require(model.source == ModelSource.OLLAMA && !model.local) { "このモデルはCloud登録の対象ではありません" }
+    settings.setModelEnabled(name, true)
+    val updated = _uiState.value.models.map { if (it.name == name) it.copy(enabled = true) else it }
+    settings.saveCachedModels(updated)
+    _uiState.value = _uiState.value.copy(models = updated, selectedModel = name)
+    "Cloudモデルを登録しました。端末には保存せず、Ollama Cloudで実行します"
+  } }
   fun downloadModel(name: String) { runRequest("モデルの取得を開始できません。HTTP応答・保存先・空き容量を確認してください。") {
     _uiState.value = _uiState.value.copy(activeDownloadModel = name, message = name + " のダウンロードを開始しています")
     val maxBytes = settings.maxLocalModelSizeGb.toDouble().times(1000000000.0).toLong()
@@ -184,7 +193,8 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     val huggingFaceNames = huggingFaceModels.map { it.name }.toSet()
     // 同名モデルは取得元タブを混在させず、HFカタログを優先する。
     val remote = ollama.filterNot { it.name in huggingFaceNames } + huggingFaceModels
-    val merged = (remote + local.filter { item -> remote.none { it.name == item.name } })
+    val enabledNames = settings.cachedModels().filter { it.enabled }.map { it.name }.toSet()
+    val merged = (remote + local.filter { item -> remote.none { it.name == item.name } }).map { if (it.name in enabledNames) it.copy(enabled = true) else it }
     settings.saveCachedModels(merged)
     _uiState.value = _uiState.value.copy(models = merged)
   }

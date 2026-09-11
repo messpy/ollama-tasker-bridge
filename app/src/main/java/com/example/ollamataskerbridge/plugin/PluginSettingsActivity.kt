@@ -49,7 +49,7 @@ class PluginSettingsActivity : ComponentActivity() {
     val local = LocalModelStore(this).directory.listFiles().orEmpty()
       .filter { it.extension == "gguf" || it.extension == "litertlm" }
       .map { OllamaModel(it.nameWithoutExtension, false, true, it.length(), true) }
-    val models = (settings.cachedModels() + local).distinctBy { it.name }
+    val models = (settings.cachedModels() + local).distinctBy { it.name }.filter { it.local || it.enabled }
     setContent {
       MyApplicationTheme {
         PluginSettingsContent(

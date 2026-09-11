@@ -71,12 +71,13 @@ class SettingsStore(context: Context) {
   fun cachedModels(): List<OllamaModel> = runCatching {
     val array = JSONArray(prefs.getString("cached_models", "[]"))
     (0 until array.length()).mapNotNull { index -> array.optJSONObject(index)?.let {
-      OllamaModel(it.optString("name"), it.optBoolean("remote", false), it.optBoolean("downloadable", true), it.optLong("size", -1L), it.optBoolean("local", false), runCatching { ModelSource.valueOf(it.optString("source", ModelSource.OLLAMA.name)) }.getOrDefault(ModelSource.OLLAMA), it.optString("downloadUrl"))
+      OllamaModel(it.optString("name"), it.optBoolean("remote", false), it.optBoolean("downloadable", true), it.optLong("size", -1L), it.optBoolean("local", false), runCatching { ModelSource.valueOf(it.optString("source", ModelSource.OLLAMA.name)) }.getOrDefault(ModelSource.OLLAMA), it.optString("downloadUrl"), it.optBoolean("enabled", false))
     } }
   }.getOrDefault(emptyList())
 
+  fun setModelEnabled(name: String, enabled: Boolean) { saveCachedModels(cachedModels().map { if (it.name == name) it.copy(enabled = enabled) else it }) }
   fun saveCachedModels(models: List<OllamaModel>) {
-    val array = JSONArray().apply { models.forEach { put(JSONObject().put("name", it.name).put("remote", it.remote).put("downloadable", it.downloadable).put("size", it.sizeBytes).put("local", it.local).put("source", it.source.name).put("downloadUrl", it.downloadUrl)) } }
+    val array = JSONArray().apply { models.forEach { put(JSONObject().put("name", it.name).put("remote", it.remote).put("downloadable", it.downloadable).put("size", it.sizeBytes).put("local", it.local).put("source", it.source.name).put("downloadUrl", it.downloadUrl).put("enabled", it.enabled)) } }
     prefs.edit().putString("cached_models", array.toString()).apply()
   }
 

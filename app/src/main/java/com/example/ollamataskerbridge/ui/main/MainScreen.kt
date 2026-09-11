@@ -113,11 +113,11 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
   val totalRamGb = memoryInfo.totalMem / 1_000_000_000.0
   val freeStorageGb = StatFs(context.filesDir.path).availableBytes / 1_000_000_000.0
   val recommendedModelGb = minOf(totalRamGb * 0.5, (freeStorageGb - 1.0).coerceAtLeast(0.5)).coerceIn(0.5, 8.0)
-  val requestDownload: (String) -> Unit = { name -> if (name.contains("gemma", ignoreCase = true) && !viewModel.gemmaTermsAccepted()) pendingGemmaDownload = name else viewModel.downloadModel(name) }
+  val requestDownload: (String) -> Unit = { name -> val item = state.models.firstOrNull { it.name == name }; if (item?.source == ModelSource.OLLAMA && !item.local && !item.downloadable) viewModel.enableCloudModel(name) else if (name.contains("gemma", ignoreCase = true) && !viewModel.gemmaTermsAccepted()) pendingGemmaDownload = name else viewModel.downloadModel(name) }
   val minBytes = state.minLocalModelSizeGb.toDoubleOrNull()?.coerceAtLeast(0.0)?.times(1_000_000_000.0)?.toLong() ?: 0L
   val maxBytes = state.maxLocalModelSizeGb.toDoubleOrNull()?.takeIf { it >= 0 }?.times(1_000_000_000.0)?.toLong() ?: Long.MAX_VALUE
-  val shownModels = state.models.filter { it.source in state.enabledSources }.filter { if (modelTab == 0) !it.local else it.local }
-    .filter { if (state.downloadedOnly) it.local else if (state.showLocal == state.showCloud) true else if (state.showCloud) it.isCloudOnly() else !it.isCloudOnly() }
+  val shownModels = state.models.filter { it.source in state.enabledSources }.filter { if (modelTab == 0) !it.local && !it.enabled else it.local || it.enabled }
+    .filter { if (state.downloadedOnly) it.local || it.enabled else if (state.showLocal == state.showCloud) true else if (state.showCloud) it.isCloudOnly() else !it.isCloudOnly() }
     .filter { it.remote || it.sizeBytes <= 0L || (it.sizeBytes >= minBytes && it.sizeBytes <= maxBytes) }
     .filter { kindFilter == "すべて" || it.modelKind() == kindFilter }
     .filter { state.search.isBlank() || it.name.contains(state.search, true) }
@@ -236,7 +236,7 @@ private fun ModelRow(model: OllamaModel, loading: Boolean, selected: Boolean, do
         }
         Text(if (model.sizeBytes > 0) "%.2f GB".format(model.sizeBytes / 1_000_000_000.0) else "サイズ不明", style = MaterialTheme.typography.bodySmall)
       }
-      if (model.local) TextButton(onClick = { onDelete(model.name) }, enabled = !loading) { Text("選択モデル削除", color = MaterialTheme.colorScheme.error) } else if (model.downloadable) IconButton(onClick = { if (downloading) onCancel() else onDownload(model.name) }, enabled = !loading || downloading) { if (downloading) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) else Text("↓") } else Text("☁ Cloudで実行（ダウンロード不要）", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+      if (model.local) TextButton(onClick = { onDelete(model.name) }, enabled = !loading) { Text("選択モデル削除", color = MaterialTheme.colorScheme.error) } else if (model.source == ModelSource.OLLAMA) IconButton(onClick = { if (downloading) onCancel() else onDownload(model.name) }, enabled = !loading || downloading) { if (downloading) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) else Text(if (model.enabled) "✓" else "↓") } else Text("未取得", style = MaterialTheme.typography.labelSmall)
     }
   }
 }
