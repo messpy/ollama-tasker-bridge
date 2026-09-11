@@ -71,8 +71,10 @@ class OllamaClient(private val baseUrl: String, private val apiKey: String = "")
     // stream. A small MacroDroid/Tasker value can therefore end before any
     // final response is produced. Keep the user value for ordinary models,
     // but reserve a usable completion budget for known reasoning families.
-    val reasoningModel = listOf("gpt-oss", "gemma4", "deepseek-r", "qwq", "qwen3").any { model.contains(it, ignoreCase = true) }
-    val effectiveMaxTokens = if (reasoningModel) maxOf(maxTokens, 2048) else maxTokens.coerceAtLeast(1)
+    val gemma4Reasoning = model.contains("gemma4", ignoreCase = true)
+    val reasoningModel = gemma4Reasoning || listOf("gpt-oss", "deepseek-r", "qwq", "qwen3").any { model.contains(it, ignoreCase = true) }
+    val reasoningFloor = if (gemma4Reasoning) 4096 else 2048
+    val effectiveMaxTokens = if (reasoningModel) maxOf(maxTokens, reasoningFloor) else maxTokens.coerceAtLeast(1)
     payload.put("options", org.json.JSONObject().put("num_predict", effectiveMaxTokens).put("temperature", temperature.coerceIn(0f, 2f)))
     val response = org.json.JSONObject(request("POST", "/api/generate", payload.toString()))
     val text = response.optString("response")

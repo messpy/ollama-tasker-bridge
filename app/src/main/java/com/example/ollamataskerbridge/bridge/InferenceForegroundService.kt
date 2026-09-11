@@ -26,9 +26,11 @@ class InferenceForegroundService : Service() {
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     createChannel();
-    startForeground(NOTIFICATION_ID, notification(intent?.getStringExtra(BridgeContract.EXTRA_MODEL).orEmpty()));
-    Log.i(TAG, "推論Service開始: executionId=" + intent?.getStringExtra(EXTRA_EXECUTION_ID) + " origin=" + intent?.getStringExtra(EXTRA_ORIGIN) + " model=" + intent?.getStringExtra(BridgeContract.EXTRA_MODEL))
-    DiagnosticsLog.note("推論Service開始: executionId=" + intent?.getStringExtra(EXTRA_EXECUTION_ID) + " origin=" + intent?.getStringExtra(EXTRA_ORIGIN) + " model=" + intent?.getStringExtra(BridgeContract.EXTRA_MODEL))
+    val localeModel = intent?.getBundleExtra(LocalePluginContract.EXTRA_BUNDLE)?.getString(LocalePluginContract.KEY_MODEL).orEmpty()
+    val displayModel = intent?.getStringExtra(BridgeContract.EXTRA_MODEL).orEmpty().ifBlank { localeModel }
+    startForeground(NOTIFICATION_ID, notification(displayModel));
+    Log.i(TAG, "推論Service開始: executionId=" + intent?.getStringExtra(EXTRA_EXECUTION_ID) + " origin=" + intent?.getStringExtra(EXTRA_ORIGIN) + " model=" + displayModel)
+    DiagnosticsLog.note("推論Service開始: executionId=" + intent?.getStringExtra(EXTRA_EXECUTION_ID) + " origin=" + intent?.getStringExtra(EXTRA_ORIGIN) + " model=" + displayModel)
     scope.launch {
       try {
         if (intent?.getStringExtra(EXTRA_ORIGIN) == ORIGIN_LOCALE) runLocale(intent) else runBridge(intent ?: Intent());
