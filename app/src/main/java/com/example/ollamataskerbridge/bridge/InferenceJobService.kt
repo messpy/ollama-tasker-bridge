@@ -131,11 +131,12 @@ class InferenceJobService : JobService() {
     val retry = wasRunning && !completed && !obsolete && InferenceExecutionRegistry.canRetry(executionId) && isRetryableStopReason(stopReason)
     DiagnosticsLog.warn("推論Job停止: jobId=" + params.jobId + " executionId=" + executionId + " model=" + params.extras.getString(KEY_MODEL).orEmpty() + " backend=" + params.extras.getString(KEY_BACKEND).orEmpty() + " stopReason=" + stopReason + " stopReasonName=" + stopReasonName(stopReason) + " running=" + wasRunning + " completed=" + completed + " obsolete=" + obsolete + " retry=" + retry)
     if (stopReason == JobParameters.STOP_REASON_DEVICE_STATE) logDeviceState(executionId, params.jobId)
-    if (retry) {
-      rescheduleJobs[params.jobId] = true
+    if (wasRunning) {
+      if (retry) rescheduleJobs[params.jobId] = true
       runningJobs[params.jobId]?.cancel()
-      DiagnosticsLog.warn("推論キャンセル: jobId=" + params.jobId + " executionId=" + executionId + " reason=job-stopped")
-    } else if (!completed && !obsolete) {
+      DiagnosticsLog.warn("推論キャンセル: jobId=" + params.jobId + " executionId=" + executionId + " reason=job-stopped retry=" + retry)
+    }
+    if (!retry && !completed && !obsolete) {
       InferenceExecutionRegistry.markObsolete(executionId)
     }
     return retry
