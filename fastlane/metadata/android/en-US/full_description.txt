@@ -1,0 +1,11 @@
+AI Model Bridge runs language and vision models on Android and connects them to Tasker and MacroDroid.
+
+Features:
+
+* Run supported local models on the device.
+* Connect to an Ollama server when remote inference is preferred.
+* Download and manage models from supported sources.
+* Use prompts, system prompts, and generation settings in the test chat.
+* Trigger inference from Tasker or MacroDroid.
+
+Local inference is available without an Ollama account. Network services are optional.
