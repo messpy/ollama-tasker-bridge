@@ -32,6 +32,7 @@ import androidx.navigation3.ui.NavDisplay
 import com.example.ollamataskerbridge.ui.main.MainScreen
 import com.example.ollamataskerbridge.ui.main.MainSection
 import com.example.ollamataskerbridge.ui.chat.ChatScreen
+import com.example.ollamataskerbridge.ui.textaction.TextActionSettingsScreen
 
 @Composable
 fun MainNavigation() {
@@ -49,6 +50,7 @@ fun MainNavigation() {
         NavigationDrawerItem(label = { Text("テストチャット") }, selected = backStack.lastOrNull() == Chat, onClick = { selectedSection = MainSection.SETTINGS; scope.launch { drawerState.close() }; backStack.removeAll { it != Main }; backStack.add(Chat) })
         NavigationDrawerItem(label = { Text("モデル管理・ダウンロード") }, selected = selectedSection == MainSection.MODELS, onClick = { selectedSection = MainSection.MODELS; scope.launch { drawerState.close() }; backStack.removeAll { it != Main }; backStack.add(Models) })
         NavigationDrawerItem(label = { Text("システムプロンプト") }, selected = selectedSection == MainSection.PROMPTS, onClick = { selectedSection = MainSection.PROMPTS; scope.launch { drawerState.close() }; backStack.removeAll { it != Main }; backStack.add(Prompts) })
+        NavigationDrawerItem(label = { Text("AIテキストアクション") }, selected = backStack.lastOrNull() == TextActions, onClick = { scope.launch { drawerState.close() }; backStack.removeAll { it != Home }; backStack.add(TextActions) })
         NavigationDrawerItem(label = { Text("接続・API設定") }, selected = backStack.lastOrNull() == Main, onClick = { selectedSection = MainSection.SETTINGS; scope.launch { drawerState.close() }; backStack.removeAll { it != Home }; backStack.add(Main) })
       }
     },
@@ -58,12 +60,13 @@ fun MainNavigation() {
     backStack = backStack,
     onBack = { backStack.removeLastOrNull() },
     entryProvider = entryProvider {
-        entry<Home> { HomeScreen(onOpenDrawer = { scope.launch { drawerState.open() } }, onOpenSettings = { backStack.add(Main) }, onOpenModels = { backStack.add(Models) }, onOpenPrompts = { backStack.add(Prompts) }, onOpenChat = { backStack.add(Chat) }, modifier = Modifier.safeDrawingPadding()) }
+        entry<Home> { HomeScreen(onOpenDrawer = { scope.launch { drawerState.open() } }, onOpenSettings = { backStack.add(Main) }, onOpenModels = { backStack.add(Models) }, onOpenPrompts = { backStack.add(Prompts) }, onOpenChat = { backStack.add(Chat) }, onOpenTextActions = { backStack.add(TextActions) }, modifier = Modifier.safeDrawingPadding()) }
         entry<Main> { MainScreen(section = MainSection.SETTINGS, onOpenDrawer = { scope.launch { drawerState.open() } }, modifier = Modifier.safeDrawingPadding(), onOpenChat = { selectedSection = MainSection.SETTINGS; backStack.add(Chat) }) }
         entry<Models> { MainScreen(section = MainSection.MODELS, onOpenDrawer = { scope.launch { drawerState.open() } }, modifier = Modifier.safeDrawingPadding()) }
         entry<Prompts> { MainScreen(section = MainSection.PROMPTS, onOpenDrawer = { scope.launch { drawerState.open() } }, modifier = Modifier.safeDrawingPadding()) }
         entry<MacroDroid> { MacroDroidGuideScreen(modifier = Modifier.safeDrawingPadding(), onOpenDrawer = { scope.launch { drawerState.open() } }) }
         entry<Chat> { ChatScreen(modifier = Modifier.safeDrawingPadding(), onOpenDrawer = { scope.launch { drawerState.open() } }) }
+        entry<TextActions> { TextActionSettingsScreen(modifier = Modifier.safeDrawingPadding(), onOpenDrawer = { scope.launch { drawerState.open() } }) }
       },
   )
   }
@@ -79,6 +82,7 @@ private fun HomeScreen(
   onOpenModels: () -> Unit,
   onOpenPrompts: () -> Unit,
   onOpenChat: () -> Unit,
+  onOpenTextActions: () -> Unit,
 ) {
   Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
     Row(Modifier.fillMaxWidth()) {
@@ -92,6 +96,7 @@ private fun HomeScreen(
     HomeItem("💬  テストチャット", "モデルとシステムプロンプトを選んで会話します", onOpenChat)
     HomeItem("📦  モデル管理・ダウンロード", "Ollama・Hugging Face・LiteRT-LMのモデルを管理します", onOpenModels)
     HomeItem("📝  システムプロンプト", "プリセットの追加・編集・削除を行います", onOpenPrompts)
+    HomeItem("✦  AIテキストアクション", "他アプリで選択した文章を要約・翻訳します", onOpenTextActions)
     HomeItem("⚙️  接続・API設定", "Ollama接続先、APIキー、各サービスを設定します", onOpenSettings)
   }
 }
