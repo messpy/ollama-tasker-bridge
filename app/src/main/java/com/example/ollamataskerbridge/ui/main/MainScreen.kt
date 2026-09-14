@@ -172,7 +172,7 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
       value = state.search,
       onValueChange = viewModel::searchChanged,
       modifier = Modifier.fillMaxWidth().height(48.dp),
-      placeholder = { Text("モデル検索", fontSize = 12.sp, maxLines = 1, softWrap = false) },
+      placeholder = { Text("検索", fontSize = 12.sp, maxLines = 1, softWrap = false) },
       singleLine = true,
       textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp),
     )
