@@ -171,7 +171,9 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
     OutlinedTextField(
       value = state.search,
       onValueChange = viewModel::searchChanged,
-      modifier = Modifier.fillMaxWidth().height(48.dp),
+      // OutlinedTextField's label/placeholder needs the Material minimum
+      // height; 48.dp clips Japanese glyphs vertically on some devices.
+      modifier = Modifier.fillMaxWidth().height(56.dp),
       placeholder = { Text("検索", fontSize = 12.sp, maxLines = 1, softWrap = false) },
       singleLine = true,
       textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp),
