@@ -71,12 +71,16 @@ class LocaleFireReceiver : BroadcastReceiver() {
       original.getStringExtra(COMPLETION_INTENT)?.let { putString(InferenceJobService.KEY_COMPLETION, it) }
     }
     val jobId = allocateJobId(context)
-    val result = context.getSystemService(JobScheduler::class.java).schedule(
-      JobInfo.Builder(jobId, ComponentName(context, InferenceJobService::class.java))
-        .setMinimumLatency(0).setOverrideDeadline(5_000)
-        .setBackoffCriteria(30_000L, JobInfo.BACKOFF_POLICY_EXPONENTIAL)
-        .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY).setExtras(extras).build()
-    )
+    val jobBuilder = JobInfo.Builder(jobId, ComponentName(context, InferenceJobService::class.java))
+      .setMinimumLatency(0).setOverrideDeadline(5_000)
+      .setBackoffCriteria(30_000L, JobInfo.BACKOFF_POLICY_EXPONENTIAL)
+    // Local LiteRT/llama.cpp requests do not need a network constraint. An
+    // unnecessary NETWORK_TYPE_ANY constraint can leave a background local
+    // screenshot request queued until the app is opened or connectivity changes.
+    if (!values?.getString(LocalePluginContract.KEY_BACKEND).orEmpty().equals("local", ignoreCase = true)) {
+      jobBuilder.setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
+    }
+    val result = context.getSystemService(JobScheduler::class.java).schedule(jobBuilder.setExtras(extras).build())
     if (result != JobScheduler.RESULT_SUCCESS) {
       InferenceExecutionRegistry.markObsolete(executionId)
       DiagnosticsLog.error("推論Job登録失敗: jobId=" + jobId + " executionId=" + executionId + " model=" + values?.getString(LocalePluginContract.KEY_MODEL).orEmpty() + " backend=" + values?.getString(LocalePluginContract.KEY_BACKEND).orEmpty() + " result=" + result)
