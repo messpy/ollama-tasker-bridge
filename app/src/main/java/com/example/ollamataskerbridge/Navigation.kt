@@ -94,7 +94,7 @@ private fun HomeScreen(
     }
     Text("使いたい機能を選択してください", style = MaterialTheme.typography.bodyLarge)
     HomeItem("💬  テストチャット", "モデルとシステムプロンプトを選んで会話します", onOpenChat)
-    HomeItem("📦  モデル管理・ダウンロード", "Ollama・Hugging Face・LiteRT-LMのモデルを管理します", onOpenModels)
+    HomeItem("📦  モデル管理・ダウンロード", "Ollama・Hugging Faceのモデル（GGUF・LiteRT-LM）を管理します", onOpenModels)
     HomeItem("📝  システムプロンプト", "プリセットの追加・編集・削除を行います", onOpenPrompts)
     HomeItem("✦  AIテキストアクション", "他アプリで選択した文章を要約・翻訳します", onOpenTextActions)
     HomeItem("⚙️  接続・API設定", "Ollama接続先、APIキー、各サービスを設定します", onOpenSettings)

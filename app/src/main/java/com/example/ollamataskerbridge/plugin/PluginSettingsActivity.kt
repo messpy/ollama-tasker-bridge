@@ -37,6 +37,7 @@ import com.example.ollamataskerbridge.data.OllamaModel
 import com.example.ollamataskerbridge.data.SettingsStore
 import com.example.ollamataskerbridge.data.SystemPromptPreset
 import com.example.ollamataskerbridge.data.ModelSource
+import com.example.ollamataskerbridge.data.ModelFormat
 import com.example.ollamataskerbridge.data.supportsVision
 import com.example.ollamataskerbridge.theme.MyApplicationTheme
 import net.dinglisch.android.tasker.TaskerPlugin
@@ -50,7 +51,7 @@ class PluginSettingsActivity : ComponentActivity() {
     val resolvedPlatform = hostPlatform ?: initial?.getString(LocalePluginContract.KEY_PLATFORM) ?: settings.pluginPlatform
     val local = LocalModelStore(this).directory.listFiles().orEmpty()
       .filter { it.extension == "gguf" || it.extension == "litertlm" }
-      .map { file -> OllamaModel(file.nameWithoutExtension, false, true, file.length(), true, if (file.extension == "litertlm") ModelSource.LITERT_LM else ModelSource.HUGGING_FACE) }
+      .map { file -> OllamaModel(file.nameWithoutExtension, false, true, file.length(), true, ModelSource.HUGGING_FACE, format = if (file.extension.equals("litertlm", true)) ModelFormat.LITERT_LM else ModelFormat.GGUF) }
     val models = (settings.cachedModels() + local).distinctBy { it.name }.filter { it.local || it.enabled }
     setContent {
       MyApplicationTheme(darkTheme = false) {
@@ -173,13 +174,13 @@ private fun PluginSettingsContent(
             Column(Modifier.weight(1f)) {
               Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(item.name)
-                Text(item.source.serviceEmoji(), style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
+                Text(item.source.sourceEmoji(), style = androidx.compose.material3.MaterialTheme.typography.labelSmall); Text(if (item.format == ModelFormat.LITERT_LM) "LiteRT-LM" else "GGUF", style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
                 if (item.supportsVision()) Text("👁️", style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
                 if (item.remote && !item.local) Text("☁", style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
               }
               Text(if (item.sizeBytes > 0) "%.2f GB".format(item.sizeBytes / 1_000_000_000.0) else "サイズ不明", style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
             }
-            Text(if (item.local) "✓ 端末に保存済み" else if (item.remote) "☁ Cloud利用可能" else "未登録")
+            Text(if (item.local) "✓ ローカル" else if (item.remote) "☁ Cloud利用可能" else "未登録")
           }
         }
       }
@@ -220,8 +221,7 @@ private fun PluginSettingsContent(
   }
 }
 
-private fun ModelSource.serviceEmoji(): String = when (this) {
+private fun ModelSource.sourceEmoji(): String = when (this) {
   ModelSource.OLLAMA -> "🦙"
   ModelSource.HUGGING_FACE -> "🤗"
-  ModelSource.LITERT_LM -> "🌞"
 }

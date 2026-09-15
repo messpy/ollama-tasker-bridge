@@ -76,7 +76,7 @@ object ModelCatalog {
     val localStore = LocalModelStore(context)
     val local = localStore.directory.listFiles().orEmpty()
       .filter { it.extension == "gguf" || it.extension == "litertlm" }
-      .map { file -> OllamaModel(file.nameWithoutExtension, false, true, file.length(), true, if (file.extension == "litertlm") ModelSource.LITERT_LM else ModelSource.HUGGING_FACE) }
+      .map { file -> OllamaModel(file.nameWithoutExtension, false, true, file.length(), true, ModelSource.HUGGING_FACE, format = if (file.extension.equals("litertlm", true)) ModelFormat.LITERT_LM else ModelFormat.GGUF) }
     val names = local.map { it.name }.toSet()
     return (settings.cachedModels() + local).distinctBy { it.name }
       .map { it.copy(local = it.local || it.name in names) }

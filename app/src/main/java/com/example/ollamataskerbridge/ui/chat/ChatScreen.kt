@@ -84,7 +84,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
   }
   fun dismissErrorDialog() { _state.value = _state.value.copy(modalError = null) }
   fun clearImage() { _state.value = _state.value.copy(imageBytes = null, imageName = "", notice = null) }
-  private fun localModels(): List<OllamaModel> = store.directory.listFiles().orEmpty().filter { it.extension == "gguf" || it.extension == "litertlm" }.map { file -> OllamaModel(file.nameWithoutExtension, false, true, file.length(), true, if (file.extension == "litertlm") ModelSource.LITERT_LM else ModelSource.HUGGING_FACE) }
+  private fun localModels(): List<OllamaModel> = store.directory.listFiles().orEmpty().filter { it.extension == "gguf" || it.extension == "litertlm" }.map { file -> OllamaModel(file.nameWithoutExtension, false, true, file.length(), true, ModelSource.HUGGING_FACE, format = if (file.extension.equals("litertlm", true)) ModelFormat.LITERT_LM else ModelFormat.GGUF) }
   private fun availableModels(): List<OllamaModel> {
     val local = localModels()
     val localNames = local.map { it.name }.toSet()

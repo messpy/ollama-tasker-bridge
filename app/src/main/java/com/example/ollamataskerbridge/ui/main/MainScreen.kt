@@ -23,6 +23,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -75,19 +77,15 @@ import com.example.ollamataskerbridge.data.SettingsStore
 import com.example.ollamataskerbridge.data.SystemPromptPreset
 import com.example.ollamataskerbridge.theme.MyApplicationTheme
 
-// An Ollama service model is executed remotely whenever it is not stored in
-// this app. This also migrates older cached entries whose remote flag was
-// incorrectly persisted as false.
-private fun OllamaModel.isCloudOnly(): Boolean = source == ModelSource.OLLAMA && !local
-private fun OllamaModel.executionLabel(): String = when {
-  local -> "端末に保存済み"
-  isCloudOnly() -> "Cloud利用可能"
-  else -> "未登録"
-}
+// Local is the downloaded-files tab. Cloud is the online catalog tab; it
+// includes both downloadable local models and Cloud-only models.
+internal fun OllamaModel.isCloudOnly(): Boolean = source == ModelSource.OLLAMA && remote && !local
+
 
 private fun OllamaModel.modelKind(): String {
   val value = name.lowercase().replace("_", "-").replace(":", "-")
   return when {
+    isCloudOnly() -> "Cloudモデル"
     supportsVision() || listOf("vlm", "vision", "llava", "minicpm-v", "moondream", "qwen2-vl", "qwen2.5-vl", "qwen2.5vl", "qwen3-vl", "qwen3vl", "qwen-vl", "pixtral", "internvl", "molmo", "glm-5.3-flash", "qwen3.8", "ornith").any { value.contains(it) } -> "VLM"
     listOf("whisper", "speech", "audio", "audio-language", "audiolanguage", "ultravox", "voxtral", "qwen2-audio", "voice", "tts").any { value.contains(it) } -> "Audio-Language Model"
     listOf("embed", "rerank", "embedding").any { value.contains(it) } -> "その他"
@@ -100,7 +98,6 @@ enum class MainSection { SETTINGS, MODELS, PROMPTS }
 fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier = Modifier, section: MainSection = MainSection.SETTINGS, onOpenDrawer: () -> Unit = {}, onOpenChat: () -> Unit = {}) {
   val state by viewModel.uiState.collectAsStateWithLifecycle()
   var pendingDelete by remember { mutableStateOf<String?>(null) }
-  var pendingCancel by remember { mutableStateOf(false) }
   var editingPreset by remember { mutableStateOf<SystemPromptPreset?>(null) }
   var showPresetDialog by remember { mutableStateOf(false) }
   var systemPresetMenu by remember { mutableStateOf(false) }
@@ -108,14 +105,19 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
   var availabilityMenu by remember { mutableStateOf(false) }
   var kindMenu by remember { mutableStateOf(false) }
   var sourceFilterMenu by remember { mutableStateOf(false) }
-  var kindFilter by remember { mutableStateOf(setOf("LLM", "VLM", "Audio-Language Model", "その他")) }
-  var executionFilter by remember { mutableStateOf(setOf("端末に保存済み", "Cloud利用可能", "未登録")) }
-  var executionMenu by remember { mutableStateOf(false) }
-  var sourceMenu by remember { mutableStateOf(false) }
-  var modelTab by remember { mutableStateOf(0) }
+  var kindFilter by remember { mutableStateOf(setOf("LLM", "VLM", "Audio-Language Model", "その他", "Cloudモデル")) }
+    var sourceMenu by remember { mutableStateOf(false) }
+  var modelTab by remember { mutableStateOf(1) }
   val clipboard = LocalClipboardManager.current
   val diagnosticsScope = rememberCoroutineScope()
   val context = LocalContext.current
+  val settingsStore = remember { SettingsStore(context) }
+  val exportSettings = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+    if (uri != null) runCatching { context.contentResolver.openOutputStream(uri)?.use { it.write(settingsStore.exportJson().toByteArray()) } ?: error("ファイルを書き込めません") }.onSuccess { Toast.makeText(context, "設定をエクスポートしました", Toast.LENGTH_SHORT).show() }.onFailure { Toast.makeText(context, "エクスポート失敗: " + (it.message ?: "不明なエラー"), Toast.LENGTH_LONG).show() }
+  }
+  val importSettings = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+    if (uri != null) runCatching { context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() } ?: error("ファイルを読み込めません") }.onSuccess { viewModel.importSettings(it) }.onFailure { Toast.makeText(context, "インポート失敗: " + (it.message ?: "不明なエラー"), Toast.LENGTH_LONG).show() }
+  }
   var contextTokens by remember { mutableStateOf(SettingsStore(context).liteRtContextTokens.toString()) }
   val memoryInfo = ActivityManager.MemoryInfo().also { context.getSystemService(ActivityManager::class.java).getMemoryInfo(it) }
   val totalRamGb = memoryInfo.totalMem / 1_000_000_000.0
@@ -124,17 +126,14 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
   val requestDownload: (String) -> Unit = { name -> val item = state.models.firstOrNull { it.name == name }; if (item?.source == ModelSource.OLLAMA && !item.local && !item.downloadable) viewModel.enableCloudModel(name) else if (name.contains("gemma", ignoreCase = true) && !viewModel.gemmaTermsAccepted()) pendingGemmaDownload = name else viewModel.downloadModel(name) }
   val minBytes = state.minLocalModelSizeGb.toDoubleOrNull()?.coerceAtLeast(0.0)?.times(1_000_000_000.0)?.toLong() ?: 0L
   val maxBytes = state.maxLocalModelSizeGb.toDoubleOrNull()?.takeIf { it >= 0 }?.times(1_000_000_000.0)?.toLong() ?: Long.MAX_VALUE
-  // Tabs represent storage state only. Cloud-enabled models are still online
-  // catalog entries and must not disappear from the model search tab.
+  // Local shows downloaded files; Cloud shows the not-yet-downloaded online catalog.
   val shownModels = state.models.filter { it.source in state.enabledSources }.filter { if (modelTab == 0) it.local else !it.local }
-    .filter { if (state.downloadedOnly) it.local || it.enabled else if (state.showLocal == state.showCloud) true else if (state.showCloud) it.isCloudOnly() else !it.isCloudOnly() }
     .filter { it.remote || it.sizeBytes <= 0L || (it.sizeBytes >= minBytes && it.sizeBytes <= maxBytes) }
-    .filter { it.executionLabel() in executionFilter }
     .filter { it.modelKind() in kindFilter }
     .filter { state.search.isBlank() || it.name.contains(state.search, true) }
-  LaunchedEffect(state.models.size, state.enabledSources, kindFilter, executionFilter, modelTab, state.search, state.minLocalModelSizeGb, state.maxLocalModelSizeGb) {
+  LaunchedEffect(state.models.size, state.enabledSources, kindFilter, modelTab, state.search, state.minLocalModelSizeGb, state.maxLocalModelSizeGb) {
     val cloudVisionCount = shownModels.count { it.isCloudOnly() && it.supportsVision() }
-    DiagnosticsLog.note("モデル一覧フィルタ: service=${state.enabledSources.joinToString()} kind=${kindFilter.joinToString()} execution=${executionFilter.joinToString()} tab=$modelTab searchChars=${state.search.length} resultCount=${shownModels.size} cloudVisionCount=$cloudVisionCount")
+    DiagnosticsLog.note("モデル一覧フィルタ: service=${state.enabledSources.joinToString()} kind=${kindFilter.joinToString()} tab=$modelTab searchChars=${state.search.length} resultCount=${shownModels.size} cloudVisionCount=$cloudVisionCount")
   }
   Column(modifier.fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) { IconButton(onClick = onOpenDrawer) { Text("☰") }; Text("AI Model Bridge", style = MaterialTheme.typography.headlineSmall) }
@@ -163,6 +162,11 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
       TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://huggingface.co/settings/tokens"))) }) { Text("Hugging Faceトークンを取得", fontSize = 11.sp) }
     }
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+      OutlinedButton(onClick = { exportSettings.launch("ollama-tasker-bridge-settings.json") }) { Text("設定をエクスポート") }
+      OutlinedButton(onClick = { importSettings.launch(arrayOf("application/json", "text/plain")) }) { Text("設定をインポート") }
+    }
+    Text("APIキーを含むため、バックアップファイルの取り扱いに注意してください。モデル本体は含まれません。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
     }
     if (section == MainSection.MODELS) {
     TabRow(selectedTabIndex = modelTab, modifier = Modifier.fillMaxWidth()) { Tab(selected = modelTab == 0, onClick = { modelTab = 0; viewModel.refreshInstalledModels() }, text = { Text("ダウンロード済み") }); Tab(selected = modelTab == 1, onClick = { modelTab = 1; viewModel.refreshInstalledModels() }, text = { Text("モデルを探す") }) }
@@ -182,32 +186,26 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
     RangeSlider(value = (state.minLocalModelSizeGb.toFloatOrNull()?.coerceIn(0f, 200f) ?: 0f)..(state.maxLocalModelSizeGb.toFloatOrNull()?.coerceIn(0f, 200f) ?: 15f), onValueChange = { viewModel.modelSizeRangeChanged(it.start, it.endInclusive) }, valueRange = 0f..200f, steps = 199)
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
       Box {
-        OutlinedButton(onClick = { sourceFilterMenu = true }) { Text("サービス: " + if (state.enabledSources.size == ModelSource.values().size) "すべて" else state.enabledSources.size.toString() + "件") }
+        OutlinedButton(onClick = { sourceFilterMenu = true }) { Text("配布元: " + if (state.enabledSources.size == ModelSource.values().size) "すべて" else state.enabledSources.size.toString() + "件") }
         DropdownMenu(expanded = sourceFilterMenu, onDismissRequest = { sourceFilterMenu = false }) {
           DropdownMenuItem(text = { Text("すべて") }, onClick = { viewModel.sourceFilterChanged(null) })
           ModelSource.values().forEach { source -> DropdownMenuItem(text = { Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) { Checkbox(source in state.enabledSources, { checked -> viewModel.sourceEnabled(source, checked) }); Text(source.displayName()) } }, onClick = { viewModel.sourceEnabled(source, source !in state.enabledSources) }) }
         }
       }
       Box {
-        OutlinedButton(onClick = { kindMenu = true }) { Text("種類: " + if (kindFilter.size == 4) "すべて" else kindFilter.size.toString() + "件") }
+        OutlinedButton(onClick = { kindMenu = true }) { Text("種類: " + if (kindFilter.size == 5) "すべて" else kindFilter.size.toString() + "件") }
         DropdownMenu(expanded = kindMenu, onDismissRequest = { kindMenu = false }) {
-          listOf("LLM", "VLM", "Audio-Language Model", "その他").forEach { kind -> DropdownMenuItem(text = { Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) { Checkbox(kind in kindFilter, { checked -> kindFilter = if (checked) kindFilter + kind else kindFilter - kind }); Text(kind) } }, onClick = { kindFilter = if (kind in kindFilter) kindFilter - kind else kindFilter + kind }) }
-        }
-      }
-      Box {
-        OutlinedButton(onClick = { executionMenu = true }) { Text("実行先: " + if (executionFilter.size == 3) "すべて" else executionFilter.size.toString() + "件") }
-        DropdownMenu(expanded = executionMenu, onDismissRequest = { executionMenu = false }) {
-          listOf("端末に保存済み", "Cloud利用可能", "未登録").forEach { target -> DropdownMenuItem(text = { Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) { Checkbox(target in executionFilter, { checked -> executionFilter = if (checked) executionFilter + target else executionFilter - target }); Text(target) } }, onClick = { executionFilter = if (target in executionFilter) executionFilter - target else executionFilter + target }) }
+          listOf("LLM", "VLM", "Audio-Language Model", "その他", "Cloudモデル").forEach { kind -> DropdownMenuItem(text = { Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) { Checkbox(kind in kindFilter, { checked -> kindFilter = if (checked) kindFilter + kind else kindFilter - kind }); Text(kind) } }, onClick = { kindFilter = if (kind in kindFilter) kindFilter - kind else kindFilter + kind }) }
         }
       }
     }
-    state.activeDownloadModel?.let { active -> Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) { Text("ダウンロード中: $active", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f)); TextButton(onClick = viewModel::cancelDownload) { Text("キャンセル") } } }
+    state.activeDownloadModel?.let { active -> Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) { Text("ダウンロード中: ${active}", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f)); IconButton(onClick = viewModel::cancelDownload) { CircularProgressIndicator(Modifier.size(20.dp)) } } }
     Text("${shownModels.size}件（上限以下。未知サイズは取得時に確認）", style = MaterialTheme.typography.bodySmall)
     if (shownModels.isEmpty()) {
       Text("表示できるモデルはありません。上限値または検索条件を確認してください。", style = MaterialTheme.typography.bodySmall)
     } else {
       Column(modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        shownModels.forEach { model -> ModelRow(model, state.loading, state.selectedModel == model.name, state.activeDownloadModel == model.name, viewModel::selectModel, requestDownload, { pendingDelete = it }, { pendingCancel = true }) }
+        shownModels.forEach { model -> ModelRow(model, state.loading, state.selectedModel == model.name, state.activeDownloadModel == model.name, viewModel::selectModel, requestDownload, { pendingDelete = it }, viewModel::cancelDownload) }
       }
     }
     Text(if (state.selectedModel.isBlank()) "モデル未選択" else "選択中: ${state.selectedModel}（${state.models.firstOrNull { it.name == state.selectedModel }?.let { if (it.local) "ローカル実行" else if (it.isCloudOnly()) "Cloud実行" else "未登録" } ?: "未登録"}）")
@@ -241,7 +239,6 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
     }
   }
   pendingGemmaDownload?.let { name -> AlertDialog(onDismissRequest = { pendingGemmaDownload = null }, title = { Text("Gemma利用条件") }, text = { Text("GemmaモデルはGoogleの利用規約に従って使用してください。 https://ai.google.dev/gemma/terms") }, confirmButton = { TextButton(onClick = { viewModel.acceptGemmaTerms(); pendingGemmaDownload = null; viewModel.downloadModel(name) }) { Text("同意してダウンロード") } }, dismissButton = { TextButton(onClick = { pendingGemmaDownload = null }) { Text("キャンセル") } }) }
-  if (pendingCancel) AlertDialog(onDismissRequest = { pendingCancel = false }, title = { Text("ダウンロードをキャンセルしますか？") }, text = { Text("途中までのファイルは削除されます。") }, confirmButton = { TextButton(onClick = { viewModel.cancelDownload(); pendingCancel = false }) { Text("OK") } }, dismissButton = { TextButton(onClick = { pendingCancel = false }) { Text("キャンセル") } })
   pendingDelete?.let { target ->
     AlertDialog(onDismissRequest = { pendingDelete = null }, title = { Text("削除しますか？") }, text = { Text(if (target.startsWith("preset:")) "プリセットを削除します。" else "$target を削除します。") }, confirmButton = { TextButton(onClick = { if (target.startsWith("preset:")) viewModel.deletePreset(target.removePrefix("preset:")) else viewModel.deleteModel(target); pendingDelete = null }) { Text("削除") } }, dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("キャンセル") } })
   }
@@ -257,7 +254,7 @@ private fun ModelRow(model: OllamaModel, loading: Boolean, selected: Boolean, do
       Column(Modifier.weight(1f)) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
           Text(model.name, modifier = Modifier.combinedClickable(onClick = { onSelect(model.name) }, onLongClick = { clipboard.setText(AnnotatedString(model.name)); Toast.makeText(context, "モデル名をコピーしました", Toast.LENGTH_SHORT).show() }))
-          Text(model.source.serviceEmoji(), style = MaterialTheme.typography.labelSmall)
+          Text(model.source.sourceEmoji(), style = MaterialTheme.typography.labelSmall); Text(if (model.format == com.example.ollamataskerbridge.data.ModelFormat.LITERT_LM) "LiteRT-LM" else "GGUF", style = MaterialTheme.typography.labelSmall)
           if (model.supportsVision()) Text("👁️", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
           if (model.isCloudOnly()) Text("☁", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
 
@@ -265,7 +262,7 @@ private fun ModelRow(model: OllamaModel, loading: Boolean, selected: Boolean, do
         }
         Text(if (model.sizeBytes > 0) "%.2f GB".format(model.sizeBytes / 1_000_000_000.0) else "サイズ不明", style = MaterialTheme.typography.bodySmall)
       }
-      if (model.local) TextButton(onClick = { onDelete(model.name) }, enabled = !loading) { Text("選択モデル削除", color = MaterialTheme.colorScheme.error) } else if (model.downloadable || (model.source == ModelSource.OLLAMA && !model.enabled)) IconButton(onClick = { if (downloading) onCancel() else onDownload(model.name) }, enabled = !loading || downloading) { if (downloading) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) else Text(if (model.enabled) "✓" else "↓") } else if (model.enabled) Text("✓ Cloud利用可能", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary) else Text("未登録", style = MaterialTheme.typography.labelSmall)
+      if (model.local) TextButton(onClick = { onDelete(model.name) }, enabled = !loading) { Text("削除", color = MaterialTheme.colorScheme.error) } else if (model.isCloudOnly()) { if (downloading) IconButton(onClick = onCancel, enabled = !loading || downloading) { CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) } else TextButton(onClick = { onDownload(model.name) }, enabled = !loading) { Text(if (model.enabled) "✓ Cloudで利用中" else "Cloudで利用") } } else if (model.downloadable) { if (downloading) IconButton(onClick = onCancel, enabled = !loading || downloading) { CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) } else TextButton(onClick = { onDownload(model.name) }, enabled = !loading) { Text("↓") } } else Text("利用不可", style = MaterialTheme.typography.labelSmall)
     }
   }
 }
@@ -279,12 +276,11 @@ private fun PresetDialog(initial: SystemPromptPreset?, onDismiss: () -> Unit, on
   AlertDialog(onDismissRequest = onDismiss, title = { Text(if (initial == null) "新しいプリセット" else "プリセットを編集") }, text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedTextField(name, { name = it }, label = { Text("名前") }); OutlinedTextField(body, { body = it }, label = { Text("本文") }, minLines = 5); Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedTextField(maxTokens, { maxTokens = it.filter(Char::isDigit) }, Modifier.weight(1f), label = { Text("最大トークン数") }); OutlinedTextField(temperature, { temperature = it }, Modifier.weight(1f), label = { Text("Temperature") }) } } }, confirmButton = { TextButton(onClick = { onSave(name.trim(), body, maxTokens.toIntOrNull()?.coerceIn(1, 4096) ?: 1024, temperature.toFloatOrNull()?.coerceIn(0f, 2f) ?: 0.7f) }, enabled = name.isNotBlank() && body.isNotBlank()) { Text("保存") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("キャンセル") } })
 }
 
-private fun ModelSource.serviceEmoji(): String = when (this) { ModelSource.OLLAMA -> "🦙"; ModelSource.HUGGING_FACE -> "🤗"; ModelSource.LITERT_LM -> "🌞" }
+private fun ModelSource.sourceEmoji(): String = when (this) { ModelSource.OLLAMA -> "🦙"; ModelSource.HUGGING_FACE -> "🤗" }
 
 private fun ModelSource.displayName(): String = when (this) {
   ModelSource.OLLAMA -> "🦙 Ollama"
   ModelSource.HUGGING_FACE -> "🤗 Hugging Face"
-  ModelSource.LITERT_LM -> "🌞 LiteRT-LM"
 }
 
 @Composable

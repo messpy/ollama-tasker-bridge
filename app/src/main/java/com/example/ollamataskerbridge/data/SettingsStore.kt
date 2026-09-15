@@ -68,16 +68,48 @@ class SettingsStore(context: Context) {
     }
     set(value) { prefs.edit().putFloat("max_local_model_size_gb", value.coerceAtLeast(0f)).apply() }
 
+  fun exportJson(): String {
+    val root = JSONObject().put("format", "ollama-tasker-bridge-settings").put("version", 1).put("endpoint", endpoint).put("apiKey", apiKey).put("huggingFaceToken", huggingFaceToken).put("lastPresetId", lastPresetId).put("pluginPlatform", pluginPlatform).put("modelSource", modelSource).put("liteRtContextTokens", liteRtContextTokens).put("gemmaTermsAccepted", gemmaTermsAccepted).put("minLocalModelSizeGb", minLocalModelSizeGb).put("maxLocalModelSizeGb", maxLocalModelSizeGb)
+    root.put("enabledModelSources", JSONArray(enabledModelSources.map { it.name }))
+    root.put("cachedModels", JSONArray(prefs.getString("cached_models", "[]")))
+    root.put("presets", JSONArray(prefs.getString("system_prompt_presets", "[]")))
+    return root.toString(2)
+  }
+
+  fun importJson(text: String) {
+    val root = JSONObject(text)
+    require(root.optString("format") == "ollama-tasker-bridge-settings") { "このファイルは設定バックアップではありません" }
+    require(root.optInt("version", 0) == 1) { "対応していない設定バックアップ形式です" }
+    val edit = prefs.edit()
+    if (root.has("endpoint")) edit.putString("endpoint", root.optString("endpoint"))
+    if (root.has("apiKey")) edit.putString("api_key", root.optString("apiKey"))
+    if (root.has("huggingFaceToken")) edit.putString("huggingface_token", root.optString("huggingFaceToken"))
+    if (root.has("lastPresetId")) edit.putString("last_preset_id", root.optString("lastPresetId"))
+    if (root.has("pluginPlatform")) edit.putString("plugin_platform", root.optString("pluginPlatform"))
+    if (root.has("modelSource")) edit.putString("model_source", root.optString("modelSource"))
+    if (root.has("liteRtContextTokens")) edit.putInt("litert_context_tokens", root.optInt("liteRtContextTokens", 2048).coerceIn(512, 8192))
+    if (root.has("gemmaTermsAccepted")) edit.putBoolean("gemma_terms_accepted", root.optBoolean("gemmaTermsAccepted"))
+    if (root.has("minLocalModelSizeGb")) edit.putFloat("min_local_model_size_gb", root.optDouble("minLocalModelSizeGb", 0.0).toFloat().coerceAtLeast(0f))
+    if (root.has("maxLocalModelSizeGb")) edit.putFloat("max_local_model_size_gb", root.optDouble("maxLocalModelSizeGb", 15.0).toFloat().coerceAtLeast(0f))
+    root.optJSONArray("enabledModelSources")?.let { values -> edit.putStringSet("enabled_model_sources", (0 until values.length()).mapNotNull { values.optString(it).takeIf(String::isNotBlank) }.toSet()) }
+    root.optJSONArray("cachedModels")?.let { edit.putString("cached_models", it.toString()) }
+    root.optJSONArray("presets")?.let { edit.putString("system_prompt_presets", it.toString()) }
+    edit.apply()
+  }
+
   fun cachedModels(): List<OllamaModel> = runCatching {
     val array = JSONArray(prefs.getString("cached_models", "[]"))
-    (0 until array.length()).mapNotNull { index -> array.optJSONObject(index)?.let {
-      OllamaModel(it.optString("name"), it.optBoolean("remote", false), it.optBoolean("downloadable", true), it.optLong("size", -1L), it.optBoolean("local", false), runCatching { ModelSource.valueOf(it.optString("source", ModelSource.OLLAMA.name)) }.getOrDefault(ModelSource.OLLAMA), it.optString("downloadUrl"), it.optBoolean("enabled", false), it.optBoolean("vision", false))
+    (0 until array.length()).mapNotNull { index -> array.optJSONObject(index)?.let { item ->
+      val storedSource = item.optString("source", ModelSource.OLLAMA.name)
+      val source = if (storedSource == "LITERT_LM") ModelSource.HUGGING_FACE else runCatching { ModelSource.valueOf(storedSource) }.getOrDefault(ModelSource.OLLAMA)
+      val format = if (storedSource == "LITERT_LM") ModelFormat.LITERT_LM else runCatching { ModelFormat.valueOf(item.optString("format", ModelFormat.GGUF.name)) }.getOrDefault(ModelFormat.GGUF)
+      OllamaModel(item.optString("name"), item.optBoolean("remote", false), item.optBoolean("downloadable", true), item.optLong("size", -1L), item.optBoolean("local", false), source, item.optString("downloadUrl"), item.optBoolean("enabled", false), item.optBoolean("vision", false), format)
     } }
   }.getOrDefault(emptyList())
 
   fun setModelEnabled(name: String, enabled: Boolean) { saveCachedModels(cachedModels().map { if (it.name == name) it.copy(enabled = enabled) else it }) }
   fun saveCachedModels(models: List<OllamaModel>) {
-    val array = JSONArray().apply { models.forEach { put(JSONObject().put("name", it.name).put("remote", it.remote).put("downloadable", it.downloadable).put("size", it.sizeBytes).put("local", it.local).put("source", it.source.name).put("downloadUrl", it.downloadUrl).put("enabled", it.enabled).put("vision", it.vision)) } }
+    val array = JSONArray().apply { models.forEach { put(JSONObject().put("name", it.name).put("remote", it.remote).put("downloadable", it.downloadable).put("size", it.sizeBytes).put("local", it.local).put("source", it.source.name).put("downloadUrl", it.downloadUrl).put("enabled", it.enabled).put("vision", it.vision).put("format", it.format.name)) } }
     prefs.edit().putString("cached_models", array.toString()).apply()
   }
 

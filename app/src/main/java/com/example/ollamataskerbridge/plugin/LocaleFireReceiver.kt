@@ -55,6 +55,8 @@ class LocaleFireReceiver : BroadcastReceiver() {
   }
 
   private fun scheduleFallbackJob(context: Context, original: Intent, values: android.os.Bundle?, executionId: String) {
+    val backend = values?.getString(LocalePluginContract.KEY_BACKEND).orEmpty()
+    val isLocal = backend.equals("local", ignoreCase = true)
     val extras = PersistableBundle().apply {
       putString(InferenceJobService.KEY_MODEL, values?.getString(LocalePluginContract.KEY_MODEL).orEmpty())
       putString(InferenceJobService.KEY_BACKEND, values?.getString(LocalePluginContract.KEY_BACKEND).orEmpty())
@@ -72,12 +74,14 @@ class LocaleFireReceiver : BroadcastReceiver() {
     }
     val jobId = allocateJobId(context)
     val jobBuilder = JobInfo.Builder(jobId, ComponentName(context, InferenceJobService::class.java))
-      .setMinimumLatency(0).setOverrideDeadline(5_000)
       .setBackoffCriteria(30_000L, JobInfo.BACKOFF_POLICY_EXPONENTIAL)
-    // Local LiteRT/llama.cpp requests do not need a network constraint. An
-    // unnecessary NETWORK_TYPE_ANY constraint can leave a background local
-    // screenshot request queued until the app is opened or connectivity changes.
-    if (!values?.getString(LocalePluginContract.KEY_BACKEND).orEmpty().equals("local", ignoreCase = true)) {
+    if (isLocal) {
+      // Prefer expedited dispatch so an idle app does not hold local inference
+      // until the user opens the app. Local inference has no network constraint.
+      jobBuilder.setMinimumLatency(0)
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) jobBuilder.setExpedited(true)
+    } else {
+      jobBuilder.setMinimumLatency(0).setOverrideDeadline(5_000)
       jobBuilder.setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
     }
     val result = context.getSystemService(JobScheduler::class.java).schedule(jobBuilder.setExtras(extras).build())
@@ -85,7 +89,7 @@ class LocaleFireReceiver : BroadcastReceiver() {
       InferenceExecutionRegistry.markObsolete(executionId)
       DiagnosticsLog.error("推論Job登録失敗: jobId=" + jobId + " executionId=" + executionId + " model=" + values?.getString(LocalePluginContract.KEY_MODEL).orEmpty() + " backend=" + values?.getString(LocalePluginContract.KEY_BACKEND).orEmpty() + " result=" + result)
     }
-    DiagnosticsLog.note("推論Job登録: jobId=" + jobId + " executionId=" + executionId + " model=" + values?.getString(LocalePluginContract.KEY_MODEL).orEmpty() + " backend=" + values?.getString(LocalePluginContract.KEY_BACKEND).orEmpty() + " executionPath=macrodroid-job-scheduler result=" + result)
+    DiagnosticsLog.note("推論Job登録: jobId=" + jobId + " executionId=" + executionId + " model=" + values?.getString(LocalePluginContract.KEY_MODEL).orEmpty() + " backend=" + backend + " expedited=" + (isLocal && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) + " executionPath=macrodroid-job-scheduler result=" + result)
   }
 
   companion object {

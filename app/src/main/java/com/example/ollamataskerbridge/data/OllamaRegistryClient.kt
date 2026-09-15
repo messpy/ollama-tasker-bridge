@@ -7,6 +7,7 @@ import java.io.FileOutputStream
 import java.io.FileInputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 import java.security.MessageDigest
 import org.json.JSONObject
 
@@ -24,27 +25,35 @@ class LocalModelStore(context: Context) {
   }
 }
 
+internal fun cloudCatalogModelName(name: String): String = if (name.endsWith(":cloud", true)) name else name + ":cloud"
+
+internal fun ollamaCatalogPath(query: String, cloudOnly: Boolean): String = if (cloudOnly) "search?c=cloud" + if (query.isBlank()) "" else "&q=" + URLEncoder.encode(query.trim(), "UTF-8") else if (query.isBlank()) "library" else "search?q=" + URLEncoder.encode(query.trim(), "UTF-8")
+
+internal fun parseOllamaCatalogNames(html: String): List<String> = Regex("""href\s*=\s*[\x27"]\/library\/([a-zA-Z0-9._:/-]+)[\x27"]""")
+  .findAll(html)
+  .map { it.groupValues[1] }
+  .distinct()
+  .toList()
+
 class OllamaRegistryClient(
 
   private val store: LocalModelStore,
   private val registryBase: String = "https://registry.ollama.ai",
 ) {
   data class ModelMetadata(val downloadable: Boolean, val sizeBytes: Long)
-  suspend fun catalog(): List<OllamaModel> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-    val connection = open("https://ollama.com/search?c=cloud", readTimeoutMs = 30_000)
+  suspend fun catalog(query: String = "", cloudOnly: Boolean = false): List<OllamaModel> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+    val connection = open("https://ollama.com/" + ollamaCatalogPath(query, cloudOnly), readTimeoutMs = 30_000)
     try {
       check(connection.responseCode in 200..299) { "モデル検索 HTTP " + connection.responseCode }
       val html = connection.inputStream.bufferedReader().use { it.readText() }
-      val discovered = Regex("href=\\\"/library/([a-zA-Z0-9._/-]+)\\\"")
-        .findAll(html)
-        .map { it.groupValues[1] }
-        .distinct()
-        // Keep Cloud entries distinct from a same-named local/Hugging Face
-        // model.  Ollama executes these catalog entries with the :cloud tag.
-        .map { name -> OllamaModel(if (name.contains(":")) name else "$name:cloud", true, false, -1L, false) }
+      val discovered = parseOllamaCatalogNames(html)
+        // The library page contains ordinary registry models. Do not add a :cloud
+        // suffix here: that suffix is reserved for models explicitly marked
+        // as Cloud-only by Ollama.
+         .map { name -> OllamaModel(if (cloudOnly) cloudCatalogModelName(name) else name, cloudOnly, !cloudOnly, -1L, false) }
         .toList()
-      // The public catalog page is rendered dynamically and may omit cloud-only
-      // models from its HTML. Keep the documented OSS cloud model discoverable.
+      // The public catalog page is rendered dynamically; the registry metadata check
+      // below determines whether each listed model has a downloadable artifact.
       discovered.distinctBy { it.name }
     } finally { connection.disconnect() }
   }

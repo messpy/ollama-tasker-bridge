@@ -22,10 +22,10 @@ class HuggingFaceClient {
           .sortedWith(compareBy<Pair<String, Long?>> { if (it.first.contains("Q4_K_M", true) || it.first.contains("int4", true)) 0 else 1 }.thenBy { it.first })
           .firstOrNull() ?: continue
         val litert = candidate.first.endsWith(".litertlm", true)
-        val source = if (litert) ModelSource.LITERT_LM else ModelSource.HUGGING_FACE
+        val source = ModelSource.HUGGING_FACE
         val downloadUrl = "https://huggingface.co/" + id + "/resolve/main/" + candidate.first
         val fileSize = candidate.second?.takeIf { it > 0L } ?: headSize(downloadUrl, accessToken)
-        found[id + ":" + candidate.first] = OllamaModel(id, false, true, fileSize, false, source, downloadUrl)
+        found[id + ":" + candidate.first] = OllamaModel(id, false, true, fileSize, false, source, downloadUrl, format = if (litert) ModelFormat.LITERT_LM else ModelFormat.GGUF)
       }
     }
     found.values.toList()

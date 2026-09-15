@@ -11,6 +11,7 @@ import com.example.ollamataskerbridge.data.LocalModelStore
 import com.example.ollamataskerbridge.data.OllamaRegistryClient
 import com.example.ollamataskerbridge.data.HuggingFaceClient
 import com.example.ollamataskerbridge.data.ModelSource
+import com.example.ollamataskerbridge.data.ModelFormat
 import com.example.ollamataskerbridge.data.SettingsStore
 import com.example.ollamataskerbridge.data.SystemPromptPreset
 import com.example.ollamataskerbridge.data.supportsVision
@@ -24,6 +25,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.core.content.ContextCompat
@@ -35,13 +38,14 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   private val localModels = LocalModelStore(application)
   private val registry = OllamaRegistryClient(localModels)
   private val huggingFace = HuggingFaceClient()
+  private var searchJob: Job? = null
   private fun installedModels() = localModels.directory.listFiles()
     ?.filter { it.extension == "gguf" || it.extension == "litertlm" }
-    ?.map { com.example.ollamataskerbridge.data.OllamaModel(it.nameWithoutExtension, false, true, it.length(), true, if (it.extension == "litertlm") ModelSource.LITERT_LM else ModelSource.HUGGING_FACE) }
+    ?.map { com.example.ollamataskerbridge.data.OllamaModel(it.nameWithoutExtension, false, true, it.length(), true, ModelSource.HUGGING_FACE, format = if (it.extension.equals("litertlm", true)) ModelFormat.LITERT_LM else ModelFormat.GGUF) }
     .orEmpty()
   private val installed = installedModels()
   private val cached = settings.cachedModels()
-  private val initialModels = (installed + cached).distinctBy { it.name }.map { item -> item.copy(remote = if (item.source == ModelSource.OLLAMA) isOllamaCloudModel(item.name) else item.remote, downloadable = if (item.source == ModelSource.OLLAMA && isOllamaCloudModel(item.name)) false else item.downloadable) }
+  private val initialModels = (cached + installed).distinctBy { it.name }.map { item -> item.copy(remote = if (item.source == ModelSource.OLLAMA) isOllamaCloudModel(item.name) else item.remote, downloadable = if (item.source == ModelSource.OLLAMA && isOllamaCloudModel(item.name)) false else item.downloadable) }
   // Cloud/Ollama is the primary catalog. Do not switch to HF just because local GGUFs exist.
   // Ollama is the primary catalog. Older installs may have persisted the HF tab.
   private val initialSource = ModelSource.OLLAMA
@@ -61,6 +65,13 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     viewModelScope.launch(Dispatchers.IO) { runCatching { loadModelsInternal() } }
   }
   val uiState: StateFlow<MainScreenUiState> = _uiState.asStateFlow()
+
+  fun importSettings(text: String) {
+    settings.importJson(text)
+    val preset = settings.presets().firstOrNull { it.id == settings.lastPresetId } ?: settings.presets().firstOrNull()
+    _uiState.value = _uiState.value.copy(endpoint = settings.endpoint, apiKey = settings.apiKey, huggingFaceToken = settings.huggingFaceToken, minLocalModelSizeGb = settings.minLocalModelSizeGb.toString(), maxLocalModelSizeGb = settings.maxLocalModelSizeGb.toString(), systemPromptPresetId = preset?.id.orEmpty(), systemPrompt = preset?.body.orEmpty(), presets = settings.presets(), models = settings.cachedModels(), enabledSources = settings.enabledModelSources, message = "設定をインポートしました")
+    viewModelScope.launch(Dispatchers.IO) { runCatching { loadModelsInternal() } }
+  }
 
   fun endpointChanged(value: String) {
     settings.endpoint = value
@@ -86,7 +97,14 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   }
   fun gemmaTermsAccepted(): Boolean = settings.gemmaTermsAccepted
   fun acceptGemmaTerms() { settings.gemmaTermsAccepted = true }
-  fun searchChanged(value: String) { _uiState.value = _uiState.value.copy(search = value) }
+  fun searchChanged(value: String) {
+    _uiState.value = _uiState.value.copy(search = value)
+    searchJob?.cancel()
+    searchJob = viewModelScope.launch(Dispatchers.IO) {
+      delay(350)
+      runCatching { loadModelsInternal(value) }.onFailure { DiagnosticsLog.warn("モデル検索失敗: queryChars=" + value.length + " message=" + (it.message ?: "不明")) }
+    }
+  }
   fun showLocalChanged(value: Boolean) { _uiState.value = _uiState.value.copy(showLocal = value) }
   fun showCloudChanged(value: Boolean) { _uiState.value = _uiState.value.copy(showCloud = value) }
   fun downloadedOnlyChanged(value: Boolean) { _uiState.value = _uiState.value.copy(downloadedOnly = value, showLocal = true, showCloud = !value) }
@@ -122,7 +140,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   fun selectModel(name: String) { _uiState.value = _uiState.value.copy(selectedModel = name, downloadModel = name, message = null) }
   fun refreshInstalledModels() {
     val installed = installedModels()
-    val installedByName = installed.associateBy { it.name }
+    val installedByName = installed.flatMap { item -> listOf(item.name to item, item.name.replace(Regex("[^A-Za-z0-9._-]"), "_") to item) }.toMap()
     val merged = (_uiState.value.models.map { item -> item.copy(local = installedByName[item.name] != null, sizeBytes = installedByName[item.name]?.sizeBytes ?: item.sizeBytes) } + installed.filter { it.name !in _uiState.value.models.map { model -> model.name } }).distinctBy { it.name }
     settings.saveCachedModels(merged)
     _uiState.value = _uiState.value.copy(models = merged)
@@ -156,14 +174,14 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     _uiState.value = _uiState.value.copy(activeDownloadModel = name, message = name + " のダウンロードを開始しています")
     val maxBytes = settings.maxLocalModelSizeGb.toDouble().times(1000000000.0).toLong()
     val model = _uiState.value.models.firstOrNull { it.name == name } ?: error("モデルが一覧にありません")
-    DiagnosticsLog.note("モデル取得経路: model=$name service=${model.source} remote=${model.remote} downloadable=${model.downloadable} visionFlag=${model.vision} sizeBytes=${model.sizeBytes}")
+    DiagnosticsLog.note("モデル取得経路: model=$name provider=${model.source} format=${model.format} remote=${model.remote} downloadable=${model.downloadable} visionFlag=${model.vision} sizeBytes=${model.sizeBytes}")
     require(model.downloadable && !model.local) { "このモデルはCloud専用のため、Androidへダウンロードできません" }
     require(model.sizeBytes <= 0L || model.sizeBytes <= maxBytes) { "上限超過です（%.2fGB）。ローカル上限を上げてください".format(model.sizeBytes / 1000000000.0) }
     val intent = Intent(getApplication(), ModelDownloadService::class.java).apply {
       putExtra(com.example.ollamataskerbridge.bridge.BridgeContract.EXTRA_MODEL, model.name)
-      if (model.source == ModelSource.HUGGING_FACE || model.source == ModelSource.LITERT_LM) {
+      if (model.source == ModelSource.HUGGING_FACE) {
         putExtra(com.example.ollamataskerbridge.bridge.BridgeContract.EXTRA_DOWNLOAD_URL, model.downloadUrl)
-        putExtra(com.example.ollamataskerbridge.bridge.BridgeContract.EXTRA_DOWNLOAD_EXTENSION, if (model.source == ModelSource.LITERT_LM) ".litertlm" else ".gguf")
+        putExtra(com.example.ollamataskerbridge.bridge.BridgeContract.EXTRA_DOWNLOAD_EXTENSION, if (model.format == ModelFormat.LITERT_LM) ".litertlm" else ".gguf")
         putExtra(com.example.ollamataskerbridge.bridge.BridgeContract.EXTRA_ACCESS_TOKEN, settings.huggingFaceToken)
       }
     }
@@ -185,33 +203,36 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   }
   override fun onCleared() { getApplication<Application>().unregisterReceiver(downloadProgressReceiver); super.onCleared() }
 
-  private suspend fun loadModelsInternal() {
+  private suspend fun loadModelsInternal(query: String = "") {
     val local = localModels.directory.listFiles()
       ?.filter { it.extension == "gguf" || it.extension == "litertlm" }
-      ?.map { com.example.ollamataskerbridge.data.OllamaModel(it.nameWithoutExtension, false, true, it.length(), true, if (it.extension == "litertlm") ModelSource.LITERT_LM else ModelSource.HUGGING_FACE) }
+      ?.map { com.example.ollamataskerbridge.data.OllamaModel(it.nameWithoutExtension, false, true, it.length(), true, ModelSource.HUGGING_FACE, format = if (it.extension.equals("litertlm", true)) ModelFormat.LITERT_LM else ModelFormat.GGUF) }
       .orEmpty()
-    val localByName = local.associateBy { it.name }
+    fun localFor(name: String): com.example.ollamataskerbridge.data.OllamaModel? = local.firstOrNull { item -> item.name == name || localModels.fileFor(name).nameWithoutExtension == item.name || localModels.liteRtFileFor(name).nameWithoutExtension == item.name }
     // Keep the two sources independent: a 401/403 from /api/tags must not hide the
     // public Ollama catalog (and vice versa).
     val ollamaApi = runCatching { client().listModels() }.getOrDefault(emptyList())
-    val ollamaCloudCatalog = runCatching { registry.catalog() }.getOrDefault(emptyList())
+    val ollamaCatalog = runCatching { registry.catalog(query, cloudOnly = false) }.getOrDefault(emptyList())
+    val ollamaCloudCatalog = runCatching { registry.catalog(query, cloudOnly = true) }.getOrDefault(emptyList())
     // The Cloud catalog is authoritative for names present in it.  /api/tags can
     // contain the same name with incomplete local metadata; keeping that entry
     // first would incorrectly route a Cloud model into Registry blob download.
     val ollamaByName = LinkedHashMap<String, com.example.ollamataskerbridge.data.OllamaModel>()
     ollamaApi.forEach { ollamaByName[it.name] = it }
+    ollamaCatalog.forEach { ollamaByName[it.name] = it }
     ollamaCloudCatalog.forEach { ollamaByName[it.name] = it }
     val ollama = ollamaByName.values.map { item ->
-      val registryInfo = runCatching { registry.metadata(item.name) }.getOrNull()
+      val localItem = localFor(item.name)
+      val cloudOnly = localItem == null && (item.remote || isOllamaCloudModel(item.name))
       item.copy(
-        remote = item.remote || isOllamaCloudModel(item.name),
-        downloadable = if (item.remote || isOllamaCloudModel(item.name)) false else (registryInfo?.downloadable ?: item.downloadable),
-        local = localByName[item.name] != null,
-        sizeBytes = localByName[item.name]?.sizeBytes ?: registryInfo?.sizeBytes?.takeIf { it > 0 } ?: item.sizeBytes,
+        remote = cloudOnly,
+        downloadable = !cloudOnly && item.downloadable,
+        local = localItem != null,
+        sizeBytes = localItem?.sizeBytes ?: item.sizeBytes,
       )
     }
     val huggingFaceModels = runCatching { huggingFace.catalog(settings.huggingFaceToken) }.getOrDefault(emptyList()).map { item ->
-      item.copy(local = localByName[item.name] != null, sizeBytes = localByName[item.name]?.sizeBytes ?: item.sizeBytes)
+      item.copy(local = localFor(item.name) != null, sizeBytes = localFor(item.name)?.sizeBytes ?: item.sizeBytes)
     }
     // Ollama Cloud and Hugging Face are separate services even when their
     // display names match; Cloud entries already carry the :cloud suffix.
@@ -219,6 +240,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     val enabledNames = settings.cachedModels().filter { it.enabled }.map { it.name }.toSet()
     val merged = (remote + local.filter { item -> remote.none { it.name == item.name } }).map { if (it.name in enabledNames) it.copy(enabled = true) else it }
     settings.saveCachedModels(merged)
+    if (query != _uiState.value.search) return
     DiagnosticsLog.note("モデル一覧取得: ollamaApi=${ollamaApi.size} cloudCatalog=${ollamaCloudCatalog.size} huggingFace=${huggingFaceModels.size} merged=${merged.size} cloudVision=${merged.count { it.source == ModelSource.OLLAMA && !it.local && it.supportsVision() }}")
     _uiState.value = _uiState.value.copy(models = merged)
   }
