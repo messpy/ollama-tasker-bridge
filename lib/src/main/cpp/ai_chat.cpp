@@ -336,12 +336,17 @@ static std::string chat_add_and_format(const std::string &role, const std::strin
 static llama_pos stop_generation_position;
 static std::string cached_token_chars;
 static std::ostringstream assistant_ss;
+static llama_token last_generated_token = LLAMA_TOKEN_NULL;
+static int repeated_token_count = 0;
+constexpr int MAX_REPEATED_TOKEN_COUNT = 32;
 
 static void reset_short_term_states() {
     stop_generation_position = 0;
     generated_token_count = 0;
     cached_token_chars.clear();
     assistant_ss.str("");
+    last_generated_token = LLAMA_TOKEN_NULL;
+    repeated_token_count = 0;
 }
 
 static int decode_tokens_in_batches(
@@ -483,7 +488,7 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_processUserPrompt(
 
     // Update position
     current_position += user_prompt_size;
-    stop_generation_position = current_position + user_prompt_size + n_predict;
+    stop_generation_position = current_position + std::max(1, n_predict);
     return 0;
 }
 
@@ -542,6 +547,16 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_generateNextToken(
 
     // Sample next token
     const auto new_token_id = common_sampler_sample(g_sampler, g_context, -1);
+    if (new_token_id == last_generated_token) {
+        repeated_token_count++;
+    } else {
+        last_generated_token = new_token_id;
+        repeated_token_count = 1;
+    }
+    if (repeated_token_count >= MAX_REPEATED_TOKEN_COUNT) {
+        LOGw("%s: STOP: repeated token %d detected %d times", __func__, new_token_id, repeated_token_count);
+        return nullptr;
+    }
     generated_token_count++;
     common_sampler_accept(g_sampler, new_token_id, true);
 
