@@ -44,8 +44,10 @@ class InferenceForegroundService : Service() {
         val message = error.message ?: "推論に失敗しました";
         Log.e(TAG, "推論Service失敗: " + message, error)
         DiagnosticsLog.error("推論Service失敗: " + message)
+        val failedExecutionId = intent?.getStringExtra(EXTRA_EXECUTION_ID).orEmpty()
+        if (failedExecutionId.isNotBlank()) { InferenceExecutionRegistry.initialize(applicationContext); InferenceExecutionRegistry.markCancelled(failedExecutionId); InferenceExecutionRegistry.markSignalFinished(failedExecutionId) }
         val action = intent?.getStringExtra(BridgeContract.EXTRA_REPLY_ACTION)?.takeIf(String::isNotBlank) ?: BridgeContract.ACTION_RESULT;
-        sendReply(action, intent?.getStringExtra(BridgeContract.EXTRA_REPLY_PACKAGE), false, null, message);
+        sendReply(action, intent?.getStringExtra(BridgeContract.EXTRA_REPLY_PACKAGE), false, null, message, intent?.getStringExtra(BridgeContract.EXTRA_REQUEST_ID));
         if (intent?.getStringExtra(EXTRA_ORIGIN) == ORIGIN_LOCALE) {
           val variables = Bundle().apply { putString("%error", message); putString("%ok", "false") };
           val signaled = TaskerPlugin.Setting.signalFinish(applicationContext, intent, TaskerPlugin.Setting.RESULT_CODE_FAILED, variables);
@@ -73,10 +75,12 @@ class InferenceForegroundService : Service() {
       readImage(intent.getStringExtra(BridgeContract.EXTRA_IMAGE_URI))
     );
     val result = DefaultInferenceRepository.generateText(applicationContext, request);
+    val executionId = intent.getStringExtra(EXTRA_EXECUTION_ID).orEmpty()
+    if (executionId.isNotBlank()) { InferenceExecutionRegistry.initialize(applicationContext); InferenceExecutionRegistry.markRunning(executionId); InferenceExecutionRegistry.markCompleted(executionId); InferenceExecutionRegistry.markSignalFinished(executionId) }
     Log.i(TAG, "LLM生成成功: backend=" + backend + " resultChars=" + result.length)
     DiagnosticsLog.note("LLM生成成功: backend=" + backend + " resultChars=" + result.length)
     sendReply(intent.getStringExtra(BridgeContract.EXTRA_REPLY_ACTION)?.takeIf(String::isNotBlank) ?: BridgeContract.ACTION_RESULT,
-      intent.getStringExtra(BridgeContract.EXTRA_REPLY_PACKAGE), true, result, null);
+      intent.getStringExtra(BridgeContract.EXTRA_REPLY_PACKAGE), true, result, null, intent.getStringExtra(BridgeContract.EXTRA_REQUEST_ID));
   }
 
   private suspend fun runLocale(intent: Intent) {
@@ -132,10 +136,11 @@ class InferenceForegroundService : Service() {
     return image
   }
 
-  private fun sendReply(action: String, packageName: String?, ok: Boolean, result: String?, error: String?) {
+  private fun sendReply(action: String, packageName: String?, ok: Boolean, result: String?, error: String?, requestId: String? = null) {
     val extras = Bundle().apply {
       putBoolean(BridgeContract.EXTRA_OK, ok);
       result?.let { putString(BridgeContract.EXTRA_RESULT, it) };
+      requestId?.let { putString(BridgeContract.EXTRA_REQUEST_ID, it) };
       error?.let { putString(BridgeContract.EXTRA_ERROR, it) };
     };
     sendReply(action, packageName, extras);

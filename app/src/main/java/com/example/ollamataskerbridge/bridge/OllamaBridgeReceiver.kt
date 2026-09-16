@@ -15,12 +15,21 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import java.util.UUID
+import kotlin.math.abs
+import com.example.ollamataskerbridge.diagnostics.DiagnosticsLog
 
 class OllamaBridgeReceiver : BroadcastReceiver() {
   override fun onReceive(context: Context, intent: Intent) {
     if (intent.action == BridgeContract.ACTION_GENERATE) {
-      val serviceIntent = Intent(context, InferenceForegroundService::class.java).putExtras(intent).putExtra(InferenceForegroundService.EXTRA_ORIGIN, "bridge")
-      if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(serviceIntent) else context.startService(serviceIntent)
+      val executionId = UUID.randomUUID().toString()
+      InferenceExecutionRegistry.initialize(context)
+      InferenceExecutionRegistry.register(executionId)
+      val serviceIntent = Intent(context, InferenceForegroundService::class.java).putExtras(intent).putExtra(InferenceForegroundService.EXTRA_ORIGIN, "bridge").putExtra(InferenceForegroundService.EXTRA_EXECUTION_ID, executionId)
+      try { if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(serviceIntent) else context.startService(serviceIntent) } catch (error: Exception) {
+        DiagnosticsLog.warn("Bridge FGS start failed; falling back to JobScheduler executionId=" + executionId)
+        scheduleInferenceJob(context, intent, executionId)
+      }
       return
     }
     val pending = goAsync()
@@ -45,8 +54,10 @@ class OllamaBridgeReceiver : BroadcastReceiver() {
               putString(BridgeContract.EXTRA_MODEL, model)
               putString(BridgeContract.EXTRA_REPLY_ACTION, intent.getStringExtra(BridgeContract.EXTRA_REPLY_ACTION))
               putString(BridgeContract.EXTRA_REPLY_PACKAGE, intent.getStringExtra(BridgeContract.EXTRA_REPLY_PACKAGE))
+              putString(BridgeContract.EXTRA_REQUEST_ID, intent.getStringExtra(BridgeContract.EXTRA_REQUEST_ID))
             }
-            val job = JobInfo.Builder(1002, ComponentName(appContext, ModelDownloadJobService::class.java))
+            val pullJobId = 1002 + abs((intent.getStringExtra(BridgeContract.EXTRA_REQUEST_ID) ?: UUID.randomUUID().toString()).hashCode() % 10000)
+            val job = JobInfo.Builder(pullJobId, ComponentName(appContext, ModelDownloadJobService::class.java))
               .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
               .setExtras(extras)
               .build()
@@ -66,6 +77,7 @@ class OllamaBridgeReceiver : BroadcastReceiver() {
     }
   }
 
+  private fun scheduleInferenceJob(context: Context, request: Intent, executionId: String) { val extras = android.os.PersistableBundle().apply { putString(InferenceJobService.KEY_ORIGIN, InferenceJobService.ORIGIN_BRIDGE); putString(InferenceJobService.KEY_EXECUTION_ID, executionId); putLong(InferenceJobService.KEY_CREATED_AT, System.currentTimeMillis()); putString(InferenceJobService.KEY_REQUEST_ID, request.getStringExtra(BridgeContract.EXTRA_REQUEST_ID)); putString(InferenceJobService.KEY_MODEL, request.getStringExtra(BridgeContract.EXTRA_MODEL).orEmpty()); putString(InferenceJobService.KEY_BACKEND, request.getStringExtra(BridgeContract.EXTRA_BACKEND).orEmpty()); putString(InferenceJobService.KEY_PROMPT, request.getStringExtra(BridgeContract.EXTRA_PROMPT).orEmpty()); putString(InferenceJobService.KEY_SYSTEM, request.getStringExtra(BridgeContract.EXTRA_SYSTEM)); putString(InferenceJobService.KEY_IMAGE_URI, request.getStringExtra(BridgeContract.EXTRA_IMAGE_URI)); putString(InferenceJobService.KEY_MAX_TOKENS, request.getIntExtra(BridgeContract.EXTRA_MAX_TOKENS, 1024).toString()); putString(InferenceJobService.KEY_TEMPERATURE, request.getFloatExtra(BridgeContract.EXTRA_TEMPERATURE, 0.7f).toString()); putString(InferenceJobService.KEY_REPLY_ACTION, request.getStringExtra(BridgeContract.EXTRA_REPLY_ACTION)); putString(InferenceJobService.KEY_REPLY_PACKAGE, request.getStringExtra(BridgeContract.EXTRA_REPLY_PACKAGE)) }; val jobId = 20000 + abs(executionId.hashCode() % 10000); val result = context.getSystemService(JobScheduler::class.java).schedule(JobInfo.Builder(jobId, ComponentName(context, InferenceJobService::class.java)).setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY).setExtras(extras).build()); check(result == JobScheduler.RESULT_SUCCESS) { "AndroidがBridge推論ジョブを登録できません" } }
   private fun sendResult(pending: PendingResult, context: Context, request: Intent, ok: Boolean, result: String? = null, error: String? = null) {
     val action = request.getStringExtra(BridgeContract.EXTRA_REPLY_ACTION)
       ?.takeIf { it.isNotBlank() } ?: BridgeContract.ACTION_RESULT

@@ -18,12 +18,13 @@ class ModelDownloadJobService : JobService() {
     val model = params.extras.getString(BridgeContract.EXTRA_MODEL).orEmpty()
     val action = params.extras.getString(BridgeContract.EXTRA_REPLY_ACTION) ?: BridgeContract.ACTION_RESULT
     val packageName = params.extras.getString(BridgeContract.EXTRA_REPLY_PACKAGE)
+    val requestId = params.extras.getString(BridgeContract.EXTRA_REQUEST_ID)
     scope.launch {
       try {
         val file = OllamaRegistryClient(LocalModelStore(applicationContext)).download(model)
-        send(action, packageName, true, "モデルをAndroidへ保存しました: ${file.name}", null)
+        send(action, packageName, true, "モデルをAndroidへ保存しました: ${file.name}", null, requestId)
       } catch (error: Exception) {
-        send(action, packageName, false, null, error.message ?: "モデル取得に失敗しました")
+        send(action, packageName, false, null, error.message ?: "モデル取得に失敗しました", requestId)
       } finally {
         jobFinished(params, false)
       }
@@ -31,9 +32,10 @@ class ModelDownloadJobService : JobService() {
     return true
   }
 
-  private fun send(action: String, packageName: String?, ok: Boolean, result: String?, error: String?) {
+  private fun send(action: String, packageName: String?, ok: Boolean, result: String?, error: String?, requestId: String? = null) {
     sendBroadcast(Intent(action).apply {
       putExtra(BridgeContract.EXTRA_OK, ok)
+      requestId?.let { putExtra(BridgeContract.EXTRA_REQUEST_ID, it) }
       result?.let { putExtra(BridgeContract.EXTRA_RESULT, it) }
       error?.let { putExtra(BridgeContract.EXTRA_ERROR, it) }
       packageName?.takeIf(String::isNotBlank)?.let(::setPackage)

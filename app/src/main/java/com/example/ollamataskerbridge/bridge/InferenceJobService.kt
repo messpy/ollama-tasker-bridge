@@ -36,6 +36,7 @@ class InferenceJobService : JobService() {
     InferenceExecutionRegistry.initialize(this)
     val data = params.extras
     val executionId = data.getString(KEY_EXECUTION_ID).orEmpty()
+    val origin = data.getString(KEY_ORIGIN).orEmpty()
     createNotificationChannel()
     val model = data.getString(KEY_MODEL).orEmpty()
     getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, Notification.Builder(this, CHANNEL_ID)
@@ -97,7 +98,7 @@ class InferenceJobService : JobService() {
             readImage(data.getString(KEY_IMAGE_URI))
           ))
           InferenceExecutionRegistry.markCompleted(executionId)
-          val signaled = if (InferenceExecutionRegistry.markSignalFinished(executionId)) TaskerPlugin.Setting.signalFinish(applicationContext, original, TaskerPlugin.Setting.RESULT_CODE_OK,
+          val signaled = if (origin == ORIGIN_BRIDGE) { if (InferenceExecutionRegistry.markSignalFinished(executionId)) sendBridgeResult(data, executionId, model, true, result, null); false } else if (InferenceExecutionRegistry.markSignalFinished(executionId)) TaskerPlugin.Setting.signalFinish(applicationContext, original, TaskerPlugin.Setting.RESULT_CODE_OK,
             Bundle().apply { putString("%answer", result); putString("%ok", "true") }) else false
           DiagnosticsLog.note("推論成功: jobId=" + params.jobId + " executionId=" + executionId + " model=" + model + " backend=" + data.getString(KEY_BACKEND).orEmpty() + " resultChars=" + result.length + " signalFinish=" + signaled)
           sendMacroDroidResult(data, executionId, params.jobId, model, true, result, null)
@@ -111,7 +112,7 @@ class InferenceJobService : JobService() {
         val message = error.message ?: "推論に失敗しました"
         Log.e(TAG, "推論Job失敗: " + message, error)
         DiagnosticsLog.error("推論Job失敗: jobId=" + params.jobId + " executionId=" + executionId + " model=" + model + " backend=" + data.getString(KEY_BACKEND).orEmpty() + " message=" + message)
-        val signaled = if (InferenceExecutionRegistry.markSignalFinished(executionId)) TaskerPlugin.Setting.signalFinish(applicationContext, original, TaskerPlugin.Setting.RESULT_CODE_FAILED,
+        val signaled = if (origin == ORIGIN_BRIDGE) { if (InferenceExecutionRegistry.markSignalFinished(executionId)) sendBridgeResult(data, executionId, model, false, null, message); false } else if (InferenceExecutionRegistry.markSignalFinished(executionId)) TaskerPlugin.Setting.signalFinish(applicationContext, original, TaskerPlugin.Setting.RESULT_CODE_FAILED,
           Bundle().apply { putString("%error", message); putString("%ok", "false") }) else false
         DiagnosticsLog.note("推論Job失敗通知: jobId=" + params.jobId + " executionId=" + executionId + " model=" + model + " backend=" + data.getString(KEY_BACKEND).orEmpty() + " signalFinish=" + signaled + " errorChars=" + message.length)
         sendMacroDroidResult(data, executionId, params.jobId, model, false, null, message)
@@ -164,6 +165,11 @@ class InferenceJobService : JobService() {
   override fun onDestroy() { scope.cancel(); super.onDestroy() }
 
   companion object {
+    const val ORIGIN_BRIDGE = "bridge"
+    const val KEY_ORIGIN = "inference.job.origin"
+    const val KEY_REQUEST_ID = "inference.job.request_id"
+    const val KEY_REPLY_ACTION = "inference.job.reply_action"
+    const val KEY_REPLY_PACKAGE = "inference.job.reply_package"
     private const val TAG = "OllamaTaskerBridge"
     // v2 avoids an already-created IMPORTANCE_LOW channel being permanently silent.
     private const val CHANNEL_ID = "inference_background_v2"
@@ -228,6 +234,7 @@ class InferenceJobService : JobService() {
     DiagnosticsLog.warn("DEVICE_STATE詳細: jobId=" + jobId + " executionId=" + executionId + " idle=" + (power?.isDeviceIdleMode ?: false) + " powerSave=" + (power?.isPowerSaveMode ?: false) + " batteryLevel=" + level + "/" + scale + " capacity=" + capacity + " charging=" + charging + " backgroundRestricted=" + restricted)
   }
 
+  private fun sendBridgeResult(data: android.os.PersistableBundle, executionId: String, model: String, ok: Boolean, result: String?, error: String?) { val action = data.getString(KEY_REPLY_ACTION)?.takeIf { it.isNotBlank() } ?: BridgeContract.ACTION_RESULT; val intent = Intent(action).putExtra(BridgeContract.EXTRA_OK, ok).putExtra(BridgeContract.EXTRA_REQUEST_ID, data.getString(KEY_REQUEST_ID)).putExtra(BridgeContract.EXTRA_MODEL, model); result?.let { intent.putExtra(BridgeContract.EXTRA_RESULT, it) }; error?.let { intent.putExtra(BridgeContract.EXTRA_ERROR, it) }; data.getString(KEY_REPLY_PACKAGE)?.takeIf { it.isNotBlank() }?.let(intent::setPackage); sendBroadcast(intent) }
   /** Sends an additional explicit result for MacroDroid hosts that do not consume
    * Tasker variable-return extras from signalFinish(). */
   private fun sendMacroDroidResult(data: android.os.PersistableBundle, executionId: String, jobId: Int, model: String, ok: Boolean, result: String?, error: String?) {
