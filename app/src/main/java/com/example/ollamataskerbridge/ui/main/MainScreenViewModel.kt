@@ -54,12 +54,19 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   private val _uiState = MutableStateFlow(MainScreenUiState(endpoint = settings.endpoint, apiKey = settings.apiKey, huggingFaceToken = settings.huggingFaceToken, minLocalModelSizeGb = settings.minLocalModelSizeGb.toString(), maxLocalModelSizeGb = settings.maxLocalModelSizeGb.toString(), systemPromptPresetId = initialPreset?.id.orEmpty(), systemPrompt = initialPreset?.body.orEmpty(), presets = initialPresets, models = initialModels, source = initialSource, enabledSources = settings.enabledModelSources))
   private val downloadProgressReceiver = object : BroadcastReceiver() {
     override fun onReceive(context: android.content.Context, intent: Intent) {
-      if (intent.action != com.example.ollamataskerbridge.bridge.BridgeContract.ACTION_DOWNLOAD_PROGRESS) return
-      _uiState.value = _uiState.value.copy(activeDownloadModel = intent.getStringExtra(com.example.ollamataskerbridge.bridge.BridgeContract.EXTRA_MODEL).orEmpty(), downloadedBytes = intent.getLongExtra(com.example.ollamataskerbridge.bridge.BridgeContract.EXTRA_DOWNLOADED_BYTES, 0L), downloadTotalBytes = intent.getLongExtra(com.example.ollamataskerbridge.bridge.BridgeContract.EXTRA_TOTAL_BYTES, 0L))
+      val bridge = com.example.ollamataskerbridge.bridge.BridgeContract
+      val model = intent.getStringExtra(bridge.EXTRA_MODEL).orEmpty()
+      if (intent.action == bridge.ACTION_DOWNLOAD_FINISHED) {
+        _uiState.value = _uiState.value.copy(activeDownloadModel = null, downloadedBytes = 0L, downloadTotalBytes = 0L, message = if (model.isBlank()) "モデルのダウンロードが完了しました" else "$model のダウンロードが完了しました")
+        refreshInstalledModels()
+        return
+      }
+      if (intent.action != bridge.ACTION_DOWNLOAD_PROGRESS) return
+      _uiState.value = _uiState.value.copy(activeDownloadModel = model, downloadedBytes = intent.getLongExtra(bridge.EXTRA_DOWNLOADED_BYTES, 0L), downloadTotalBytes = intent.getLongExtra(bridge.EXTRA_TOTAL_BYTES, 0L))
     }
   }
   init {
-    ContextCompat.registerReceiver(application, downloadProgressReceiver, IntentFilter(com.example.ollamataskerbridge.bridge.BridgeContract.ACTION_DOWNLOAD_PROGRESS), ContextCompat.RECEIVER_NOT_EXPORTED)
+    ContextCompat.registerReceiver(application, downloadProgressReceiver, IntentFilter().apply { addAction(com.example.ollamataskerbridge.bridge.BridgeContract.ACTION_DOWNLOAD_PROGRESS); addAction(com.example.ollamataskerbridge.bridge.BridgeContract.ACTION_DOWNLOAD_FINISHED) }, ContextCompat.RECEIVER_NOT_EXPORTED)
     // Refresh the shared catalog when the model screen is opened so an older
     // cache cannot keep Cloud entries classified as ordinary uninstalled models.
     viewModelScope.launch(Dispatchers.IO) { runCatching { loadModelsInternal() } }
@@ -171,7 +178,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     "Cloudモデルを登録しました。端末には保存せず、Ollama Cloudで実行します"
   } }
   fun downloadModel(name: String) { runRequest("モデルの取得を開始できません。HTTP応答・保存先・空き容量を確認してください。") {
-    _uiState.value = _uiState.value.copy(activeDownloadModel = name, message = name + " のダウンロードを開始しています")
+    _uiState.value = _uiState.value.copy(activeDownloadModel = name, downloadedBytes = 0L, downloadTotalBytes = _uiState.value.models.firstOrNull { it.name == name }?.sizeBytes?.takeIf { it > 0L } ?: 0L, message = name + " のダウンロードを開始しています")
     val maxBytes = settings.maxLocalModelSizeGb.toDouble().times(1000000000.0).toLong()
     val model = _uiState.value.models.firstOrNull { it.name == name } ?: error("モデルが一覧にありません")
     DiagnosticsLog.note("モデル取得経路: model=$name provider=${model.source} format=${model.format} remote=${model.remote} downloadable=${model.downloadable} visionFlag=${model.vision} sizeBytes=${model.sizeBytes}")
@@ -186,7 +193,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
       }
     }
     ContextCompat.startForegroundService(getApplication(), intent)
-    "バックグラウンドでモデル取得を開始しました。通知バーで進捗を確認できます"
+    "バックグラウンドでモデル取得を開始しました。画面上でも進捗を確認できます"
   } }
   fun cancelDownload() { getApplication<Application>().startService(Intent(getApplication(), ModelDownloadService::class.java).setAction(com.example.ollamataskerbridge.bridge.BridgeContract.ACTION_CANCEL_DOWNLOAD)); _uiState.value = _uiState.value.copy(activeDownloadModel = null, message = "ダウンロードをキャンセルしました") }
   fun loadModels() { runRequest("モデル一覧の取得に失敗しました。APIキーとネットワークを確認してください。") { loadModelsInternal(); "モデル一覧を更新しました" } }

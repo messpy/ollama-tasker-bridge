@@ -116,7 +116,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
     val index = old.messages.size + 1
     _state.value = old.copy(input = "", imageBytes = null, imageName = "", generating = true, messages = old.messages + ChatMessage(true, prompt) + ChatMessage(false, "", old.selectedModel, true, retryPrompt = prompt))
-    val backend = if (selectedModel?.source == ModelSource.OLLAMA) Backend.OLLAMA else Backend.LOCAL
+    val localFile = selectedModel?.let { store.fileFor(it.name).isFile || store.liteRtFileFor(it.name).isFile } == true
+    val backend = if (localFile) Backend.LOCAL else if (selectedModel?.source == ModelSource.OLLAMA) Backend.OLLAMA else Backend.LOCAL
     val request = GenerateRequest(backend, old.selectedModel, prompt, old.systemPrompt.takeIf { it.isNotBlank() }, old.maxTokens.toIntOrNull()?.coerceAtLeast(1) ?: 1024, old.temperature.toFloatOrNull()?.coerceIn(0f, 2f) ?: 0.7f, old.imageBytes)
     val startedAt = SystemClock.elapsedRealtime()
     DiagnosticsLog.note("テストチャット生成開始: backend=" + request.backend + " model=" + request.model + " maxTokens=" + request.maxTokens + " temperature=" + request.temperature + " image=" + (request.imageBytes != null) + " promptChars=" + request.prompt.length)

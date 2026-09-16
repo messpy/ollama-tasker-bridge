@@ -29,9 +29,9 @@ constexpr int   N_THREADS_MIN           = 2;
 constexpr int   N_THREADS_MAX           = 4;
 constexpr int   N_THREADS_HEADROOM      = 2;
 
-constexpr int   DEFAULT_CONTEXT_SIZE    = 8192;
+constexpr int   DEFAULT_CONTEXT_SIZE    = 4096;
 constexpr int   OVERFLOW_HEADROOM       = 4;
-constexpr int   BATCH_SIZE              = 512;
+constexpr int   BATCH_SIZE              = 128;
 constexpr float DEFAULT_SAMPLER_TEMP    = 0.3f;
 
 static llama_model                      * g_model;
@@ -66,6 +66,9 @@ extern "C"
 JNIEXPORT jint JNICALL
 Java_com_arm_aichat_internal_InferenceEngineImpl_load(JNIEnv *env, jobject, jstring jmodel_path) {
     llama_model_params model_params = llama_model_default_params();
+    model_params.n_gpu_layers = 0;
+    model_params.load_mode = LLAMA_LOAD_MODE_MMAP;
+    model_params.use_extra_bufts = false;
 
     const auto *model_path = env->GetStringUTFChars(jmodel_path, 0);
     struct stat model_stat{};

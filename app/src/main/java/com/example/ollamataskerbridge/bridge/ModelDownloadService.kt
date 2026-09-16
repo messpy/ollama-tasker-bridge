@@ -28,6 +28,7 @@ class ModelDownloadService : Service() {
     val model = intent?.getStringExtra(BridgeContract.EXTRA_MODEL).orEmpty()
     activeModel = model
     startForeground(1001, notification(model))
+    sendProgress(model, 0L, -1L)
     val downloadUrl = intent?.getStringExtra(BridgeContract.EXTRA_DOWNLOAD_URL).orEmpty()
     val downloadExtension = intent?.getStringExtra(BridgeContract.EXTRA_DOWNLOAD_EXTENSION).orEmpty().ifBlank { ".gguf" }
     val accessToken = intent?.getStringExtra(BridgeContract.EXTRA_ACCESS_TOKEN).orEmpty()
@@ -39,8 +40,10 @@ class ModelDownloadService : Service() {
         val client = OllamaRegistryClient(LocalModelStore(applicationContext))
         val file = if (downloadUrl.isNotBlank()) client.downloadFromUrl(downloadUrl, model, downloadExtension, accessToken) { downloaded, total -> updateProgress(model, downloaded, total) } else client.download(model) { downloaded, total -> updateProgress(model, downloaded, total) }
         sendReply(replyAction, replyPackage, true, "モデルをAndroidへ保存しました: ${file.name}", null)
+        sendBroadcast(Intent(BridgeContract.ACTION_DOWNLOAD_FINISHED).setPackage(packageName).putExtra(BridgeContract.EXTRA_MODEL, model))
       } catch (error: Exception) {
         sendReply(replyAction, replyPackage, false, null, error.message ?: "モデル取得に失敗しました")
+        sendBroadcast(Intent(BridgeContract.ACTION_DOWNLOAD_FINISHED).setPackage(packageName).putExtra(BridgeContract.EXTRA_MODEL, model))
       } finally {
         stopSelf(startId)
       }
@@ -73,6 +76,7 @@ class ModelDownloadService : Service() {
   }
 
   private fun updateProgress(model: String, downloaded: Long, total: Long) {
+    sendProgress(model, downloaded, total)
     val now = SystemClock.elapsedRealtime()
     if (now - lastProgressNotificationAt < 1000L) return
     lastProgressNotificationAt = now
@@ -83,6 +87,9 @@ class ModelDownloadService : Service() {
     if (total > 0L) builder.setProgress(100, ((downloaded * 100L) / total).toInt().coerceIn(0, 100), false).setContentText("$model  ${downloaded / 1000000} / ${total / 1000000} MB")
     else builder.setProgress(0, 0, true).setContentText("$model を取得しています")
     getSystemService(NotificationManager::class.java).notify(1001, builder.build())
+  }
+
+  private fun sendProgress(model: String, downloaded: Long, total: Long) {
     sendBroadcast(Intent(BridgeContract.ACTION_DOWNLOAD_PROGRESS).setPackage(packageName).apply {
       putExtra(BridgeContract.EXTRA_MODEL, model)
       putExtra(BridgeContract.EXTRA_DOWNLOADED_BYTES, downloaded)

@@ -10,6 +10,7 @@ object BridgeContract {
   const val ACTION_DOWNLOAD_MODEL = "com.example.ollamataskerbridge.action.DOWNLOAD_MODEL"
   const val ACTION_CANCEL_DOWNLOAD = "com.example.aimodelbridge.action.CANCEL_DOWNLOAD"
   const val ACTION_DOWNLOAD_PROGRESS = "com.example.aimodelbridge.action.DOWNLOAD_PROGRESS"
+  const val ACTION_DOWNLOAD_FINISHED = "com.example.aimodelbridge.action.DOWNLOAD_FINISHED"
   const val ACTION_LIST_MODELS = "com.example.ollamataskerbridge.action.LIST_MODELS"
   const val ACTION_STOP = "com.example.ollamataskerbridge.action.STOP"
 

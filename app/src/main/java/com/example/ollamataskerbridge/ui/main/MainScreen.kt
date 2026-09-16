@@ -209,10 +209,15 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
       }
     }
     Text(if (state.selectedModel.isBlank()) "モデル未選択" else "選択中: ${state.selectedModel}（${state.models.firstOrNull { it.name == state.selectedModel }?.let { if (it.local) "ローカル実行" else if (it.isCloudOnly()) "Cloud実行" else "未登録" } ?: "未登録"}）")
-    if (state.downloadTotalBytes > 0L) {
-      val progress = (state.downloadedBytes.toFloat() / state.downloadTotalBytes.toFloat()).coerceIn(0f, 1f)
-      LinearProgressIndicator(progress = progress, modifier = Modifier.fillMaxWidth())
-      Text("モデル取得中: %.0f%% (%.1f / %.1f GB)".format(progress * 100f, state.downloadedBytes / 1_000_000_000f, state.downloadTotalBytes / 1_000_000_000f), style = MaterialTheme.typography.bodySmall)
+    if (state.activeDownloadModel != null) {
+      if (state.downloadTotalBytes > 0L) {
+        val progress = (state.downloadedBytes.toFloat() / state.downloadTotalBytes.toFloat()).coerceIn(0f, 1f)
+        LinearProgressIndicator(progress = progress, modifier = Modifier.fillMaxWidth())
+        Text("モデル取得中: %.0f%% (%.1f / %.1f GB)".format(progress * 100f, state.downloadedBytes / 1_000_000_000f, state.downloadTotalBytes / 1_000_000_000f), style = MaterialTheme.typography.bodySmall)
+      } else {
+        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        Text("モデル取得中: %.1f GB（総容量を取得中）".format(state.downloadedBytes / 1_000_000_000f), style = MaterialTheme.typography.bodySmall)
+      }
     }
     state.message?.let { Text(it, color = if (it.startsWith("エラー")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary) }
     state.helpUrl?.let { url -> TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }) { Text("アクセス申請を開く") } }

@@ -105,10 +105,14 @@ object LocalInferenceBridge {
     } catch (error: CancellationException) {
       throw error
     } catch (error: Exception) {
-      DiagnosticsLog.error(error.message ?: "ローカル推論に失敗しました")
+      val detail = when (error) {
+        is com.arm.aichat.UnsupportedArchitectureException -> "このGGUFモデルのアーキテクチャは、端末のローカル推論エンジンに未対応です。対応モデルを選ぶか、Ollama Cloudモデルを使用してください。"
+        else -> error.message?.takeIf { it.isNotBlank() } ?: "ローカル推論に失敗しました"
+      }
+      DiagnosticsLog.error("ローカル推論失敗: model=" + model + " type=" + error::class.simpleName + " detail=" + detail)
       loadedPath = null
       loadedSystemPrompt = null
-      emit(GenerateEvent.Error(error.message ?: "生成に失敗しました"))
+      emit(GenerateEvent.Error(detail))
     } finally {
       InferenceNotification.finish(context)
     }
