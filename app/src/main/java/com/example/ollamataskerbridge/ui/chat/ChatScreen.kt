@@ -44,8 +44,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 
+private fun displayAssistantText(raw: String, showReasoning: Boolean): String { if (showReasoning) return raw; val start = Regex("(?is)<\\|channel(?:\\|)?>\\s*thought\\b").find(raw); if (start == null) return raw.replace(Regex("(?is)</?\\|?channel\\|?>"), "").trim(); val end = Regex("(?is)<(?:\\|channel\\|>|\\|channel>|channel\\|>)\\s*(?:final\\b)?").find(raw, start.range.last + 1); val visible = if (end != null) raw.removeRange(start.range.first, end.range.first) else raw.substring(0, start.range.first); return visible.replace(Regex("(?is)</?\\|?channel\\|?>"), "").trim() }
 data class ChatMessage(val user: Boolean, val text: String, val model: String = "", val generating: Boolean = false, val error: Boolean = false, val retryPrompt: String = "", val elapsedMs: Long = 0L, val inputTokens: Int = 0, val outputTokens: Int = 0, val tokenCountEstimated: Boolean = false)
-data class ChatUiState(val messages: List<ChatMessage> = emptyList(), val selectedModel: String = "", val maxTokens: String = "1024", val temperature: String = "0.7", val systemPromptId: String = "", val systemPrompt: String = "", val presets: List<SystemPromptPreset> = emptyList(), val generating: Boolean = false, val input: String = "", val notice: String? = null, val imageBytes: ByteArray? = null, val imageName: String = "", val modalError: String? = null)
+data class ChatUiState(val messages: List<ChatMessage> = emptyList(), val selectedModel: String = "", val maxTokens: String = "1024", val temperature: String = "0.7", val systemPromptId: String = "", val systemPrompt: String = "", val presets: List<SystemPromptPreset> = emptyList(), val generating: Boolean = false, val input: String = "", val notice: String? = null, val imageBytes: ByteArray? = null, val imageName: String = "", val modalError: String? = null, val showReasoning: Boolean = false)
 
 class ChatViewModel(application: Application) : AndroidViewModel(application) {
   private val settings = SettingsStore(application)
@@ -105,6 +106,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     _state.value = old.copy(systemPromptId = value?.id.orEmpty(), systemPrompt = value?.body.orEmpty(), maxTokens = value?.maxTokens?.toString() ?: old.maxTokens, temperature = value?.temperature?.toString() ?: old.temperature, messages = if (changed && old.messages.isNotEmpty()) emptyList() else old.messages, notice = if (changed && old.messages.isNotEmpty()) "システムプロンプトを変更したため、会話をリセットしました。" else old.notice)
   }
   fun stop() { running?.cancel(); _state.value = _state.value.copy(generating = false) }
+  fun toggleReasoning() { _state.value = _state.value.copy(showReasoning = !_state.value.showReasoning) }
   fun retry(prompt: String) = send(prompt)
   fun send(value: String = _state.value.input) {
     val prompt = value.trim(); val old = _state.value
@@ -123,7 +125,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     DiagnosticsLog.note("テストチャット生成開始: backend=" + request.backend + " model=" + request.model + " maxTokens=" + request.maxTokens + " temperature=" + request.temperature + " image=" + (request.imageBytes != null) + " promptChars=" + request.prompt.length)
     DiagnosticsLog.note("テストチャットプロンプト: " + request.prompt)
     running = viewModelScope.launch {
-      try { DefaultInferenceRepository.generate(getApplication(), request).collect { event -> when (event) { is GenerateEvent.Token -> update(index, ChatMessage(false, _state.value.messages.getOrNull(index)?.text.orEmpty() + event.text, request.model, true, retryPrompt = prompt)); is GenerateEvent.Done -> { val elapsed = SystemClock.elapsedRealtime() - startedAt; val exact = event.inputTokens > 0 || event.outputTokens > 0; val inputTokens = if (exact) event.inputTokens else estimateTokens(prompt); val outputTokens = if (exact) event.outputTokens else estimateTokens(event.fullText); DiagnosticsLog.note("テストチャット応答: " + event.fullText); update(index, ChatMessage(false, event.fullText, request.model, false, retryPrompt = prompt, elapsedMs = elapsed, inputTokens = inputTokens, outputTokens = outputTokens, tokenCountEstimated = !exact)) }; is GenerateEvent.Error -> { DiagnosticsLog.error(event.message); update(index, ChatMessage(false, event.message, request.model, false, true, prompt)); _state.value = _state.value.copy(modalError = event.message) } } } }
+      var rawAssistantText = ""; try { DefaultInferenceRepository.generate(getApplication(), request).collect { event -> when (event) { is GenerateEvent.Token -> { rawAssistantText += event.text; update(index, ChatMessage(false, displayAssistantText(rawAssistantText, _state.value.showReasoning), request.model, true, retryPrompt = prompt)); }; is GenerateEvent.Done -> { val displayedText = displayAssistantText(event.fullText, _state.value.showReasoning); val elapsed = SystemClock.elapsedRealtime() - startedAt; val exact = event.inputTokens > 0 || event.outputTokens > 0; val inputTokens = if (exact) event.inputTokens else estimateTokens(prompt); val outputTokens = if (exact) event.outputTokens else estimateTokens(event.fullText); DiagnosticsLog.note("テストチャット応答: " + displayedText); update(index, ChatMessage(false, displayedText, request.model, false, retryPrompt = prompt, elapsedMs = elapsed, inputTokens = inputTokens, outputTokens = outputTokens, tokenCountEstimated = !exact)) }; is GenerateEvent.Error -> { DiagnosticsLog.error(event.message); update(index, ChatMessage(false, event.message, request.model, false, true, prompt)); _state.value = _state.value.copy(modalError = event.message) } } } }
       catch (e: CancellationException) { DiagnosticsLog.warn("生成を中断しました"); update(index, ChatMessage(false, "生成を中断しました", request.model, error = true, retryPrompt = prompt)) }
       catch (e: Exception) { val message = e.message ?: "生成に失敗しました"; DiagnosticsLog.error(message); update(index, ChatMessage(false, "生成に失敗しました: $message", request.model, error = true, retryPrompt = prompt)); _state.value = _state.value.copy(modalError = message) }
       finally { DiagnosticsLog.note("テストチャット生成終了: model=" + request.model); _state.value = _state.value.copy(generating = false) }
@@ -161,6 +163,7 @@ fun ChatScreen(viewModel: ChatViewModel = viewModel(), modifier: Modifier = Modi
         DropdownMenuItem({ Text("最大トークン数  ${state.maxTokens}") }, { menu = false; tokens = true })
         DropdownMenuItem({ Text("Temperature  ${state.temperature}") }, { menu = false; temp = true })
         DropdownMenuItem({ Text("システムプロンプト  ${state.presets.firstOrNull { it.id == state.systemPromptId }?.name ?: "なし"}") }, { menu = false; viewModel.refreshPresets(); prompts = true })
+        DropdownMenuItem({ Text(if (state.showReasoning) "思考過程を表示: ON" else "思考過程を表示: OFF") }, { viewModel.toggleReasoning(); menu = false })
       }
       Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.Bottom) {
         IconButton({ menu = true }) { Text("＋", style = MaterialTheme.typography.headlineSmall) }
