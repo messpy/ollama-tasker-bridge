@@ -11,10 +11,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import com.example.ollamataskerbridge.theme.MyApplicationTheme
+import com.example.ollamataskerbridge.bridge.InferenceNotification
 
 class MainActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+    // Clear a stale notification left by a process killed during local inference.
+    InferenceNotification.finish(this)
     val permissions = buildList {
       if (Build.VERSION.SDK_INT >= 33) {
         add(Manifest.permission.POST_NOTIFICATIONS)
