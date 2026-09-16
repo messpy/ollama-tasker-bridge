@@ -326,16 +326,16 @@ static std::string chat_add_and_format(const std::string &role, const std::strin
 
 /**
  * Completion loop's short-term states:
- * - stop generation position
+ * - generated token limit
  * - token chars caching
  * - current assistant message being generated
  */
-static llama_pos stop_generation_position;
+static int generation_token_limit;
 static std::string cached_token_chars;
 static std::ostringstream assistant_ss;
 
 static void reset_short_term_states() {
-    stop_generation_position = 0;
+    generation_token_limit = 0;
     generated_token_count = 0;
     cached_token_chars.clear();
     assistant_ss.str("");
@@ -461,10 +461,10 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_processUserPrompt(
     }
 
     // Ensure user prompt doesn't exceed the context size by truncating if necessary.
-    const int user_prompt_size = (int) user_tokens.size();
+    const int original_user_prompt_size = (int) user_tokens.size();
     const int max_batch_size = DEFAULT_CONTEXT_SIZE - OVERFLOW_HEADROOM;
-    if (user_prompt_size > max_batch_size) {
-        const int skipped_tokens = user_prompt_size - max_batch_size;
+    if (original_user_prompt_size > max_batch_size) {
+        const int skipped_tokens = original_user_prompt_size - max_batch_size;
         user_tokens.resize(max_batch_size);
         LOGw("%s: User prompt too long! Skipped %d tokens!", __func__, skipped_tokens);
     }
@@ -475,12 +475,14 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_processUserPrompt(
         return 2;
     }
 
-    user_prompt_token_count = (int) user_tokens.size();
+    const int user_prompt_size = (int) user_tokens.size();
+    user_prompt_token_count = user_prompt_size;
     LOGi("User prompt token count=%d (system=%d)", user_prompt_token_count, system_prompt_token_count);
 
-    // Update position
+    // Update position using the actual decoded token count. Keep output limiting
+    // independent from current_position so context shifting cannot extend generation.
     current_position += user_prompt_size;
-    stop_generation_position = current_position + user_prompt_size + n_predict;
+    generation_token_limit = std::max(0, (int) n_predict);
     return 0;
 }
 
@@ -531,9 +533,10 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_generateNextToken(
         shift_context();
     }
 
-    // Stop if reaching the marked position
-    if (current_position >= stop_generation_position) {
-        LOGw("%s: STOP: hitting stop position: %d", __func__, stop_generation_position);
+    // Stop after exactly the requested output budget. Position-based stopping is
+    // incorrect once context shifting moves current_position backwards.
+    if (generated_token_count >= generation_token_limit) {
+        LOGw("%s: STOP: hitting generation token limit: %d", __func__, generation_token_limit);
         return nullptr;
     }
 
