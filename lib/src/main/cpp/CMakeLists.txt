@@ -16,6 +16,14 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}" CACHE STRING "" FORCE)
 # --------------------------------------------------------------------------
 
 set(LLAMA_SRC ${CMAKE_CURRENT_LIST_DIR}/../../../../third_party/llama.cpp)
+
+# llama.cpp recommends KleidiAI for Android arm64. It supplies optimized Arm
+# CPU kernels and selects compatible kernels at runtime. Do not enable it for
+# x86_64: llama.cpp intentionally rejects KleidiAI on non-AArch64 targets.
+if(ANDROID AND ANDROID_ABI STREQUAL "arm64-v8a")
+    set(GGML_CPU_KLEIDIAI ON CACHE BOOL "Enable KleidiAI optimized Arm kernels" FORCE)
+endif()
+
 add_subdirectory(${LLAMA_SRC} build-llama)
 
 add_library(${CMAKE_PROJECT_NAME} SHARED
