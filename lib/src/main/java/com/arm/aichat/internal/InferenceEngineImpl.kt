@@ -173,9 +173,9 @@ internal class InferenceEngineImpl private constructor(
                 Log.i(TAG, "Loading model... \n$pathToModel")
                 _readyForSystemPrompt = false
                 _state.value = InferenceEngine.State.LoadingModel
-                load(pathToModel).let {
-                    // TODO-han.yin: find a better way to pass other error codes
-                    if (it != 0) throw UnsupportedArchitectureException()
+                val loadResult = load(pathToModel)
+                if (loadResult != 0) {
+                    throw IOException("GGUFモデルのロードに失敗しました (nativeResult=" + loadResult + ")。端末のメモリ不足、GGUF破損、または未対応形式の可能性があります。")
                 }
                 prepare().let {
                     if (it != 0) throw IOException("Failed to prepare resources")
