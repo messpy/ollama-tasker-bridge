@@ -80,6 +80,7 @@ import com.example.ollamataskerbridge.theme.MyApplicationTheme
 // Local is the downloaded-files tab. Cloud is the online catalog tab; it
 // includes both downloadable local models and Cloud-only models.
 internal fun OllamaModel.isCloudOnly(): Boolean = source == ModelSource.OLLAMA && remote && !local
+internal fun OllamaModel.isCloudInUse(): Boolean = source == ModelSource.OLLAMA && remote && enabled
 
 
 private fun OllamaModel.modelKind(): String {
@@ -127,7 +128,7 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
   val minBytes = state.minLocalModelSizeGb.toDoubleOrNull()?.coerceAtLeast(0.0)?.times(1_000_000_000.0)?.toLong() ?: 0L
   val maxBytes = state.maxLocalModelSizeGb.toDoubleOrNull()?.takeIf { it >= 0 }?.times(1_000_000_000.0)?.toLong() ?: Long.MAX_VALUE
   // Local shows downloaded files; Cloud shows the not-yet-downloaded online catalog.
-  val shownModels = state.models.filter { it.source in state.enabledSources }.filter { if (modelTab == 0) it.local else !it.local }
+  val shownModels = state.models.filter { it.source in state.enabledSources }.filter { if (modelTab == 0) it.local || it.isCloudInUse() else !it.local }
     .filter { it.remote || it.sizeBytes <= 0L || (it.sizeBytes >= minBytes && it.sizeBytes <= maxBytes) }
     .filter { it.modelKind() in kindFilter }
     .filter { state.search.isBlank() || it.name.contains(state.search, true) }
