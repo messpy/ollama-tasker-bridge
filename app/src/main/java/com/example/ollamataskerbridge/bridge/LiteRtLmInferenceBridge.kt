@@ -12,11 +12,11 @@ import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
 import com.google.ai.edge.litertlm.SamplerConfig
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -25,7 +25,6 @@ object LiteRtLmInferenceBridge {
   private val mutex = Mutex()
   private var loadedPath: String? = null
   private var loadedSystem: String? = null
-  private var loadedMaxTokens: Int = 0
   private var loadedTemperature: Float = -1f
   private var loadedContextTokens: Int = 0
   private var loadedVision: Boolean = false
@@ -40,13 +39,22 @@ object LiteRtLmInferenceBridge {
         require(file.isFile) { "LiteRT-LMモデル未取得です: $model" }
         val normalizedSystem = system?.takeIf { it.isNotBlank() }
         val wantsVision = imageBytes != null
-        if (loadedPath != file.absolutePath || loadedSystem != normalizedSystem || loadedMaxTokens != maxTokens || loadedTemperature != temperature || loadedContextTokens != SettingsStore(context).liteRtContextTokens || loadedVision != wantsVision) {
-          // System instructions belong to ConversationConfig, so changing them creates a fresh conversation.
+        val contextTokens = SettingsStore(context).liteRtContextTokens
+        val normalizedTemperature = temperature.coerceIn(0f, 2f)
+
+        // Engine initialization is expensive for large models. Rebuild it only when
+        // engine-level settings change. maxTokens is an output limit from the common
+        // request contract; LiteRT-LM's EngineConfig.maxNumTokens is context capacity,
+        // so changing maxTokens must not force a model reload.
+        val engineChanged = engine == null ||
+          loadedPath != file.absolutePath ||
+          loadedContextTokens != contextTokens ||
+          loadedVision != wantsVision
+
+        if (engineChanged) {
           closeLocked()
-          // maxNumTokens is context capacity, not the UI output limit. Keep normal prompts and history above 256 tokens.
-          val contextTokens = SettingsStore(context).liteRtContextTokens
           // Gemma 3n's vision encoder requires the GPU vision backend even when
-          // the language decoder itself runs on the CPU.  Gallery uses the same
+          // the language decoder itself runs on the CPU. Gallery uses the same
           // split backend configuration; omitting it causes a native null
           // dereference when an image is supplied on Pixel devices.
           val newEngine = Engine(EngineConfig(
@@ -57,14 +65,30 @@ object LiteRtLmInferenceBridge {
           ))
           newEngine.initialize()
           engine = newEngine
-          conversation = newEngine.createConversation(ConversationConfig(systemInstruction = normalizedSystem?.let { Contents.of(it) } ?: Contents.of(""), samplerConfig = SamplerConfig(topK = 20, topP = 0.95, temperature = temperature.coerceIn(0f, 2f).toDouble(), seed = 0)))
           loadedPath = file.absolutePath
-          loadedSystem = normalizedSystem
-          loadedMaxTokens = maxTokens
-          loadedTemperature = temperature
           loadedContextTokens = contextTokens
           loadedVision = wantsVision
         }
+
+        // System instructions and sampler settings belong to ConversationConfig.
+        // Recreate only the conversation when they change so the loaded model stays hot.
+        if (conversation == null || engineChanged || loadedSystem != normalizedSystem || loadedTemperature != normalizedTemperature) {
+          closeConversationLocked()
+          conversation = requireNotNull(engine).createConversation(
+            ConversationConfig(
+              systemInstruction = normalizedSystem?.let { Contents.of(it) } ?: Contents.of(""),
+              samplerConfig = SamplerConfig(
+                topK = 20,
+                topP = 0.95,
+                temperature = normalizedTemperature.toDouble(),
+                seed = 0,
+              ),
+            ),
+          )
+          loadedSystem = normalizedSystem
+          loadedTemperature = normalizedTemperature
+        }
+
         val activeConversation = requireNotNull(conversation)
         val fullText = StringBuilder()
         val contents = imageBytes?.let { Contents.of(Content.ImageBytes(it), Content.Text(prompt)) } ?: Contents.of(prompt)
@@ -85,15 +109,18 @@ object LiteRtLmInferenceBridge {
     }
   }.flowOn(Dispatchers.Default)
 
-  private fun closeLocked() {
+  private fun closeConversationLocked() {
     runCatching { conversation?.close() }
-    runCatching { engine?.close() }
     conversation = null
+    loadedSystem = null
+    loadedTemperature = -1f
+  }
+
+  private fun closeLocked() {
+    closeConversationLocked()
+    runCatching { engine?.close() }
     engine = null
     loadedPath = null
-    loadedSystem = null
-    loadedMaxTokens = 0
-    loadedTemperature = -1f
     loadedContextTokens = 0
     loadedVision = false
   }
