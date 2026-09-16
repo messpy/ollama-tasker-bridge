@@ -10,11 +10,15 @@ import android.os.IBinder
 import android.os.SystemClock
 import com.example.ollamataskerbridge.data.LocalModelStore
 import com.example.ollamataskerbridge.data.OllamaRegistryClient
+import com.arm.aichat.AiChat
+import com.arm.aichat.InferenceEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
+import com.example.ollamataskerbridge.diagnostics.DiagnosticsLog
 
 class ModelDownloadService : Service() {
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -36,12 +40,16 @@ class ModelDownloadService : Service() {
       ?.takeIf(String::isNotBlank) ?: BridgeContract.ACTION_RESULT
     val replyPackage = intent?.getStringExtra(BridgeContract.EXTRA_REPLY_PACKAGE)
     activeJob = scope.launch {
+      var downloadedFile: java.io.File? = null
       try {
         val client = OllamaRegistryClient(LocalModelStore(applicationContext))
         val file = if (downloadUrl.isNotBlank()) client.downloadFromUrl(downloadUrl, model, downloadExtension, accessToken) { downloaded, total -> updateProgress(model, downloaded, total) } else client.download(model) { downloaded, total -> updateProgress(model, downloaded, total) }
-        sendReply(replyAction, replyPackage, true, "モデルをAndroidへ保存しました: ${file.name}", null)
+        downloadedFile = file
+        if (file.extension.equals("gguf", true)) validateGguf(file)
+        sendReply(replyAction, replyPackage, true, "モデルを保存し、端末実行検証に成功しました: ${file.name}", null)
         sendBroadcast(Intent(BridgeContract.ACTION_DOWNLOAD_FINISHED).setPackage(packageName).putExtra(BridgeContract.EXTRA_MODEL, model))
       } catch (error: Exception) {
+        downloadedFile?.delete()
         sendReply(replyAction, replyPackage, false, null, error.message ?: "モデル取得に失敗しました")
         sendBroadcast(Intent(BridgeContract.ACTION_DOWNLOAD_FINISHED).setPackage(packageName).putExtra(BridgeContract.EXTRA_MODEL, model))
       } finally {
@@ -51,6 +59,7 @@ class ModelDownloadService : Service() {
     return START_NOT_STICKY
   }
 
+  private suspend fun validateGguf(file: java.io.File) { val engine = AiChat.getInferenceEngine(applicationContext); val state = engine.state.first { it is InferenceEngine.State.Initialized || it is InferenceEngine.State.ModelReady || it is InferenceEngine.State.Error }; if (state is InferenceEngine.State.ModelReady || state is InferenceEngine.State.Error) engine.cleanUp(); try { DiagnosticsLog.note("ローカル実行検証開始: file=" + file.name); engine.loadModel(file.absolutePath); DiagnosticsLog.note("ローカル実行検証成功: file=" + file.name) } finally { when (engine.state.value) { is InferenceEngine.State.ModelReady, is InferenceEngine.State.Error -> engine.cleanUp(); else -> {} } } }
   private fun cancelDownload() {
     activeJob?.cancel()
     val store = LocalModelStore(applicationContext)
