@@ -50,10 +50,28 @@ static const char * GEMMA3_CHAT_TEMPLATE = R"jinja(
 {%- endif %}
 )jinja";
 
+static const char * XING4_CHAT_TEMPLATE = R"jinja(
+{%- set default_system = "You are Xing, an AI assistant developed by China Telecom Artificial Intelligence Technology Co., Ltd." %}
+{%- for message in messages %}
+{%- if message.role == "system" %}{{ "<_system>" + default_system + message.content }}
+{%- elif message.role == "user" %}{{ "<_user>" + message.content }}
+{%- elif message.role == "assistant" or message.role == "bot" %}{{ "<_bot>" + message.content + "<_end>" }}
+{%- elif message.role == "tool" %}{{ "<_observation><tool_response>" + message.content + "</tool_response>" }}
+{%- endif %}
+{%- endfor %}
+{%- if add_generation_prompt %}{{ "<_bot><think>\n" }}{%- endif %}
+)jinja";
+
 static bool is_gemma3_model(const llama_model * model) {
     char architecture[32] = {};
     return llama_model_meta_val_str(model, "general.architecture", architecture, sizeof(architecture)) > 0
         && std::string(architecture) == "gemma3";
+}
+
+static bool is_xing4_model(const llama_model * model) {
+    char architecture[32] = {};
+    return llama_model_meta_val_str(model, "general.architecture", architecture, sizeof(architecture)) > 0
+        && std::string(architecture) == "xingchen4";
 }
 
 static llama_model                      * g_model;
@@ -155,9 +173,10 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_prepare(JNIEnv * /*env*/, jobje
     if (!context) { return 1; }
     g_context = context;
     g_batch = llama_batch_init(BATCH_SIZE, 0, 1);
-    const std::string chat_template = is_gemma3_model(g_model) && llama_model_chat_template(g_model, nullptr) == nullptr ? GEMMA3_CHAT_TEMPLATE : "";
+    const bool missing_chat_template = llama_model_chat_template(g_model, nullptr) == nullptr;
+    const std::string chat_template = missing_chat_template ? (is_gemma3_model(g_model) ? GEMMA3_CHAT_TEMPLATE : (is_xing4_model(g_model) ? XING4_CHAT_TEMPLATE : "")) : "";
     g_chat_templates = common_chat_templates_init(g_model, chat_template);
-    LOGi("Chat template source=%s", chat_template.empty() ? "model metadata" : "Gemma3 fallback");
+    LOGi("Chat template source=%s", chat_template.empty() ? "model metadata" : (is_xing4_model(g_model) ? "Xing4 fallback" : "Gemma3 fallback"));
     g_sampler = new_sampler(DEFAULT_SAMPLER_TEMP);
     return 0;
 }
