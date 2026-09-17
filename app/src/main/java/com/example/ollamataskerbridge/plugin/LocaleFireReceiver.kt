@@ -78,17 +78,19 @@ class LocaleFireReceiver : BroadcastReceiver() {
       // Prefer expedited dispatch so an idle app does not hold local inference
       // until the user opens the app. Local inference has no network constraint.
       jobBuilder.setMinimumLatency(0)
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) jobBuilder.setExpedited(true)
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) jobBuilder.setExpedited(true) else jobBuilder.setOverrideDeadline(5_000)
     } else {
-      jobBuilder.setMinimumLatency(0).setOverrideDeadline(5_000)
-      jobBuilder.setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
+      // Do not gate dispatch on JobScheduler network state. The HTTP client
+      // handles connectivity and a network constraint can leave MacroDroid jobs pending indefinitely.
+      jobBuilder.setMinimumLatency(0)
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) jobBuilder.setExpedited(true) else jobBuilder.setOverrideDeadline(5_000)
     }
     val result = context.getSystemService(JobScheduler::class.java).schedule(jobBuilder.setExtras(extras).build())
     if (result != JobScheduler.RESULT_SUCCESS) {
       InferenceExecutionRegistry.markObsolete(executionId)
       DiagnosticsLog.error("推論Job登録失敗: jobId=" + jobId + " executionId=" + executionId + " model=" + values?.getString(LocalePluginContract.KEY_MODEL).orEmpty() + " backend=" + values?.getString(LocalePluginContract.KEY_BACKEND).orEmpty() + " result=" + result)
     }
-    DiagnosticsLog.note("推論Job登録: jobId=" + jobId + " executionId=" + executionId + " model=" + values?.getString(LocalePluginContract.KEY_MODEL).orEmpty() + " backend=" + backend + " expedited=" + (isLocal && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) + " executionPath=macrodroid-job-scheduler result=" + result)
+    DiagnosticsLog.note("推論Job登録: jobId=" + jobId + " executionId=" + executionId + " model=" + values?.getString(LocalePluginContract.KEY_MODEL).orEmpty() + " backend=" + backend + " expedited=" + (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) + " executionPath=macrodroid-job-scheduler result=" + result)
   }
 
   companion object {
