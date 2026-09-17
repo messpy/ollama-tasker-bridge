@@ -5,10 +5,11 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 class HuggingFaceClient {
-  suspend fun catalog(accessToken: String = ""): List<OllamaModel> = withContext(Dispatchers.IO) {
+  suspend fun catalog(accessToken: String = "", search: String = ""): List<OllamaModel> = withContext(Dispatchers.IO) {
     val found = linkedMapOf<String, OllamaModel>()
-    val queries = listOf("https://huggingface.co/api/models?search=Xing4.0&sort=downloads&direction=-1&limit=100", "https://huggingface.co/api/models?search=XingChen4&sort=downloads&direction=-1&limit=100", "https://huggingface.co/api/models?filter=gguf&sort=downloads&direction=-1&limit=100", "https://huggingface.co/api/models?search=litertlm&sort=downloads&direction=-1&limit=100", "https://huggingface.co/api/models?search=MiniCPM-V-4.6&sort=downloads&direction=-1&limit=100", "https://huggingface.co/api/models?search=MiniCPM-V&filter=gguf&sort=downloads&direction=-1&limit=100")
+    val queries = buildList { if (search.isNotBlank()) add("https://huggingface.co/api/models?search=" + URLEncoder.encode(search.trim(), "UTF-8") + "&filter=gguf&sort=downloads&direction=-1&limit=100"); addAll(listOf("https://huggingface.co/api/models?search=Xing4.0&sort=downloads&direction=-1&limit=100", "https://huggingface.co/api/models?search=XingChen4&sort=downloads&direction=-1&limit=100", "https://huggingface.co/api/models?filter=gguf&sort=downloads&direction=-1&limit=100", "https://huggingface.co/api/models?search=litertlm&sort=downloads&direction=-1&limit=100", "https://huggingface.co/api/models?search=MiniCPM-V-4.6&sort=downloads&direction=-1&limit=100", "https://huggingface.co/api/models?search=MiniCPM-V&filter=gguf&sort=downloads&direction=-1&limit=100")) }
     queries.forEach { query ->
       val listing = runCatching { JSONArray(request(query, accessToken)) }.getOrNull() ?: return@forEach
       for (index in 0 until listing.length()) {
