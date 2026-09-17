@@ -24,8 +24,7 @@ class LocaleFireReceiver : BroadcastReceiver() {
     val values = intent.getBundleExtra(LocalePluginContract.EXTRA_BUNDLE)
     val model = values?.getString(LocalePluginContract.KEY_MODEL).orEmpty()
     val backend = values?.getString(LocalePluginContract.KEY_BACKEND).orEmpty()
-    val suppliedExecutionId = intent.getStringExtra("com.example.ollamataskerbridge.REQUEST_ID").orEmpty()
-    val executionId = suppliedExecutionId.ifBlank { UUID.randomUUID().toString() }
+    val executionId = UUID.randomUUID().toString()
     if (!RequestTracker.accept(executionId) || !InferenceExecutionRegistry.register(executionId)) {
       DiagnosticsLog.warn("重複FIRE_SETTINGを無視: executionId=" + executionId)
       setResultCode(TaskerPlugin.Setting.RESULT_CODE_FAILED)
