@@ -77,12 +77,12 @@ class LocaleFireReceiver : BroadcastReceiver() {
     if (isLocal) {
       // Prefer expedited dispatch so an idle app does not hold local inference
       // until the user opens the app. Local inference has no network constraint.
-      jobBuilder.setMinimumLatency(0)
+      if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) jobBuilder.setMinimumLatency(0)
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) jobBuilder.setExpedited(true) else jobBuilder.setOverrideDeadline(5_000)
     } else {
       // Do not gate dispatch on JobScheduler network state. The HTTP client
       // handles connectivity and a network constraint can leave MacroDroid jobs pending indefinitely.
-      jobBuilder.setMinimumLatency(0)
+      if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) jobBuilder.setMinimumLatency(0)
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) jobBuilder.setExpedited(true) else jobBuilder.setOverrideDeadline(5_000)
     }
     val result = context.getSystemService(JobScheduler::class.java).schedule(jobBuilder.setExtras(extras).build())
