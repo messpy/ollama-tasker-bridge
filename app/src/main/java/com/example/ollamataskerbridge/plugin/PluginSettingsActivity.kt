@@ -76,7 +76,7 @@ class PluginSettingsActivity : ComponentActivity() {
             val normalizedResult = "answer"
             val values = Bundle().apply {
               putString(LocalePluginContract.KEY_MODEL, normalizeModelForPlatform(model, platform))
-              putString(LocalePluginContract.KEY_PROMPT, prompt)
+              putString(LocalePluginContract.KEY_PROMPT, normalizePromptForPlatform(prompt, platform))
               putString(LocalePluginContract.KEY_IMAGE_URI, imageUri)
               putString(LocalePluginContract.KEY_PRESET_ID, presetId)
               putString(LocalePluginContract.KEY_CUSTOM_SYSTEM, customSystem)
