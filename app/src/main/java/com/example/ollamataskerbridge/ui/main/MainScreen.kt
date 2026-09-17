@@ -260,7 +260,7 @@ private fun ModelRow(model: OllamaModel, loading: Boolean, selected: Boolean, do
       Column(Modifier.weight(1f)) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
           Text(model.name, modifier = Modifier.combinedClickable(onClick = { onSelect(model.name) }, onLongClick = { clipboard.setText(AnnotatedString(model.name)); Toast.makeText(context, "モデル名をコピーしました", Toast.LENGTH_SHORT).show() }))
-          Text(model.source.sourceEmoji(), style = MaterialTheme.typography.labelSmall); Text(if (model.format == com.example.ollamataskerbridge.data.ModelFormat.LITERT_LM) "LiteRT-LM" else "GGUF", style = MaterialTheme.typography.labelSmall)
+          Text(model.source.sourceEmoji(), style = MaterialTheme.typography.labelSmall)
           if (model.supportsVision()) Text("👁️", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
           if (model.isCloudOnly()) Text("☁", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
 

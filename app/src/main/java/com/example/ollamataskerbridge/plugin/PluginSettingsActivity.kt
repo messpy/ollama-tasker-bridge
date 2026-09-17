@@ -176,7 +176,7 @@ private fun PluginSettingsContent(
             Column(Modifier.weight(1f)) {
               Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(item.name)
-                Text(item.source.sourceEmoji(), style = androidx.compose.material3.MaterialTheme.typography.labelSmall); Text(if (item.format == ModelFormat.LITERT_LM) "LiteRT-LM" else "GGUF", style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
+                Text(item.source.sourceEmoji(), style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
                 if (item.supportsVision()) Text("👁️", style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
                 if (item.remote && !item.local) Text("☁", style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
               }
