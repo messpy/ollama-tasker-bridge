@@ -156,18 +156,13 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
       },
     )
 
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-      TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://ollama.com/settings/keys"))) }) { Text("Ollama APIキーを取得", fontSize = 11.sp) }
-    }
     OutlinedTextField(value = state.huggingFaceToken, onValueChange = viewModel::huggingFaceTokenChanged, modifier = Modifier.fillMaxWidth(), label = { Text("Hugging Faceアクセストークン（Gemma等）") }, singleLine = true, visualTransformation = PasswordVisualTransformation())
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-      TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://huggingface.co/settings/tokens"))) }) { Text("Hugging Faceトークンを取得", fontSize = 11.sp) }
-    }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       OutlinedButton(onClick = { exportSettings.launch("ollama-tasker-bridge-settings.json") }) { Text("設定をエクスポート") }
       OutlinedButton(onClick = { importSettings.launch(arrayOf("application/json", "text/plain")) }) { Text("設定をインポート") }
     }
     Text("APIキーを含むため、バックアップファイルの取り扱いに注意してください。モデル本体は含まれません。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Box(Modifier.combinedClickable(onClick = { diagnosticsScope.launch { clipboard.setText(AnnotatedString(DiagnosticsLog.copyableSnapshot())) } }, onLongClick = { DiagnosticsLog.clear(); Toast.makeText(context, "診断ログをクリアしました", Toast.LENGTH_SHORT).show() }).padding(8.dp)) { Text("ログをコピー（長押しでクリア）", fontSize = 11.sp) } }
     }
     if (section == MainSection.MODELS) {
     TabRow(selectedTabIndex = modelTab, modifier = Modifier.fillMaxWidth()) { Tab(selected = modelTab == 0, onClick = { modelTab = 0; viewModel.refreshInstalledModels() }, text = { Text("ダウンロード済み") }); Tab(selected = modelTab == 1, onClick = { modelTab = 1; viewModel.refreshInstalledModels() }, text = { Text("モデルを探す") }) }
@@ -239,9 +234,6 @@ fun MainScreen(viewModel: MainScreenViewModel = viewModel(), modifier: Modifier 
       }
     }
     OutlinedButton(onClick = { showPresetDialog = true }) { Text("新しいプリセットを追加") }
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-      Box(Modifier.combinedClickable(onClick = { diagnosticsScope.launch { clipboard.setText(AnnotatedString(DiagnosticsLog.copyableSnapshot())) } }, onLongClick = { DiagnosticsLog.clear(); Toast.makeText(context, "診断ログをクリアしました", Toast.LENGTH_SHORT).show() }).padding(8.dp)) { Text("ログをコピー（長押しでクリア）", fontSize = 11.sp) }
-    }
     }
   }
   pendingGemmaDownload?.let { name -> AlertDialog(onDismissRequest = { pendingGemmaDownload = null }, title = { Text("Gemma利用条件") }, text = { Text("GemmaモデルはGoogleの利用規約に従って使用してください。 https://ai.google.dev/gemma/terms") }, confirmButton = { TextButton(onClick = { viewModel.acceptGemmaTerms(); pendingGemmaDownload = null; viewModel.downloadModel(name) }) { Text("同意してダウンロード") } }, dismissButton = { TextButton(onClick = { pendingGemmaDownload = null }) { Text("キャンセル") } }) }
