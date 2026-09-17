@@ -28,6 +28,11 @@ class HuggingFaceClient {
         found[id + ":" + candidate.first] = OllamaModel(id, false, true, fileSize, false, source, downloadUrl, format = if (litert) ModelFormat.LITERT_LM else ModelFormat.GGUF)
       }
     }
+    val xingRepo = "XingChen-AGI/Xing4.0-29B-A4B-GGUF"
+    if (found.keys.none { it.startsWith(xingRepo + ":") }) {
+      val xingFile = "xing4_0-29b-IQ4_NL-00001-of-00003.gguf"
+      found[xingRepo + ":" + xingFile] = OllamaModel(xingRepo, false, true, 20104013088L, false, ModelSource.HUGGING_FACE, "https://huggingface.co/" + xingRepo + "/resolve/main/" + xingFile, format = ModelFormat.GGUF)
+    }
     found.values.toList()
   }
 
