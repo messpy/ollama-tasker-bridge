@@ -99,7 +99,7 @@ class InferenceJobService : JobService() {
           ))
           InferenceExecutionRegistry.markCompleted(executionId)
           val signaled = if (origin == ORIGIN_BRIDGE) { if (InferenceExecutionRegistry.markSignalFinished(executionId)) sendBridgeResult(data, executionId, model, true, result, null); false } else if (InferenceExecutionRegistry.markSignalFinished(executionId)) TaskerPlugin.Setting.signalFinish(applicationContext, original, TaskerPlugin.Setting.RESULT_CODE_OK,
-            Bundle().apply { putString("%answer", result); putString("%ok", "true") }) else false
+            Bundle().apply { putString("%answer", result); putString("%model", model); putString("%ok", "true") }) else false
           DiagnosticsLog.note("推論成功: jobId=" + params.jobId + " executionId=" + executionId + " model=" + model + " backend=" + data.getString(KEY_BACKEND).orEmpty() + " resultChars=" + result.length + " signalFinish=" + signaled)
           sendMacroDroidResult(data, executionId, params.jobId, model, true, result, null)
         }
@@ -113,7 +113,7 @@ class InferenceJobService : JobService() {
         Log.e(TAG, "推論Job失敗: " + message, error)
         DiagnosticsLog.error("推論Job失敗: jobId=" + params.jobId + " executionId=" + executionId + " model=" + model + " backend=" + data.getString(KEY_BACKEND).orEmpty() + " message=" + message)
         val signaled = if (origin == ORIGIN_BRIDGE) { if (InferenceExecutionRegistry.markSignalFinished(executionId)) sendBridgeResult(data, executionId, model, false, null, message); false } else if (InferenceExecutionRegistry.markSignalFinished(executionId)) TaskerPlugin.Setting.signalFinish(applicationContext, original, TaskerPlugin.Setting.RESULT_CODE_FAILED,
-          Bundle().apply { putString("%error", message); putString("%ok", "false") }) else false
+          Bundle().apply { putString("%error", message); putString("%model", model); putString("%ok", "false") }) else false
         DiagnosticsLog.note("推論Job失敗通知: jobId=" + params.jobId + " executionId=" + executionId + " model=" + model + " backend=" + data.getString(KEY_BACKEND).orEmpty() + " signalFinish=" + signaled + " errorChars=" + message.length)
         sendMacroDroidResult(data, executionId, params.jobId, model, false, null, message)
       } finally {
@@ -246,6 +246,8 @@ class InferenceJobService : JobService() {
       putString("answer", result.orEmpty())
       putString("result", result.orEmpty())
       putString("%answer", result.orEmpty())
+      putString("model", model)
+      putString("%model", model)
       putString("%ok", ok.toString())
       if (!ok) {
         putString("error", error.orEmpty())

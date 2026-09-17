@@ -75,7 +75,7 @@ class PluginSettingsActivity : ComponentActivity() {
             if (presetId.isNotBlank() && presetId != "custom") settings.lastPresetId = presetId
             val normalizedResult = "answer"
             val values = Bundle().apply {
-              putString(LocalePluginContract.KEY_MODEL, model)
+              putString(LocalePluginContract.KEY_MODEL, normalizeModelForPlatform(model, platform))
               putString(LocalePluginContract.KEY_PROMPT, prompt)
               putString(LocalePluginContract.KEY_IMAGE_URI, imageUri)
               putString(LocalePluginContract.KEY_PRESET_ID, presetId)
@@ -89,9 +89,9 @@ class PluginSettingsActivity : ComponentActivity() {
             }
             val resultIntent = Intent().putExtra(LocalePluginContract.EXTRA_BUNDLE, values)
               .putExtra(LocalePluginContract.EXTRA_STRING_BLURB, "$model / $platform")
-            TaskerPlugin.Setting.setVariableReplaceKeys(values, arrayOf(LocalePluginContract.KEY_PROMPT, LocalePluginContract.KEY_IMAGE_URI, LocalePluginContract.KEY_SYSTEM, LocalePluginContract.KEY_CUSTOM_SYSTEM))
+            TaskerPlugin.Setting.setVariableReplaceKeys(values, arrayOf(LocalePluginContract.KEY_MODEL, LocalePluginContract.KEY_PROMPT, LocalePluginContract.KEY_IMAGE_URI, LocalePluginContract.KEY_SYSTEM, LocalePluginContract.KEY_CUSTOM_SYSTEM))
             TaskerPlugin.Setting.requestTimeoutMS(resultIntent, 120_000)
-            TaskerPlugin.addRelevantVariableList(resultIntent, arrayOf("%answer\n回答\nLLMの生成結果", "%error\nエラー\n失敗時のエラー内容", "%ok\n成否\n成功時true、失敗時false"))
+            TaskerPlugin.addRelevantVariableList(resultIntent, arrayOf("%answer\n回答\nLLMの生成結果", "%model\nモデル\n実際に使用したモデル名", "%error\nエラー\n失敗時のエラー内容", "%ok\n成否\n成功時true、失敗時false"))
             setResult(Activity.RESULT_OK, resultIntent)
             finish()
           },
@@ -108,6 +108,8 @@ class PluginSettingsActivity : ComponentActivity() {
       else -> null
     }
   }
+
+  private fun normalizeModelForPlatform(value: String, platform: String): String = if (platform == "macrodroid") value.replace("%model", "{lv=model}").replace("{iv=model}", "{lv=model}") else value.replace("{lv=model}", "%model").replace("{iv=model}", "%model")
 
   private fun normalizePromptForPlatform(value: String, platform: String): String = if (platform == "macrodroid") value.replace("%prompt", "{lv=prompt}").replace("{iv=prompt}", "{lv=prompt}") else value.replace("{lv=prompt}", "%prompt").replace("{iv=prompt}", "%prompt")
 
@@ -161,7 +163,7 @@ private fun PluginSettingsContent(
     Text("モデルの取得・APIキー・プリセット管理は本体アプリで行います。最新のHugging Face候補は本体アプリでモデル一覧を更新すると共有されます。")
     Row { Checkbox(checked = true, onCheckedChange = null); Text("本体アプリのAPIキーを使用") }
     Button(onClick = onOpenApp, modifier = Modifier.fillMaxWidth()) { Text("本体アプリを開く") }
-    OutlinedTextField(model, { }, Modifier.fillMaxWidth(), label = { Text("モデル") }, singleLine = true, readOnly = true)
+    OutlinedTextField(model, { model = it }, Modifier.fillMaxWidth(), label = { Text("モデル名 / MacroDroid変数") }, supportingText = { Text(if (platform == "macrodroid") "例: {lv=model} または %model" else "モデル一覧から選択、または直接入力") }, singleLine = true)
     if (platform == "macrodroid") OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), label = { Text("検索", maxLines = 1, softWrap = false) }, singleLine = true)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       if (localOnly) OutlinedButton(onClick = { localOnly = false }) { Text("すべて") } else Button(onClick = { localOnly = false }) { Text("すべて") }
@@ -203,14 +205,15 @@ private fun PluginSettingsContent(
     }
     if (selectedPreset != null) Text(selectedPreset.body.take(200), style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
     if (presetId == "custom") OutlinedTextField(customSystem, { customSystem = it }, Modifier.fillMaxWidth(), label = { Text("システムプロンプト（カスタム）") }, minLines = 3)
-    OutlinedTextField("%answer", {}, Modifier.fillMaxWidth(), label = { Text("出力変数") }, supportingText = { Text("成功: %answer / %ok、失敗: %error") }, singleLine = true, readOnly = true)
-    Text("結果: %answer（回答）・%ok（成否）・%error（エラー）")
+    OutlinedTextField("%answer", {}, Modifier.fillMaxWidth(), label = { Text("出力変数") }, supportingText = { Text("成功: %answer / %model / %ok、失敗: %error") }, singleLine = true, readOnly = true)
+    Text("結果: %answer（回答）・%model（使用モデル）・%ok（成否）・%error（エラー）")
     if (showVariables) AlertDialog(
       onDismissRequest = { showVariables = false },
       title = { Text("MacroDroid用の変数") },
       text = { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text("入力（プロンプト）: %prompt")
         Text("出力（回答）: %answer")
+        Text("使用モデル: %model")
         Text("成功: %ok")
         Text("失敗: %error")
         Text("Prompt欄には %prompt を入力してください。MacroDroidの次のアクションでは、受け取った answer を {lv=answer} で参照します。")

@@ -49,7 +49,7 @@ class InferenceForegroundService : Service() {
         val action = intent?.getStringExtra(BridgeContract.EXTRA_REPLY_ACTION)?.takeIf(String::isNotBlank) ?: BridgeContract.ACTION_RESULT;
         sendReply(action, intent?.getStringExtra(BridgeContract.EXTRA_REPLY_PACKAGE), false, null, message, intent?.getStringExtra(BridgeContract.EXTRA_REQUEST_ID));
         if (intent?.getStringExtra(EXTRA_ORIGIN) == ORIGIN_LOCALE) {
-          val variables = Bundle().apply { putString("%error", message); putString("%ok", "false") };
+          val variables = Bundle().apply { putString("%error", message); putString("%model", intent?.getBundleExtra(LocalePluginContract.EXTRA_BUNDLE)?.getString(LocalePluginContract.KEY_MODEL).orEmpty()); putString("%ok", "false") };
           val signaled = TaskerPlugin.Setting.signalFinish(applicationContext, intent, TaskerPlugin.Setting.RESULT_CODE_FAILED, variables);
           Log.i(TAG, "signalFinish失敗通知: signaled=" + signaled + " errorChars=" + message.length)
           DiagnosticsLog.note("signalFinish失敗通知: signaled=" + signaled + " errorChars=" + message.length)
@@ -103,14 +103,16 @@ class InferenceForegroundService : Service() {
     val extras = Bundle().apply {
       putBoolean(BridgeContract.EXTRA_OK, true);
       putString(BridgeContract.EXTRA_REQUEST_ID, intent.getStringExtra(BridgeContract.EXTRA_REQUEST_ID));
+      putString(BridgeContract.EXTRA_MODEL, model);
       putString(BridgeContract.EXTRA_RESULT, result);
       putString("response", result);
       putString("answer", result);
+      putString("model", model);
           };
     sendReply(intent.getStringExtra(BridgeContract.EXTRA_REPLY_ACTION)?.takeIf(String::isNotBlank) ?: BridgeContract.ACTION_RESULT,
       intent.getStringExtra(BridgeContract.EXTRA_REPLY_PACKAGE), extras);
-    TaskerPlugin.addVariableBundle(extras, Bundle().apply { putString("%answer", result); putString("%ok", "true") })
-    val variables = Bundle().apply { putString("%answer", result); putString("%ok", "true") };
+    TaskerPlugin.addVariableBundle(extras, Bundle().apply { putString("%answer", result); putString("%model", model); putString("%ok", "true") })
+    val variables = Bundle().apply { putString("%answer", result); putString("%model", model); putString("%ok", "true") };
     val signaled = TaskerPlugin.Setting.signalFinish(applicationContext, intent, TaskerPlugin.Setting.RESULT_CODE_OK, variables);
     Log.i(TAG, "signalFinish完了通知: signaled=" + signaled + " %answer文字数=" + result.length)
     DiagnosticsLog.note("signalFinish完了通知: signaled=" + signaled + " %answer文字数=" + result.length)
