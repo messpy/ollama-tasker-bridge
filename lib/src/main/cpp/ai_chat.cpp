@@ -381,6 +381,8 @@ static std::string cached_token_chars;
 static std::ostringstream assistant_ss;
 static llama_token last_generated_token = LLAMA_TOKEN_NULL;
 static int repeated_token_count = 0;
+static bool stop_on_chat_control = false;
+static size_t emitted_assistant_chars = 0;
 constexpr int MAX_REPEATED_TOKEN_COUNT = 32;
 
 static void reset_short_term_states() {
@@ -390,6 +392,8 @@ static void reset_short_term_states() {
     assistant_ss.str("");
     last_generated_token = LLAMA_TOKEN_NULL;
     repeated_token_count = 0;
+    stop_on_chat_control = false;
+    emitted_assistant_chars = 0;
 }
 
 static int decode_tokens_in_batches(
@@ -587,6 +591,9 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_generateNextToken(
         LOGw("%s: STOP: hitting stop position: %d", __func__, stop_generation_position);
         return nullptr;
     }
+    if (stop_on_chat_control) {
+        return nullptr;
+    }
 
     // Sample next token
     const auto new_token_id = common_sampler_sample(g_sampler, g_context, -1);
@@ -628,10 +635,24 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_generateNextToken(
     // Create and return a valid UTF-8 Java string
     jstring result = nullptr;
     if (is_valid_utf8(cached_token_chars.c_str())) {
-        result = env->NewStringUTF(cached_token_chars.c_str());
-        LOGv("id: %d,\tcached: `%s`,\tnew: `%s`", new_token_id, cached_token_chars.c_str(), new_token_chars.c_str());
-
         assistant_ss << cached_token_chars;
+        const std::string generated_text = assistant_ss.str();
+        size_t stop_pos = generated_text.find("<end_of_turn>");
+        const size_t start_pos = generated_text.find("<start_of_turn>");
+        if (stop_pos == std::string::npos || (start_pos != std::string::npos && start_pos < stop_pos)) stop_pos = start_pos;
+        const bool found_chat_control = stop_pos != std::string::npos;
+        const std::string visible_text = found_chat_control ? generated_text.substr(0, stop_pos) : generated_text;
+        const std::string delta = visible_text.substr(emitted_assistant_chars);
+        emitted_assistant_chars = visible_text.size();
+        if (found_chat_control) {
+            assistant_ss.str("");
+            assistant_ss << visible_text;
+            stop_on_chat_control = true;
+            chat_add_and_format(ROLE_ASSISTANT, visible_text);
+            LOGi("%s: STOP: chat control token detected", __func__);
+        }
+        result = env->NewStringUTF(delta.c_str());
+        LOGv("id: %d,\tcached: `%s`,\tnew: `%s`", new_token_id, delta.c_str(), new_token_chars.c_str());
         cached_token_chars.clear();
     } else {
         LOGv("id: %d,\tappend to cache", new_token_id);
