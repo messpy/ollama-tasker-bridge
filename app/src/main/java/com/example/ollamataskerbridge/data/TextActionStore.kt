@@ -79,7 +79,7 @@ object ModelCatalog {
       .map { file -> OllamaModel(file.nameWithoutExtension, false, true, file.length(), true, ModelSource.HUGGING_FACE, format = if (file.extension.equals("litertlm", true)) ModelFormat.LITERT_LM else ModelFormat.GGUF) }
     val names = local.map { it.name }.toSet()
     return (settings.cachedModels() + local).distinctBy { it.name }
-      .map { it.copy(local = it.local || it.name in names) }
+      .map { localStore.withInstalledSize(it).copy(local = it.local || it.name in names) }
       .filter { it.local || it.enabled }
   }
 }

@@ -23,6 +23,10 @@ class LocalModelStore(context: Context) {
     val safe = model.replace(Regex("[^A-Za-z0-9._-]"), "_")
     return File(directory, safe + ".litertlm")
   }
+  fun withInstalledSize(model: OllamaModel): OllamaModel {
+    val file = listOf(fileFor(model.name), liteRtFileFor(model.name)).firstOrNull { it.isFile && it.length() > 0L }
+    return if (file != null) model.copy(local = true, sizeBytes = file.length()) else model
+  }
 }
 
 internal fun cloudCatalogModelName(name: String): String = if (name.endsWith(":cloud", true)) name else name + ":cloud"

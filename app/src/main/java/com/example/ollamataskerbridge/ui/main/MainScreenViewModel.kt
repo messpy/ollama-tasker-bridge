@@ -45,7 +45,7 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
     .orEmpty()
   private val installed = installedModels()
   private val cached = settings.cachedModels()
-  private val initialModels = (cached + installed).distinctBy { it.name }.map { item -> item.copy(remote = if (item.source == ModelSource.OLLAMA) isOllamaCloudModel(item.name) else item.remote, downloadable = if (item.source == ModelSource.OLLAMA && isOllamaCloudModel(item.name)) false else item.downloadable) }
+  private val initialModels = (cached + installed).distinctBy { it.name }.map { item -> localModels.withInstalledSize(item).copy(remote = if (item.source == ModelSource.OLLAMA) isOllamaCloudModel(item.name) else item.remote, downloadable = if (item.source == ModelSource.OLLAMA && isOllamaCloudModel(item.name)) false else item.downloadable) }
   // Cloud/Ollama is the primary catalog. Do not switch to HF just because local GGUFs exist.
   // Ollama is the primary catalog. Older installs may have persisted the HF tab.
   private val initialSource = ModelSource.OLLAMA

@@ -52,7 +52,8 @@ class PluginSettingsActivity : ComponentActivity() {
     val local = LocalModelStore(this).directory.listFiles().orEmpty()
       .filter { it.extension == "gguf" || it.extension == "litertlm" }
       .map { file -> OllamaModel(file.nameWithoutExtension, false, true, file.length(), true, ModelSource.HUGGING_FACE, format = if (file.extension.equals("litertlm", true)) ModelFormat.LITERT_LM else ModelFormat.GGUF) }
-    val models = (settings.cachedModels() + local).distinctBy { it.name }.filter { it.local || it.enabled }
+    val localStore = LocalModelStore(this)
+    val models = (settings.cachedModels() + local).distinctBy { it.name }.map { localStore.withInstalledSize(it) }.filter { it.local || it.enabled }
     setContent {
       MyApplicationTheme(darkTheme = false) {
         PluginSettingsContent(
