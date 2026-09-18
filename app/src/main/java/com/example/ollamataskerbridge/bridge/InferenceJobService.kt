@@ -99,7 +99,7 @@ class InferenceJobService : JobService() {
           ))
           InferenceExecutionRegistry.markCompleted(executionId)
           val signaled = if (origin == ORIGIN_BRIDGE) { if (InferenceExecutionRegistry.markSignalFinished(executionId)) sendBridgeResult(data, executionId, model, true, result, null); false } else if (InferenceExecutionRegistry.markSignalFinished(executionId)) TaskerPlugin.Setting.signalFinish(applicationContext, original, TaskerPlugin.Setting.RESULT_CODE_OK,
-            Bundle().apply { putString("%answer", result); putString("%used_model", model); putString("%ok", "true") }) else false
+            Bundle().apply { putString("%answer", result); putString("%used_model", model); putString("%success", "true") }) else false
           DiagnosticsLog.note("推論成功: jobId=" + params.jobId + " executionId=" + executionId + " model=" + model + " backend=" + data.getString(KEY_BACKEND).orEmpty() + " resultChars=" + result.length + " signalFinish=" + signaled)
           sendMacroDroidResult(data, executionId, params.jobId, model, true, result, null)
         }
@@ -113,7 +113,7 @@ class InferenceJobService : JobService() {
         Log.e(TAG, "推論Job失敗: " + message, error)
         DiagnosticsLog.error("推論Job失敗: jobId=" + params.jobId + " executionId=" + executionId + " model=" + model + " backend=" + data.getString(KEY_BACKEND).orEmpty() + " message=" + message)
         val signaled = if (origin == ORIGIN_BRIDGE) { if (InferenceExecutionRegistry.markSignalFinished(executionId)) sendBridgeResult(data, executionId, model, false, null, message); false } else if (InferenceExecutionRegistry.markSignalFinished(executionId)) TaskerPlugin.Setting.signalFinish(applicationContext, original, TaskerPlugin.Setting.RESULT_CODE_FAILED,
-          Bundle().apply { putString("%error", message); putString("%used_model", model); putString("%ok", "false") }) else false
+          Bundle().apply { putString("%error_message", message); putString("%used_model", model); putString("%success", "false") }) else false
         DiagnosticsLog.note("推論Job失敗通知: jobId=" + params.jobId + " executionId=" + executionId + " model=" + model + " backend=" + data.getString(KEY_BACKEND).orEmpty() + " signalFinish=" + signaled + " errorChars=" + message.length)
         sendMacroDroidResult(data, executionId, params.jobId, model, false, null, message)
       } finally {
@@ -249,10 +249,11 @@ class InferenceJobService : JobService() {
       putString("model", model)
       putString("used_model", model)
       putString("%used_model", model)
-      putString("%ok", ok.toString())
+      putString("success", ok.toString())
+      putString("%success", ok.toString())
       if (!ok) {
-        putString("error", error.orEmpty())
-        putString("%error", error.orEmpty())
+        putString("error_message", error.orEmpty())
+        putString("%error_message", error.orEmpty())
       }
     }
     val intent = Intent(BridgeContract.ACTION_MACRODROID_RESULT).putExtras(extras).putExtra("jobId", jobId)

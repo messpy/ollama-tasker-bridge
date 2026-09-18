@@ -91,7 +91,7 @@ class PluginSettingsActivity : ComponentActivity() {
               .putExtra(LocalePluginContract.EXTRA_STRING_BLURB, "$model / $platform")
             TaskerPlugin.Setting.setVariableReplaceKeys(values, arrayOf(LocalePluginContract.KEY_MODEL, LocalePluginContract.KEY_PROMPT, LocalePluginContract.KEY_IMAGE_URI, LocalePluginContract.KEY_SYSTEM, LocalePluginContract.KEY_CUSTOM_SYSTEM))
             TaskerPlugin.Setting.requestTimeoutMS(resultIntent, 120_000)
-            TaskerPlugin.addRelevantVariableList(resultIntent, arrayOf("%answer\n回答\nLLMの生成結果", "%used_model\n使用モデル\n実際に使用したモデル名", "%error\nエラー\n失敗時のエラー内容", "%ok\n成否\n成功時true、失敗時false"))
+            TaskerPlugin.addRelevantVariableList(resultIntent, arrayOf("%answer\n回答\nLLMの生成結果", "%used_model\n使用モデル\n実際に使用したモデル名", "%error_message\nエラー内容\n失敗時の詳細", "%success\n成否\n成功時true、失敗時false"))
             setResult(Activity.RESULT_OK, resultIntent)
             finish()
           },
@@ -205,8 +205,8 @@ private fun PluginSettingsContent(
     }
     if (selectedPreset != null) Text(selectedPreset.body.take(200), style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
     if (presetId == "custom") OutlinedTextField(customSystem, { customSystem = it }, Modifier.fillMaxWidth(), label = { Text("システムプロンプト（カスタム）") }, minLines = 3)
-    OutlinedTextField("%answer", {}, Modifier.fillMaxWidth(), label = { Text("出力変数") }, supportingText = { Text("成功: %answer / %used_model / %ok、失敗: %error") }, singleLine = true, readOnly = true)
-    Text("結果: %answer（回答）・%used_model（使用モデル）・%ok（成否）・%error（エラー）")
+    OutlinedTextField("%answer", {}, Modifier.fillMaxWidth(), label = { Text("出力変数") }, supportingText = { Text("成功: %answer / %used_model / %success、エラー内容: %error_message") }, singleLine = true, readOnly = true)
+    Text("結果: %answer（回答）・%used_model（使用モデル）・%success（成否）・%error_message（エラー内容）")
     if (showVariables) AlertDialog(
       onDismissRequest = { showVariables = false },
       title = { Text("MacroDroid用の変数") },
@@ -214,8 +214,8 @@ private fun PluginSettingsContent(
         Text("入力（プロンプト）: %prompt")
         Text("出力（回答）: %answer")
         Text("使用モデル: %used_model")
-        Text("成功: %ok")
-        Text("失敗: %error")
+        Text("成功: %success")
+        Text("エラー内容: %error_message")
         Text("Prompt欄には %prompt を入力してください。MacroDroidの次のアクションでは、受け取った answer を {lv=answer} で参照します。")
       } },
       confirmButton = { Button(onClick = { showVariables = false }) { Text("閉じる") } },
