@@ -103,6 +103,7 @@ object LocalInferenceBridge {
         emit(GenerateEvent.Done(fullText.toString(), counts.inputTokens, counts.outputTokens))
       }
     } catch (error: CancellationException) {
+      DiagnosticsLog.warn("ローカル推論Flowキャンセル: model=" + model + " cause=" + (error.message ?: error::class.simpleName))
       throw error
     } catch (error: Exception) {
       val detail = when (error) {
