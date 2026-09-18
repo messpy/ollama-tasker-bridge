@@ -106,26 +106,30 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   fun acceptGemmaTerms() { settings.gemmaTermsAccepted = true }
   fun searchChanged(value: String) {
     _uiState.value = _uiState.value.copy(search = value)
-    // Keep Ollama filtering client-side; query Hugging Face separately because
-    // its catalog is too large to preload reliably.
+    // Search both catalogs. Ollama is queried here for the public catalog; the
+    // current list is retained so a transient service failure cannot erase it.
     searchJob?.cancel()
     if (value.isBlank()) return
     searchJob = viewModelScope.launch(Dispatchers.IO) {
       delay(350)
-      val found = runCatching { huggingFace.catalog(settings.huggingFaceToken, value) }.getOrElse {
+      val ollamaFound = runCatching { registry.catalog(value, cloudOnly = false) + registry.catalog(value, cloudOnly = true) }.getOrElse {
+        DiagnosticsLog.warn("Ollamaモデル検索失敗: queryChars=${value.length} message=${it.message ?: "不明"}")
+        emptyList()
+      }
+      val huggingFaceFound = runCatching { huggingFace.catalog(settings.huggingFaceToken, value) }.getOrElse {
         DiagnosticsLog.warn("Hugging Faceモデル検索失敗: queryChars=${value.length} message=${it.message ?: "不明"}")
         emptyList()
       }
-      if (value != _uiState.value.search || found.isEmpty()) return@launch
+      if (value != _uiState.value.search) return@launch
       val localByName = installedModels().associateBy { it.name }
-      val additions = found.map { item ->
+      val additions = (ollamaFound + huggingFaceFound).map { item ->
         val local = localByName[item.name]
         item.copy(local = local != null, sizeBytes = local?.sizeBytes ?: item.sizeBytes)
       }
       val merged = (_uiState.value.models + additions).distinctBy { it.source.name + ":" + it.name }
       settings.saveCachedModels(merged)
       _uiState.value = _uiState.value.copy(models = merged)
-      DiagnosticsLog.note("Hugging Faceモデル検索: queryChars=${value.length} resultCount=${found.size}")
+      DiagnosticsLog.note("モデル検索: queryChars=${value.length} ollamaResultCount=${ollamaFound.size} huggingFaceResultCount=${huggingFaceFound.size}")
     }
   }
   fun showLocalChanged(value: Boolean) { _uiState.value = _uiState.value.copy(showLocal = value) }
