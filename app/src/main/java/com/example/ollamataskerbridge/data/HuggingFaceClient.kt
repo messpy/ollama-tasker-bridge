@@ -19,8 +19,8 @@ class HuggingFaceClient {
         val files = detail.optJSONArray("siblings") ?: continue
         val candidate = (0 until files.length()).mapNotNull { files.optJSONObject(it) }
           .map { it.optString("rfilename") to it.optJSONObject("lfs")?.optLong("size", it.optLong("size", -1L)) }
-          .filter { it.first.endsWith(".gguf", true) || it.first.endsWith(".litertlm", true) }
-          .sortedWith(compareBy<Pair<String, Long?>> { if (it.first.contains("Q4_K_M", true) || it.first.contains("int4", true)) 0 else 1 }.thenBy { it.first })
+          .filter { (it.first.endsWith(".gguf", true) || it.first.endsWith(".litertlm", true)) && !it.first.contains("mmproj", true) }
+          .sortedWith(compareBy<Pair<String, Long?>> { when { it.first.contains("PTQ1_0", true) || it.first.contains("TQ1_0", true) -> 0; it.first.contains("PQ2_0", true) -> 1; it.first.contains("Q4_K_M", true) || it.first.contains("int4", true) -> 2; it.first.contains("F16", true) -> 9; else -> 3 } }.thenBy { it.first })
           .firstOrNull() ?: continue
         val litert = candidate.first.endsWith(".litertlm", true)
         val source = ModelSource.HUGGING_FACE
@@ -28,6 +28,11 @@ class HuggingFaceClient {
         val fileSize = candidate.second?.takeIf { it > 0L } ?: headSize(downloadUrl, accessToken)
         found[id + ":" + candidate.first] = OllamaModel(id, false, true, fileSize, false, source, downloadUrl, format = if (litert) ModelFormat.LITERT_LM else ModelFormat.GGUF)
       }
+    }
+    if (search.contains("bonsai", true) && found.keys.none { it.startsWith("prism-ml/Ternary-Bonsai-2-27B-gguf:") }) {
+      val bonsaiRepo = "prism-ml/Ternary-Bonsai-2-27B-gguf"
+      val bonsaiFile = "Ternary-Bonsai-2-27B-PTQ1_0.gguf"
+      found[bonsaiRepo + ":" + bonsaiFile] = OllamaModel(bonsaiRepo, false, true, 5950000000L, false, ModelSource.HUGGING_FACE, "https://huggingface.co/" + bonsaiRepo + "/resolve/main/" + bonsaiFile, format = ModelFormat.GGUF)
     }
     val xingRepo = "XingChen-AGI/Xing4.0-29B-A4B-GGUF"
     if (found.keys.none { it.startsWith(xingRepo + ":") }) {
