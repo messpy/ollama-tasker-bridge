@@ -25,8 +25,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.core.content.ContextCompat
@@ -38,7 +36,6 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   private val localModels = LocalModelStore(application)
   private val registry = OllamaRegistryClient(localModels)
   private val huggingFace = HuggingFaceClient()
-  private var searchJob: Job? = null
   private fun installedModels() = localModels.directory.listFiles()
     ?.filter { it.extension == "gguf" || it.extension == "litertlm" }
     ?.map { com.example.ollamataskerbridge.data.OllamaModel(it.nameWithoutExtension, false, true, it.length(), true, ModelSource.HUGGING_FACE, format = if (it.extension.equals("litertlm", true)) ModelFormat.LITERT_LM else ModelFormat.GGUF) }
@@ -106,11 +103,9 @@ class MainScreenViewModel(application: Application) : AndroidViewModel(applicati
   fun acceptGemmaTerms() { settings.gemmaTermsAccepted = true }
   fun searchChanged(value: String) {
     _uiState.value = _uiState.value.copy(search = value)
-    searchJob?.cancel()
-    searchJob = viewModelScope.launch(Dispatchers.IO) {
-      delay(350)
-      runCatching { loadModelsInternal(value) }.onFailure { DiagnosticsLog.warn("モデル検索失敗: queryChars=" + value.length + " message=" + (it.message ?: "不明")) }
-    }
+    // Search is intentionally client-side. The full Ollama catalog is loaded
+    // once and the screen filters it locally, so a transient/partial HTML
+    // response from ollama.com cannot replace the list with zero results.
   }
   fun showLocalChanged(value: Boolean) { _uiState.value = _uiState.value.copy(showLocal = value) }
   fun showCloudChanged(value: Boolean) { _uiState.value = _uiState.value.copy(showCloud = value) }
