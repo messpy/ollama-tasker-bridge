@@ -78,7 +78,7 @@ class OllamaClient(private val baseUrl: String, private val apiKey: String = "")
     val reasoningFloor = if (gemma4Reasoning) 4096 else 2048
     val effectiveMaxTokens = if (reasoningModel) maxOf(maxTokens, reasoningFloor) else maxTokens.coerceAtLeast(1)
     payload.put("options", org.json.JSONObject().put("num_predict", effectiveMaxTokens).put("temperature", temperature.coerceIn(0f, 2f)))
-    val response = org.json.JSONObject(request("POST", "/api/generate", payload.toString()))
+    val response = org.json.JSONObject(requestWithDnsRetry("POST", "/api/generate", payload.toString(), 15 * 60 * 1000))
     val text = response.optString("response")
     val thinking = response.optString("thinking")
     val doneReason = response.optString("done_reason", "unknown")
@@ -89,6 +89,19 @@ class OllamaClient(private val baseUrl: String, private val apiKey: String = "")
       throw IOException("Ollamaがthinking中に生成上限へ到達しました（thinkingChars=" + thinking.length + ", evalCount=" + evalCount + ", maxTokens=" + effectiveMaxTokens + ").最大トークン数を増やしてください")
     }
     throw IOException(if (thinking.isNotBlank()) "Ollamaが本文を返さず終了しました（thinkingChars=" + thinking.length + ", doneReason=" + doneReason + ")" else "Ollamaから応答がありません（responseとthinkingが空です、doneReason=" + doneReason + ")")
+  }
+
+  private fun requestWithDnsRetry(method: String, path: String, body: String?, readTimeoutMs: Int): String {
+    var last: java.net.UnknownHostException? = null
+    repeat(3) { attempt ->
+      try { return request(method, path, body, readTimeoutMs) }
+      catch (error: java.net.UnknownHostException) {
+        last = error
+        Log.w(logTag, "DNS解決失敗、再試行: path=" + path + " attempt=" + (attempt + 1))
+        if (attempt < 2) Thread.sleep((1500L * (attempt + 1)))
+      }
+    }
+    throw last ?: IOException("Ollama接続先のDNS解決に失敗しました")
   }
 
   private fun request(method: String, path: String, body: String? = null, readTimeoutMs: Int = 30_000, authenticated: Boolean = true): String {
