@@ -99,7 +99,7 @@ class InferenceForegroundService : Service() {
     val request = GenerateRequest(backend, model, values?.getString(LocalePluginContract.KEY_PROMPT).orEmpty(), system, values?.getInt(LocalePluginContract.KEY_MAX_TOKENS, 1024) ?: 1024, values?.getFloat(LocalePluginContract.KEY_TEMPERATURE, 0.7f) ?: 0.7f, readImage(values?.getString(LocalePluginContract.KEY_IMAGE_URI)));
     val result = DefaultInferenceRepository.generateText(applicationContext, request);
     Log.i(TAG, "LLM生成成功: backend=" + backend + " resultChars=" + result.length)
-    DiagnosticsLog.note("LLM生成成功: backend=" + backend + " resultChars=" + result.length)
+    DiagnosticsLog.note("LLM生成成功: backend=" + backend + " promptChars=" + values?.getString(LocalePluginContract.KEY_PROMPT).orEmpty().length + " resultChars=" + result.length)
     val extras = Bundle().apply {
       putBoolean(BridgeContract.EXTRA_OK, true);
       putString(BridgeContract.EXTRA_REQUEST_ID, intent.getStringExtra(BridgeContract.EXTRA_REQUEST_ID));

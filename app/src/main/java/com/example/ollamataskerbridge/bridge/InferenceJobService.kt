@@ -77,7 +77,7 @@ class InferenceJobService : JobService() {
       }
     }
     InferenceExecutionRegistry.markQueued(executionId)
-    DiagnosticsLog.note("推論Job開始: jobId=" + params.jobId + " executionId=" + executionId + " model=" + model + " backend=" + data.getString(KEY_BACKEND).orEmpty())
+    DiagnosticsLog.note("推論Job開始: jobId=" + params.jobId + " executionId=" + executionId + " model=" + model + " backend=" + data.getString(KEY_BACKEND).orEmpty() + " promptChars=" + data.getString(KEY_PROMPT).orEmpty().length)
     val task = scope.launch {
       try {
         InferenceQueue.withSlot {

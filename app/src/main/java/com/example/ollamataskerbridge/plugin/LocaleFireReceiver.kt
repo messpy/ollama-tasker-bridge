@@ -31,7 +31,7 @@ class LocaleFireReceiver : BroadcastReceiver() {
       return
     }
     Log.i("OllamaTaskerBridge", "FIRE_SETTING受付: ordered=" + isOrderedBroadcast + " model=" + model + " backend=" + backend + " executionId=" + executionId)
-    DiagnosticsLog.note("MacroDroid/Tasker受付: model=" + model + " backend=" + backend + " executionPath=receiver executionId=" + executionId)
+    DiagnosticsLog.note("MacroDroid/Tasker受付: model=" + model + " backend=" + backend + " promptChars=" + values?.getString(LocalePluginContract.KEY_PROMPT).orEmpty().length + " executionPath=receiver executionId=" + executionId)
     if (model.isBlank() || backend.isBlank()) {
       DiagnosticsLog.error("空のFIRE_SETTINGを拒否: model=" + model + " backend=" + backend + " executionId=" + executionId)
       setResultCode(TaskerPlugin.Setting.RESULT_CODE_FAILED)
